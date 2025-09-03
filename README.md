@@ -36,6 +36,8 @@ screeninfo>=0.8
 numpy>=1.24
 ```
 
+Note: this game is also compatible with Pygame Community Edition. If you would prefer to use that, simply replace `pygame` with `pygame-ce` in the installation process.
+
 ## Installation and Setup
 
 ```bash
