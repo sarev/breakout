@@ -2235,7 +2235,7 @@ class Game(object):
 
         # Redraw the parts of the background that brick undrawing won't touch
         self.gfx.screen.blit(self.gfx.background, (0, self.bottom_edge), self.bottom_clip)
-        if self.right_edge:
+        if self.right_clip:
             self.gfx.screen.blit(self.gfx.background, (self.right_edge, 0), self.right_clip)
 
         # Blend the glowing trails over the background
