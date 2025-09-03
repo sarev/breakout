@@ -1839,6 +1839,11 @@ class Game(object):
         self.clock = pygame.time.Clock()
         self.lowest_brick = 0
 
+        self.bottom_edge = 0
+        self.bottom_clip = None
+        self.right_edge = 0
+        self.right_clip = None
+
         # Create the hero ball
         self.hero_ball = Ball(
             self.gfx.ball_img,
@@ -1963,11 +1968,6 @@ class Game(object):
         self.gfx.brick_images = self.gfx.scale_brick_images(self.get_current_level())
         self.create_bricks()
 
-        # Calculate the position of the bottom of the lowest brick (with some padding)
-        self.lowest_brick = self.bricks[-1]
-        bbox = self.lowest_brick.bbox()
-        self.lowest_brick = bbox[1] + bbox[3] + self.hero_ball.height
-
         # Reset the hero ball position and motion
         self.gfx.set_mouse_pos(self.gfx.window_width // 2, self.gfx.window_height)
         self.hero_ball.x = self.gfx.mouse_x
@@ -2071,6 +2071,16 @@ class Game(object):
 
         # Get the layout of the brick rows for this level
         level_rows = Game.get_level_def(self.level)
+
+        # Calculate some important bounding boxes and coordinates for redrawing things
+        self.bottom_edge = Brick.height() * len(level_rows)
+        self.right_edge = Brick.width() * len(level_rows[0])
+        self.lowest_brick = self.bottom_edge + self.hero_ball.height
+        self.bottom_clip = pygame.Rect(0, self.bottom_edge, self.gfx.window_width, self.gfx.window_height - self.bottom_edge)
+        if self.right_edge < self.gfx.window_width:
+            self.right_clip = pygame.Rect(self.right_edge, 0, self.gfx.window_width - self.right_edge, self.bottom_edge)
+        else:
+            self.right_clip = None
 
         # Depending on the game mode, we can have different mixes of blue, green, and red bricks
         if self.difficulty == 0:
@@ -2223,12 +2233,15 @@ class Game(object):
             bool: True if all destroyable bricks are gone (level cleared), else False.
         """
 
-        self.gfx.screen.set_clip(pygame.Rect(0, self.lowest_brick - self.hero_ball.height, self.gfx.window_width, self.gfx.window_height))
-        self.gfx.screen.blit(self.gfx.background, (0, 0))
-        self.gfx.screen.set_clip(None)
+        # Redraw the parts of the background that brick undrawing won't touch
+        self.gfx.screen.blit(self.gfx.background, (0, self.bottom_edge), self.bottom_clip)
+        if self.right_edge:
+            self.gfx.screen.blit(self.gfx.background, (self.right_edge, 0), self.right_clip)
 
-        # self.gfx.screen.blit(self.gfx.background, (0, 0))
+        # Blend the glowing trails over the background
         self.gfx.screen.blit(self.gfx.trail_sfc, (0, 0))
+
+        # Draw all of the HUD and objects in a sensible order
         self.lives_text.draw()
         self.level_text.draw()
         self.gfx.draw_objects(self.bricks)
