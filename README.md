@@ -2,11 +2,11 @@
 
 A modern, Pygame-based take on the classic brick-breaker. Clear all destroyable bricks while keeping the blue “hero” ball in play. Power-ups, lasers, inversion, and multi-ball keep things lively.
 
-![Illustration](./sprites/sm-intro.png)
+![Illustration](./sprites/intro.png)
 
 ## Features
 
-- Five handcrafted levels with per-level brick layouts
+- Six handcrafted levels with per-level brick layouts
 - Multiple brick types with unique effects and hit points
 - Bonus balls, extra bats, control inversion, laser mode, and blackout mode
 - Stereo-panned sound effects

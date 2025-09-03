@@ -30,6 +30,11 @@ from random import random, randint
 from typing import Any, Iterable, Optional, Sequence
 
 
+# # Now draw new stuff onto `self.trail_sfc` with whatever alpha you want...
+# # Finally, blit `self.trail_sfc` to the screen:
+# screen.blit(self.trail_sfc, (0, 0))
+
+
 class Text(object):
     def __init__(
         self,
@@ -718,6 +723,7 @@ class Ball(object):
     def __init__(
         self,
         image: pygame.Surface,
+        glow: pygame.Surface,
         gfx: object,
         game: object,
         x: float,
@@ -773,6 +779,7 @@ class Ball(object):
             return mask_image
 
         self.image = image
+        self.glow = glow
         self.gfx = gfx
         self.game = game
         self.mask_image = generate_mask_image(image)
@@ -809,7 +816,14 @@ class Ball(object):
         if surface is None:
             surface = self.gfx.screen
         # pygame.draw.rect(surface, (255,255,255), self.bbox())
-        surface.blit(self.image, (self.x - self.w2, self.y - self.h2))
+
+        # Plot the ball
+        pos = (self.x - self.w2, self.y - self.h2)
+        surface.blit(self.image, pos)
+
+        # Plot a glow into the trail surface
+        self.gfx.trail_sfc.blit(self.glow, pos)
+
         return True
 
     def undraw(self, surface: pygame.Surface | None = None) -> None:
@@ -1265,14 +1279,20 @@ class Graphics(object):
         self.display = pygame.display.set_mode((self.window_width, self.window_height), pygame.NOFRAME)
 
         # Create a surface to do all of our rendering into
-        self.screen = pygame.Surface((self.window_width, self.window_height))
+        screen_size = (self.window_width, self.window_height)
+        self.screen = pygame.Surface(screen_size)
 
         # Create a surface for holding the background image (for undrawing objects)
         self.background = None
 
         # Create a black surface with the same size as the screen for darkening effects
-        self.black_screen = pygame.Surface(self.screen.get_size())
+        self.black_screen = pygame.Surface(screen_size)
         self.black_screen.fill(Graphics.colours['black'])
+
+        # Create a transparent surface for plotting glowing trails into
+        self.trail_sfc = pygame.Surface(screen_size, pygame.SRCALPHA)
+        # self.trail_sfc.set_alpha(None)      # ensure per-pixel alpha, not per-surface alpha
+        self.trail_sfc.fill((0, 0, 0, 0))   # make fully transparent
 
         # Set the name of the window
         pygame.display.set_caption("Breakout")
@@ -1322,10 +1342,12 @@ class Graphics(object):
 
         try:
             hires_ball_img = pygame.image.load(os.path.join(path, "ball.png"))
-            hires_bat_img = pygame.image.load(os.path.join(path, "bat.png"))
-            hires_blue_laser_img = pygame.image.load(os.path.join(path, "blue.png"))
             hires_bonus_ball_img = pygame.image.load(os.path.join(path, "extra-ball.png"))
+            hires_blue_glow_img = pygame.image.load(os.path.join(path, "blue-glow.png"))
+            hires_red_glow_img = pygame.image.load(os.path.join(path, "red-glow.png"))
+            hires_bat_img = pygame.image.load(os.path.join(path, "bat.png"))
             hires_bonus_bat_img = pygame.image.load(os.path.join(path, "extra-bat.png"))
+            hires_blue_laser_img = pygame.image.load(os.path.join(path, "blue.png"))
             hires_green_laser_img = pygame.image.load(os.path.join(path, "green.png"))
 
             hires_brick_imgs = []
@@ -1341,6 +1363,8 @@ class Graphics(object):
         # Resize various images to something more appropriate for our screen
         self.ball_img = rescale_image(self, hires_ball_img, 4.5)
         self.bonus_ball_img = rescale_image(self, hires_bonus_ball_img, 4.5)
+        self.blue_glow_img = rescale_image(self, hires_blue_glow_img, 4.5)
+        self.red_glow_img = rescale_image(self, hires_red_glow_img, 4.5)
 
         self.bat_img = rescale_image(self, hires_bat_img, 6)
         self.bonus_bat_img = rescale_image(self, hires_bonus_bat_img, 6)
@@ -1404,7 +1428,8 @@ class Graphics(object):
 
     def initialise_background(self, level: int) -> None:
         """
-        Create the tiled background for a level and apply a darkening overlay.
+        Create the tiled background for a level and apply a darkening overlay to help increase contrast
+        with the foreground elements.
 
         Args:
             level: Level index used to choose the background tile image.
@@ -1620,6 +1645,19 @@ class Game(object):
             [3, 0, 5, 7, 0, 0, 0, 0, 7, 7, 0, 6, 0, 0, 0, 0, 7, 4, 0, 0],
             [0, 7, 7, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 7, 7, 5],
             [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+        ],
+        [
+            # Level 6
+            [7, 0, 0, 0, 0, 0, 5, 0, 0, 4, 0, 0, 4, 0, 0, 5, 0, 0, 0, 0, 0, 7],
+            [0, 0, 7, 0, 6, 0, 0, 0, 0, 0, 8, 3, 0, 0, 0, 0, 0, 6, 0, 7, 0, 0],
+            [0, 4, 0, 0, 0, 6, 0, 0, 5, 0, 0, 0, 5, 0, 0, 6, 0, 0, 0, 4, 0, 0],
+            [0, 0, 0, 0, 0, 0, 7, 7, 7, 6, 0, 0, 6, 7, 7, 7, 0, 0, 0, 0, 0, 0],
+            [0, 0, 4, 0, 0, 0, 7, 0, 0, 4, 0, 8, 4, 0, 0, 7, 0, 0, 0, 4, 0, 0],
+            [0, 6, 0, 0, 7, 0, 0, 0, 6, 0, 7, 0, 0, 6, 0, 0, 7, 0, 0, 0, 6, 0],
+            [5, 0, 0, 7, 0, 0, 0, 8, 0, 0, 6, 0, 0, 0, 8, 0, 0, 7, 0, 0, 0, 5],
+            [0, 0, 0, 0, 0, 7, 0, 3, 6, 0, 7, 0, 6, 3, 0, 7, 0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 5, 0, 0, 0, 0, 4, 0, 0, 0, 4, 0, 0, 0, 0, 0, 5, 0, 0, 0],
+            [7, 0, 0, 0, 0, 6, 0, 0, 0, 8, 0, 0, 0, 8, 0, 0, 0, 6, 0, 0, 0, 7]
         ]
     ]
 
@@ -1799,9 +1837,17 @@ class Game(object):
         self.inversion = 0
         self.laser_count = 0
         self.clock = pygame.time.Clock()
+        self.lowest_brick = 0
 
         # Create the hero ball
-        self.hero_ball = Ball(self.gfx.ball_img, self.gfx, self, 0, 0)
+        self.hero_ball = Ball(
+            self.gfx.ball_img,
+            self.gfx.blue_glow_img,
+            self.gfx,
+            self,
+            0,
+            0
+        )
 
         # Get the level number from the first argument, or default to 1 if none is supplied
         self.level = None
@@ -1862,9 +1908,12 @@ class Game(object):
 
         return self.level
 
-    def reset(self) -> None:
+    def reset(self, level: int = 1) -> None:
         """
         Reset level, lives, background, and centre the bat/mouse.
+
+        Args:
+            level: Level to reset to (defaults to 1).
 
         Behaviour:
             - Sets `self.level` from CLI arg 1 if present, else 1.
@@ -1873,7 +1922,7 @@ class Game(object):
             - Centres the hero bat and mouse horizontally.
         """
 
-        self.level = int(sys.argv[1]) if len(sys.argv) > 1 else 1
+        self.level = level
 
         # Set the hero ball lives to the starting value
         bonus_lives = 2 - self.difficulty
@@ -1905,22 +1954,19 @@ class Game(object):
             - Computes the y coordinate below the lowest brick with padding.
             - Centres and positions the hero ball above the bat with initial velocity.
             - Resets darkening and inversion effects, clears extra balls and lasers.
-
-        Returns:
-            int: The y threshold below which balls are considered outside the brick area.
         """
 
         # Blit (draw) the background onto the screen (essentially clear the screen)
-        self.gfx.screen.blit(self.gfx.background, (0, 0))
+        # self.gfx.screen.blit(self.gfx.background, (0, 0))
 
         # Initialise the bricks (and draw them)
         self.gfx.brick_images = self.gfx.scale_brick_images(self.get_current_level())
         self.create_bricks()
 
         # Calculate the position of the bottom of the lowest brick (with some padding)
-        lowest_brick = self.bricks[-1]
-        bbox = lowest_brick.bbox()
-        lowest_brick = bbox[1] + bbox[3] + self.hero_ball.height
+        self.lowest_brick = self.bricks[-1]
+        bbox = self.lowest_brick.bbox()
+        self.lowest_brick = bbox[1] + bbox[3] + self.hero_ball.height
 
         # Reset the hero ball position and motion
         self.gfx.set_mouse_pos(self.gfx.window_width // 2, self.gfx.window_height)
@@ -1950,8 +1996,6 @@ class Game(object):
         # Create an empty list of laser beams
         self.lasers = []
         self.laser_count = 0
-
-        return lowest_brick
 
     def _load_sounds(self, path: str, brick_types: int) -> None:
         """
@@ -2117,6 +2161,7 @@ class Game(object):
 
             bonus_ball = Ball(
                 self.gfx.bonus_ball_img,
+                self.gfx.red_glow_img,
                 self.gfx,
                 self,
                 x,
@@ -2178,11 +2223,19 @@ class Game(object):
             bool: True if all destroyable bricks are gone (level cleared), else False.
         """
 
+        self.gfx.screen.set_clip(pygame.Rect(0, self.lowest_brick - self.hero_ball.height, self.gfx.window_width, self.gfx.window_height))
+        self.gfx.screen.blit(self.gfx.background, (0, 0))
+        self.gfx.screen.set_clip(None)
+
+        # self.gfx.screen.blit(self.gfx.background, (0, 0))
+        self.gfx.screen.blit(self.gfx.trail_sfc, (0, 0))
         self.lives_text.draw()
         self.level_text.draw()
+        self.gfx.draw_objects(self.bricks)
         self.gfx.draw_objects(self.lasers)
         self.gfx.draw_objects(self.balls)
         self.gfx.draw_objects(self.bats)
+
         return self.gfx.draw_objects(self.bricks) == 0
 
     def undraw_all_objects(self) -> None:
@@ -2190,12 +2243,29 @@ class Game(object):
         Restore background over all animated objects and HUD elements.
         """
 
-        self.gfx.undraw_objects(self.balls)
-        self.gfx.undraw_objects(self.bats)
+        # Note: we don't undraw most objects (any more) because the glowing trails code now means
+        # we're blitting the background (below the bricks) on every frame, so only the area where the
+        # bricks live needs to be undrawn.
+
+        # self.gfx.undraw_objects(self.balls)
+        # self.gfx.undraw_objects(self.bats)
         self.gfx.undraw_objects(self.bricks)
-        self.gfx.undraw_objects(self.lasers)
-        self.lives_text.undraw()
-        self.level_text.undraw()
+        # self.gfx.undraw_objects(self.lasers)
+        # self.lives_text.undraw()
+        # self.level_text.undraw()
+
+    def display(self):
+        """
+        Update the display with the latest frame.
+        """
+        self.gfx.display.blit(self.gfx.screen, (0, 0))
+        self.dark_alpha = Game.get_next_alpha(self.dark_alpha)
+        self.gfx.darken_screen(self.gfx.display, self.dark_alpha)
+        pygame.display.flip()
+
+        # After each frame, we do a liner fade of the glowing trails (towards transparent)
+        fade = 10  # 0..255 to subtract this frame
+        self.gfx.trail_sfc.fill((0, 0, 0, fade), special_flags=pygame.BLEND_RGBA_SUB)  # RGB unchanged, alpha -= fade
 
     def check_inversion_mode(self) -> None:
         """
@@ -2287,18 +2357,15 @@ class Game(object):
             self.bats.remove(bat)
             self.extra_bats.append(bat)
 
-    def animate_balls(self, lowest_brick: int) -> None:
+    def animate_balls(self) -> None:
         """
         Advance balls, resolve collisions with bats/bricks/other balls, and cull lost ones.
-
-        Args:
-            lowest_brick: Y threshold below which brick collisions are skipped.
 
         Behaviour:
             - Calls `move()` on each ball with current level.
             - Checks bat collisions for each ball.
             - Deletes balls whose lives drop below 1 (except the hero ball object itself).
-            - For balls above `lowest_brick`, checks brick collisions and triggers brick effects.
+            - For balls above `self.lowest_brick`, checks brick collisions and triggers brick effects.
             - Resolves pairwise ball-ball collisions.
         """
 
@@ -2317,7 +2384,7 @@ class Game(object):
                 lost.append(ball)
 
             # If the ball is in the bricks area, see if it has hit one
-            if ball.y < lowest_brick:
+            if ball.y < self.lowest_brick:
                 for brick in self.bricks:
                     # Did we hit (and destroy) a brick?
                     if ball.check_brick_collision(brick):
@@ -2443,6 +2510,7 @@ def intro(gfx: Graphics, game: Game, image_path: str) -> bool:
     for idx in range(15):
         intro_ball = Ball(
             gfx.ball_img if idx == 0 else gfx.bonus_ball_img,
+            gfx.blue_glow_img if idx == 0 else gfx.red_glow_img,
             gfx,
             game,
             randint(0, gfx.window_width - 1),
@@ -2575,11 +2643,18 @@ def intro(gfx: Graphics, game: Game, image_path: str) -> bool:
         for text in messages:
             text.draw(surface=gfx.display)
 
+        gfx.display.blit(gfx.trail_sfc, (0, 0))
+
         # Draw all of the balls
         gfx.draw_objects(intro_balls, gfx.display)
 
         # Update the display
         pygame.display.flip()
+
+        # After each frame, we do a liner fade of the glowing trails (towards transparent)
+        fade = 10  # 0..255 to subtract this frame
+        gfx.trail_sfc.fill((0, 0, 0, fade), special_flags=pygame.BLEND_RGBA_SUB)  # RGB unchanged, alpha -= fade
+
         game.clock.tick(60)
         frame += 1
 
@@ -2645,10 +2720,7 @@ def splash_screen(
         banner.draw()
 
         # Flip the gfx.display after applying the darkening effect
-        gfx.display.blit(gfx.screen, (0, 0))
-        game.dark_alpha = Game.get_next_alpha(game.dark_alpha)
-        gfx.darken_screen(gfx.display, game.dark_alpha)
-        pygame.display.flip()
+        game.display()
 
         # Cap the frame rate to 120 frames per second
         game.clock.tick(120)
@@ -2681,9 +2753,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             break
 
         # Main loops: outer loop progresses levels; inner loop runs a single level
-        while game.running and game.get_current_level() < Game.get_number_levels() and game.get_lives() > 0:
-            # Prepare this level and record the y threshold below the lowest brick (with padding)
-            lowest_brick = game.initialise_level()
+        while game.running and game.get_current_level() <= Game.get_number_levels() and game.get_lives() > 0:
+            # Prepare this level
+            game.initialise_level()
 
             # Frame counter: increment once per frame
             game.frame_count = 0
@@ -2705,27 +2777,27 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                         elif event.key == pygame.K_SPACE:
                             game.paused = not game.paused
 
-                    elif event.type == pygame.MOUSEBUTTONDOWN:
-                        if event.button == 1:
-                            # Left click: destroy the brick under the cursor
-                            x, y = pygame.mouse.get_pos()
-                            for brick in game.bricks:
-                                if not brick.expired():
-                                    bbox = brick.bbox()
-                                    if bbox.collidepoint((x, y)):
-                                        brick.hit(x, kill=True)
-                                        game.kill_a_brick(brick)
-                        elif event.button == 3:
-                            # Right click: no action
-                            pass
-
-                    elif event.type == pygame.MOUSEBUTTONUP:
-                        if event.button == 1:
-                            # Left button released: hide cursor
-                            pygame.mouse.set_visible(False)
-                        elif event.button == 3:
-                            # Right button released: show cursor
-                            pygame.mouse.set_visible(True)
+                    # # Debugging cheats...
+                    # elif event.type == pygame.MOUSEBUTTONDOWN:
+                    #     if event.button == 1:
+                    #         # Left click: destroy the brick under the cursor
+                    #         x, y = pygame.mouse.get_pos()
+                    #         for brick in game.bricks:
+                    #             if not brick.expired():
+                    #                 bbox = brick.bbox()
+                    #                 if bbox.collidepoint((x, y)):
+                    #                     brick.hit(x, kill=True)
+                    #                     game.kill_a_brick(brick)
+                    #     elif event.button == 3:
+                    #         # Right click: no action
+                    #         pass
+                    # elif event.type == pygame.MOUSEBUTTONUP:
+                    #     if event.button == 1:
+                    #         # Left button released: hide cursor
+                    #         pygame.mouse.set_visible(False)
+                    #     elif event.button == 3:
+                    #         # Right button released: show cursor
+                    #         pygame.mouse.set_visible(True)
 
                     elif event.type == pygame.MOUSEMOTION:
                         # Update cached mouse position; apply inversion if active
@@ -2737,7 +2809,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                     game.check_inversion_mode()
                     game.check_lasers_mode()
                     game.animate_bats()
-                    game.animate_balls(lowest_brick)
+                    game.animate_balls()
 
                 # Stop if no lives remain
                 if game.get_lives() <= 0:
@@ -2750,10 +2822,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                     break
 
                 # Present the frame, optionally blending with black
-                gfx.display.blit(gfx.screen, (0, 0))
-                game.dark_alpha = Game.get_next_alpha(game.dark_alpha)
-                gfx.darken_screen(gfx.display, game.dark_alpha)
-                pygame.display.flip()
+                game.display()
                 game.frame_count += 1
 
                 # Cap frame rate to 120 FPS
@@ -2773,7 +2842,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             elif game.running:
                 # Level cleared
                 game.level_up()
-                if game.get_current_level() <= Game.get_number_levels():
+                if game.get_current_level() < Game.get_number_levels():
                     # Award a bonus life and show next level splash
                     game.set_lives(1 + game.get_lives())
                     splash = f"Level {game.get_current_level()}..."
