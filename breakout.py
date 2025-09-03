@@ -885,7 +885,7 @@ class Ball(object):
 
             if self.vx != 0 and abs(self.vy / self.vx) < angle_threshold:
                 sign = -1.0 if self.vy < 0 else +1.0
-                self.vy = sign * self.vx * angle_threshold
+                self.vy = sign * abs(self.vx) * angle_threshold
 
         def play_wall_hit_sound():
             """Play wall collision sound, with stereo pan and speed-scaled volume."""
