@@ -40,7 +40,7 @@ Lasers are the simplest entity: a sprite, a bounding box, and a constant upward 
 
 ---
 
-# Ball objects
+# 6. Ball objects
 
 I treat the ball as a compact state machine with clear responsibilities: draw itself (plus a glow), move with a few safety rails, and resolve collisions against bats, bricks, walls and other balls. The class keeps half-sizes `w2/h2` to avoid repeating common calculations, exposes a `bbox()` for broad-phase checks, and uses an `intro` flag to slightly soften physics on the title screen (damping movement as per friction and collisions that aren't perfectly elastic).
 
