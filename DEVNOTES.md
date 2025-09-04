@@ -40,15 +40,15 @@ Lasers are the simplest entity: a sprite, a bounding box, and a constant upward 
 
 ---
 
-# 6. Ball objects
+## 6. Ball objects
 
 I treat the ball as a compact state machine with clear responsibilities: draw itself (plus a glow), move with a few safety rails, and resolve collisions against bats, bricks, walls and other balls. The class keeps half-sizes `w2/h2` to avoid repeating common calculations, exposes a `bbox()` for broad-phase checks, and uses an `intro` flag to slightly soften physics on the title screen (damping movement as per friction and collisions that aren't perfectly elastic).
 
-## Drawing and erasing
+### Drawing and erasing
 
 Drawing a ball requires two blits: the ball sprite into the world surface, and a round glow to the trail surface at the same coordinates so I can fade light-trails after presentation. Erasing the ball restores the background only under the old bounding box via a tiny pre-binarised alpha mask, which avoids full clears and keeps edges crisp. This is important because if I erase the whole (square) bounding box, it can end up chipping bits off bricks that the ball travels close to - because the bricks aren't plotted every frame - and that looks bad. So the ball is erased by plotting a circular cut-out of background over the top of it.
 
-## Movement and wall interactions
+### Movement and wall interactions
 
 `move(level)` integrates position, keeps speeds sensible for the current level and difficulty setting, and handles walls and the floor. Outside the intro I enforce a minimum speed that scales with `level + 1.5`, and I correct very shallow horizontal bounce angles so the ball doesn't get stuck bouncing from left and right.
 
@@ -58,7 +58,7 @@ Wall collision and drop sounds are stereo-panned by the `x` coordinate and volum
 
 Edge cases worth noting: when `speed < min_speed` I rescale `(vx, vy)` proportionally rather than snapping to constants; in the intro screen, I apply a tiny per-frame damping to let movement energy die away.
 
-## Bat collisions
+### Bat collisions
 
 The bat handler starts with a quick axis-aligned bounding box (AABB) overlap test. I then split the bat's shape into three regions: a left rounded end, a flat top, and a right rounded end.
 
@@ -68,19 +68,19 @@ On the flat top of the bat, I snap the ball to sit exactly on the bat (ensuring 
 
 After any hit I add a small random nudge to `vx` and a difficulty-scaled increase to upward speed for liveliness, then play the bat-hit sound with stereo pan and volume derived from `x` coordinate and speed.
 
-## Brick collisions
+### Brick collisions
 
 This resolves in two phases. First, a fast axis-aligned bounding box test early-exits if there is no overlap.
 
 If there is overlap, I classify the contact as either hitting an edge or a corner, by comparing the ball centre to the brick’s bounds. Edge contacts snap the ball to the relevant side and flip the matching velocity component, then call `brick.hit(x, volume=…)`. Corner contacts do a short circle-point resolve towards the corner and reflect velocity along the computed normal before calling `brick.hit` (similar to hitting the end of a bat). This keeps motion stable and avoids tunnelling at corners without requiring per-pixel tests.
 
-## Ball–ball collisions
+### Ball–ball collisions
 
 All balls are the same size, so I check centre distance against the sum of the radii. If overlapping, I separate them by half the overlap along the normal, then reverse each ball’s velocity component along that normal. This essentially results in the balls bouncing off each other in a reasonably natural way. The collision sound’s volume scales with the normal relative speed, with stereo pan from the impact's `x` coordinate. A defensive `dist != 0` avoids division by zero when balls coincide exactly.
 
 During the intro I apply damping to the collision so it's not quite perfectly elastic.
 
-## Bounding box API
+### Bounding box API
 
 `bbox()` returns a `pygame.Rect` at `(x − w2, y − h2, width, height)`. Every broad-phase collision path in the game starts here, which keeps the hot loop tidy and fast.
 
