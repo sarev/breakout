@@ -15,27 +15,136 @@
 # limitations under the License.
 
 from __future__ import annotations
+import argparse
 import cv2
-import json
 import math
 import os
-import platform
 import pygame
-import subprocess
 import sys
 import time
+import traceback
 import numpy as np
-from screeninfo import get_monitors
-from random import random, randint
+from random import random, randint, uniform
 from typing import Any, Iterable, Optional, Sequence
 
 
-# # Now draw new stuff onto `self.trail_sfc` with whatever alpha you want...
-# # Finally, blit `self.trail_sfc` to the screen:
-# screen.blit(self.trail_sfc, (0, 0))
+class MonitorSelector():
+    """
+    Widget that cycles through available monitors and draws a selectable UI element for choosing the target display.
+
+    The widget is disabled if a monitor was explicitly chosen by the user or if the system only has a single monitor.
+    """
+
+    def __init__(self, choice: int | None, x: int = 0, y: int = 0):
+        """Initialise the selector.
+
+        Args:
+            choice: Explicit monitor index to use, or `None` to enable the widget and allow interactive
+                selection. The index is modulo the number of detected displays.
+            x: Logical X position of the widget before scaling.
+            y: Logical Y position of the widget before scaling.
+
+        Raises:
+            RuntimeError: If no monitors are detected, which implies a headless environment.
+        """
+
+        self.raw_x, self.raw_y = x, y
+        self.x, self.y = 0, 0
+        self.width, self.height = 0, 0
+
+        # This widget is disabled if the user has manually selected a monitor
+        self.enabled = choice is None
+
+        # How many monitors does this device have?
+        self.monitors = pygame.display.get_num_displays()
+        if self.monitors == 0:
+            # No monitors found!
+            raise RuntimeError("Breakout cannot run on a headless system")
+        elif self.monitors == 1:
+            # Disable this widget if there's only one monitor
+            self.enabled = False
+
+        # Ensure the selected monitor index is in range
+        self.monitor = 0 if choice is None else choice % self.monitors
+
+        # Make a note of the logical dimensions of all of the monitors
+        self.desktops = pygame.display.get_desktop_sizes()
+
+    def reposition(self, gfx: object, image: pygame.Surface) -> None:
+        """Update on-screen position and size based on the current scale.
+
+        Computes the scaled top-left position and stores the image size for hit testing and drawing.
+
+        Args:
+            gfx: Object that provides a `scale_ratio` attribute used to scale the logical coordinates to device pixels.
+            image: The surface that represents this widget when rendered.
+
+        Notes:
+            Does nothing when the widget is disabled.
+        """
+
+        if self.enabled:
+            self.width, self.height = image.get_size()
+            self.x, self.y = int(self.raw_x * gfx.scale_ratio), int(self.raw_y * gfx.scale_ratio)
+            # print(f"repositioned ({self.x},{self.y}) as [{self.width}x{self.height}]")
+
+    def draw(self, surface: pygame.Surface, image: pygame.Surface) -> None:
+        """Blit the widget image to the given surface at the current position.
+
+        Args:
+            surface: Target surface to draw onto.
+            image: Image to blit when drawing this widget.
+
+        Notes:
+            Does nothing when the widget is disabled.
+        """
+
+        if self.enabled:
+            surface.blit(image, (self.x, self.y))
+
+    def _bbox(self) -> pygame.Rect | None:
+        """Return the current widget bounding rectangle for hit testing.
+
+        Returns:
+            A `pygame.Rect` covering the last known position and size when the widget is enabled.
+            Returns `None` when disabled.
+        """
+
+        return pygame.Rect(self.x, self.y, self.width, self.height) if self.enabled else None
+
+    def is_over(self, x: int, y: int) -> bool:
+        """Report whether a point lies over the widget.
+
+        Args:
+            x: X coordinate in the same space used for drawing.
+            y: Y coordinate in the same space used for drawing.
+
+        Returns:
+            `True` if the point is inside the widget's bounding box and the widget is enabled. `False` otherwise.
+        """
+
+        # print(f"({x},{y}) is_over {self._bbox()}")
+        return self._bbox().collidepoint(x, y) if self.enabled else False
+
+    def select(self, game: object) -> None:
+        """Advance to the next monitor and play a click sound.
+
+        Increments the current monitor index modulo the number of displays, then plays the configured
+        click sound via the provided game object.
+
+        Args:
+            game: Game context that supplies `play_stereo_sound` and a `click_sound` attribute.
+
+        Notes:
+            Does nothing when the widget is disabled.
+        """
+
+        if self.enabled:
+            self.monitor = (self.monitor + 1) % self.monitors
+            game.play_stereo_sound(game.click_sound)
 
 
-class Text(object):
+class Text():
     def __init__(
         self,
         gfx: Any,
@@ -109,9 +218,9 @@ class Text(object):
             surface = self.gfx.screen
 
         if self.text == "lives":
-            text = str(self.game.get_lives())
+            text = str(self.game.lives)
         elif self.text == "level":
-            text = str(self.game.get_current_level())
+            text = str(self.game.level)
         else:
             text = self.text
 
@@ -195,8 +304,12 @@ class Text(object):
             self.italic = italic
 
 
-class Laser(object):
-    speed: int = 10
+class Laser():
+    # Vertical speed of a laser bolt
+    speed: int = 20
+
+    # Duration of the laser power-up (seconds)
+    duration: int = 6
 
     @classmethod
     def set_speed(cls, speed: int) -> None:
@@ -226,7 +339,7 @@ class Laser(object):
         self.y = y
         self.vy = -type(self).speed
         self.width, self.height = image.get_size()
-        self.w2, self.h2 = self.width // 2, self.height // 2
+        self.w2, self.h2 = max(1, self.width // 2), max(1, self.height // 2)
 
     def bbox(self) -> pygame.Rect:
         """
@@ -292,13 +405,13 @@ class Laser(object):
             bool: True if the laser's thin collision rect intersects the brick's bbox, else False.
         """
 
-        thin = self.w2 // 2
+        thin = max(2, self.w2 // 2)
         bbox = pygame.Rect(self.x - thin, self.y - self.h2, thin * 2, self.height)
 
         return bbox.colliderect(brick.bbox())
 
 
-class Bat(object):
+class Bat():
     def __init__(
         self,
         id: int,
@@ -340,7 +453,7 @@ class Bat(object):
         self.image = image
         self.gfx = gfx
         self.width, self.height = image.get_size()
-        self.w2, self.h2 = self.width // 2, self.height // 2
+        self.w2, self.h2 = max(1, self.width // 2), max(1, self.height // 2)
         self.dx = dx                                         # Horizontal delta (offset) for this bat's position (pixels)
         self.x = (gfx.window_width // 2) + dx                # Horizontal centre of bat (pixels)
         self.vx = vx                                         # Horitontal speed (pixels per frame)
@@ -468,7 +581,7 @@ class Bat(object):
             return time.time() > self.expire
 
 
-class Brick(object):
+class Brick():
     size = None
     half = None
 
@@ -568,7 +681,7 @@ class Brick(object):
         self.game = game
         self.image = self.gfx.brick_images[self.type]
         self.width, self.height = self.image.get_size()
-        self.w2, self.h2 = self.width // 2, self.height // 2
+        self.w2, self.h2 = max(1, self.width // 2), max(1, self.height // 2)
         self.x = x  # Horizontal centre of ball (pixels)
         self.y = y  # Vertical centre of ball (pixels)
 
@@ -719,7 +832,7 @@ class Brick(object):
         return self.lives < -20 or self.lives == 99
 
 
-class Ball(object):
+class Ball():
     def __init__(
         self,
         image: pygame.Surface,
@@ -784,7 +897,7 @@ class Ball(object):
         self.game = game
         self.mask_image = generate_mask_image(image)
         self.width, self.height = image.get_size()
-        self.w2, self.h2 = self.width // 2, self.height // 2
+        self.w2, self.h2 = max(1, self.width // 2), max(1, self.height // 2)
         self.x = x              # Horizontal centre of ball (pixels)
         self.y = y              # Vertical centre of ball (pixels)
         self.vx = vx            # Horitontal speed (pixels per frame)
@@ -852,6 +965,16 @@ class Ball(object):
         # Blit the pre-binarised alpha surface onto the screen
         surface.blit(temp, (bbox.x, bbox.y))
 
+    def kick(self, ratio=1.25) -> None:
+        """
+        Give this ball a kick of extra speed.
+
+        Args:
+            ratio: The speed kick ratio (e.g. 1.25 == 25% faster).
+        """
+
+        self.vx, self.vy = self.vx * ratio, self.vy * ratio
+
     def move(self, level: int = 1) -> None:
         """
         Integrate position, enforce minimum speed, handle wall and floor interactions.
@@ -871,14 +994,15 @@ class Ball(object):
         def enforce_minimum_speed(min_speed=2):
             """Calculate the speed (magnitude of velocity vector)."""
 
-            speed = math.sqrt(self.vx**2 + self.vy**2)
+            speed = math.hypot(self.vx, self.vy)
+            min_speed = min_speed * self.gfx.scale_ratio
             if speed == 0:
                 self.vx = 2
             elif speed < min_speed:
                 # Scale the velocity to have the desired minimum speed
                 factor = min_speed / speed
-                self.vx = int(round(self.vx * factor))
-                self.vy = int(round(self.vy * factor))
+                self.vx = int(round(self.vx * factor)) * self.gfx.scale_ratio
+                self.vy = int(round(self.vy * factor)) * self.gfx.scale_ratio
 
         def adjust_direction(angle_threshold=0.35):
             """Adjust very horizontal motion to be more vertical."""
@@ -988,7 +1112,7 @@ class Ball(object):
         if self.x < bat_left + bat.h2:
             collision_x = bat_left + bat.h2
             collision_y = bat.y + bat.h2
-            distance = math.sqrt((self.x - collision_x) ** 2 + (self.y - collision_y) ** 2)
+            distance = math.hypot(self.x - collision_x, self.y - collision_y)
             if distance < bat.h2 + self.h2:
                 # Adjust ball position to edge of collision
                 overlap = bat.h2 + self.h2 - distance
@@ -998,7 +1122,7 @@ class Ball(object):
                 self.x += math.cos(normal_angle) * overlap
                 self.y += math.sin(normal_angle) * overlap
                 # Reflect velocity based on angle of collision
-                speed = math.sqrt(self.vx ** 2 + self.vy ** 2)
+                speed = math.hypot(self.vx, self.vy)
                 self.vx = speed * math.cos(normal_angle)
                 self.vy = speed * math.sin(normal_angle)
             else:
@@ -1009,7 +1133,7 @@ class Ball(object):
         elif self.x > bat_right - bat.h2:
             collision_x = bat_right - bat.h2
             collision_y = bat.y + bat.h2
-            distance = math.sqrt((self.x - collision_x) ** 2 + (self.y - collision_y) ** 2)
+            distance = math.hypot(self.x - collision_x, self.y - collision_y)
             if distance < bat.h2 + self.h2:
                 # Adjust ball position to edge of collision
                 overlap = bat.h2 + self.h2 - distance
@@ -1019,7 +1143,7 @@ class Ball(object):
                 self.x += math.cos(normal_angle) * overlap
                 self.y += math.sin(normal_angle) * overlap
                 # Reflect velocity based on angle of collision
-                speed = math.sqrt(self.vx ** 2 + self.vy ** 2)
+                speed = math.hypot(self.vx, self.vy)
                 self.vx = speed * math.cos(normal_angle)
                 self.vy = speed * math.sin(normal_angle)
             else:
@@ -1035,9 +1159,11 @@ class Ball(object):
         vol = self.game.velocity_to_volume(self.vx, self.vy)
         pan = self.x / self.gfx.window_width
         Game.play_stereo_sound(self.game.bat_hit_sound, stereo=pan, volume=vol)
-        self.vx += (random() - 0.5)
-        scale = 4 - self.game.get_difficulty()
-        self.vy -= random() * self.gfx.scale_ratio / scale
+
+        # Add a bit of random peturbation to the velocity vector (bias towards accelerating upwards)
+        self.vx += (random() - 0.5) * self.gfx.scale_ratio
+        scale = 4 - self.game.difficulty
+        self.vy -= (random() * self.gfx.scale_ratio) / scale
 
         return True
 
@@ -1101,7 +1227,7 @@ class Ball(object):
                 return True
 
         # Corner collision (distance check)
-        distance = math.sqrt((self.x - collision_x) ** 2 + (self.y - collision_y) ** 2)
+        distance = math.hypot(self.x - collision_x, self.y - collision_y)
         if distance < self.h2:
             # Adjust ball position to edge of collision
             overlap = self.h2 - distance
@@ -1112,7 +1238,7 @@ class Ball(object):
             self.y += math.sin(normal_angle) * overlap
 
             # Reflect velocity based on angle of collision
-            speed = math.sqrt(self.vx ** 2 + self.vy ** 2)
+            speed = math.hypot(self.vx, self.vy)
             self.vx = speed * math.cos(normal_angle)
             self.vy = speed * math.sin(normal_angle)
             brick.hit(self.x, volume=self.game.velocity_to_volume(self.vx, self.vy))
@@ -1140,7 +1266,7 @@ class Ball(object):
         # Calculate the distance between the centers of the balls
         dx = other.x - self.x
         dy = other.y - self.y
-        dist = math.sqrt(dx * dx + dy * dy)
+        dist = math.hypot(dx, dy)
 
         # Both balls have the same radius since they're the same size
         radius = self.w2    # or self.height / 2, assuming width == height
@@ -1190,7 +1316,7 @@ class Ball(object):
         return False
 
 
-class Graphics(object):
+class Graphics():
     # Create a dict of handy colours. The order of the first entries is important, as these
     # colours are used for the corresponding bricks (the flash when they are destroyed)
     colours = {
@@ -1204,9 +1330,9 @@ class Graphics(object):
         'metal': (181, 192, 201),
         'laser': (32, 32, 200),
         'black': (0, 0, 0),
-        'level': (196, 224, 255),
+        'lives': (196, 224, 255),
         'advance': (128, 255, 192),
-        'lives': (164, 240, 164),
+        'level': (164, 240, 164),
         'die': (255, 164, 164),
         'win': (224, 224, 255),
         'title': (64, 104, 191),
@@ -1217,66 +1343,42 @@ class Graphics(object):
         'selitem': (96, 224, 96)
     }
 
-    def __init__(self, base: str, path: str, brick_types: int) -> None:
+    def __init__(self, monitor: int, path: str, brick_types: int, resize: float = 1.0) -> None:
         """
         Initialise graphics, window surfaces, and high-resolution sprites.
 
         Args:
-            base: Base directory containing auxiliary scripts (for example the DPI sub-process).
+            monitor: Index of the monitor to display on (0 is primary).
             path: Assets directory containing images.
             brick_types: Number of brick variants to load.
+            resize: Graphics resizing (downsampling) ratio.
         """
 
-        def get_dpi_aware_monitor_info(base):
-            """Spawn a DPI-aware subprocess to query monitor info."""
+        def get_monitor_info(monitor: int):
+            desktops = pygame.display.get_desktop_sizes()
+            width, height = desktops[monitor]
 
-            dpi_subproc_path = os.path.join(base, "dpi_subproc.py")
-            result = subprocess.run(
-                ["python", dpi_subproc_path],  # Path to the subprocess script
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-            )
-            if result.returncode != 0:
-                print(f"Error: {result.stderr}")
-                return None
+            return width, height
 
-            monitor_info = json.loads(result.stdout)
-            for monitor in monitor_info:
-                if monitor['is_primary']:
-                    return monitor['scaled']
-
-            if monitor_info:
-                return monitor_info[0]['scaled']
-
-            raise RuntimeError("Primary monitor not found.")
-
-        def get_monitor_info():
-            """Obtain the dimensions of the primary monitor."""
-            primary_monitor = None
-            for monitor in get_monitors():
-                if monitor.is_primary:
-                    primary_monitor = monitor
-                    break
-
-            if primary_monitor:
-                # Get the screen dimensions
-                return (primary_monitor.width, primary_monitor.height)
-
-            raise RuntimeError("Primary monitor not found.")
-
-        # Get the dimensions of the primary monitor
-        if platform.system() == "Windows":
-            self.window_width, self.window_height = get_dpi_aware_monitor_info(base)
-        else:
-            self.window_width, self.window_height = get_monitor_info()
+        print(f"Open on monitor {monitor}")
+        self.window_width, self.window_height = get_monitor_info(monitor)
+        print(f"Resolution {self.window_width}x{self.window_height}")
+        resize = max(resize, 1.0)
+        self.window_width, self.window_height = int(self.window_width / resize), int(self.window_height / resize)
+        print(f"Resized resolution {self.window_width}x{self.window_height}")
 
         # Make a note of the aspect ratio and the scale of this monitor relative to our reference implementation
         self.aspect_ratio = self.window_width / self.window_height
         self.scale_ratio = self.window_height / 1080
+        print(f"Scale ratio {self.scale_ratio}")
 
         # Create the display (window) for our game
-        self.display = pygame.display.set_mode((self.window_width, self.window_height), pygame.NOFRAME)
+        self.display = pygame.display.set_mode(
+            (self.window_width, self.window_height),
+            pygame.NOFRAME | pygame.SCALED | pygame.FULLSCREEN,
+            # vsync=1,
+            display=monitor
+        )
 
         # Create a surface to do all of our rendering into
         screen_size = (self.window_width, self.window_height)
@@ -1313,6 +1415,33 @@ class Graphics(object):
         self.hires_brick_imgs = self._load_sprites(path=path, brick_types=brick_types)
         self.brick_images = None
 
+    def _rescale_image(self, src_img: pygame.Surface, pcnt: float) -> pygame.Surface:
+        """
+        Rescale the supplied image so that its height is a specified percentage of the window height,
+        while maintaining its aspect ratio.
+
+        Args:
+            scr_img: The image to resize.
+            pcnt: The window height percentage to scale to.
+
+        Returns:
+            pygame.Surface: The resized image.
+
+        Note: use higher-quality `smoothscale()` rather than the faster `scale()` because we only do
+        this once per loaded image, so quality matters more than speed.
+        """
+
+        # What size should this image be, raltice to the window dimensions?
+        h_out = (self.window_height * pcnt) // 100
+
+        # Get actual image size
+        w_in, h_in = src_img.get_size()
+
+        # Compute the scaling ratio
+        ratio = h_out / h_in
+
+        return pygame.transform.smoothscale(src_img, (int(w_in * ratio), int(h_in * ratio)))
+
     def _load_sprites(self, path: str, brick_types: int) -> list[pygame.Surface]:
         """
         Load and scale core sprites to monitor-appropriate sizes.
@@ -1328,18 +1457,6 @@ class Graphics(object):
             SystemExit: If any image fails to load.
         """
 
-        def rescale_image(self, src_img, pcnt):
-            # What size should this image be, raltice to the window dimensions?
-            h_out = self.window_height * (pcnt / 100)
-
-            # Get actual image size
-            w_in, h_in = src_img.get_size()
-
-            # Compute the scaling ratio
-            ratio = h_out / h_in
-
-            return pygame.transform.scale(src_img, (int(w_in * ratio), int(h_in * ratio)))
-
         try:
             hires_ball_img = pygame.image.load(os.path.join(path, "ball.png"))
             hires_bonus_ball_img = pygame.image.load(os.path.join(path, "extra-ball.png"))
@@ -1349,6 +1466,7 @@ class Graphics(object):
             hires_bonus_bat_img = pygame.image.load(os.path.join(path, "extra-bat.png"))
             hires_blue_laser_img = pygame.image.load(os.path.join(path, "blue.png"))
             hires_green_laser_img = pygame.image.load(os.path.join(path, "green.png"))
+            hires_monitors_img = pygame.image.load(os.path.join(path, "monitors.png"))
 
             hires_brick_imgs = []
             for brick in range(brick_types):
@@ -1361,16 +1479,21 @@ class Graphics(object):
             sys.exit()
 
         # Resize various images to something more appropriate for our screen
-        self.ball_img = rescale_image(self, hires_ball_img, 4.5)
-        self.bonus_ball_img = rescale_image(self, hires_bonus_ball_img, 4.5)
-        self.blue_glow_img = rescale_image(self, hires_blue_glow_img, 4.5)
-        self.red_glow_img = rescale_image(self, hires_red_glow_img, 4.5)
+        self.ball_img = self._rescale_image(hires_ball_img, 4.5)
+        self.bonus_ball_img = self._rescale_image(hires_bonus_ball_img, 4.5)
+        self.blue_glow_img = self._rescale_image(hires_blue_glow_img, 4.5)
+        self.red_glow_img = self._rescale_image(hires_red_glow_img, 4.5)
 
-        self.bat_img = rescale_image(self, hires_bat_img, 6)
-        self.bonus_bat_img = rescale_image(self, hires_bonus_bat_img, 6)
+        self.bat_img = self._rescale_image(hires_bat_img, 6)
+        self.bonus_bat_img = self._rescale_image(hires_bonus_bat_img, 6)
 
-        self.blue_laser_img = rescale_image(self, hires_blue_laser_img, 6)
-        self.green_laser_img = rescale_image(self, hires_green_laser_img, 6)
+        self.blue_laser_img = self._rescale_image(hires_blue_laser_img, 6)
+        self.green_laser_img = self._rescale_image(hires_green_laser_img, 6)
+
+        self.monitors_img = self._rescale_image(hires_monitors_img, 10)
+
+        # Note: we resize the bricks at the start of each level, because different numbers of
+        # brick per level mean they need to be different sizes each time.
 
         return hires_brick_imgs
 
@@ -1439,17 +1562,19 @@ class Graphics(object):
         """
 
         try:
+            level = min(level, Game.get_max_level())
             tile_image = pygame.image.load(os.path.join(self.path, f"tile{level}.png"))
         except pygame.error as e:
             print(f"Error loading background tile: {e}")
             pygame.quit()
             sys.exit()
 
+        # Ensure the tile image scaled appropriately for the display height
+        tile_image = self._rescale_image(tile_image, 100)
+        tile_width, tile_height = tile_image.get_size()
+
         # Create a background surface with the same dimensions as the screen
         self.background = pygame.Surface((self.window_width, self.window_height))
-
-        # Get the dimensions of the tile image
-        tile_width, tile_height = tile_image.get_size()
 
         # Calculate the offsets to align tiles to the bottom and horizontally centre them
         y_offset = tile_height - (self.window_height % tile_height)
@@ -1580,7 +1705,7 @@ class Graphics(object):
                 obj.undraw(surface=surface)
 
 
-class Game(object):
+class Game():
     # Modify file paths if running as a PyInstaller bundle
     base_path = sys._MEIPASS if hasattr(sys, '_MEIPASS') else os.path.abspath(".")
 
@@ -1591,11 +1716,14 @@ class Game(object):
     # There are this many varieties of bricks
     num_brick_types = 9
 
-    # Laser mode lasts for this many frames
-    laser_duration = 120 * 4
+    # Number of seconds to keep controls inverted
+    inversion_seconds = 6
 
     # Number of lives to start the game with
     starting_lives = 3
+
+    # Number of seconds of no brick kills before we chuck a bonus ball in
+    boring_timeout = 10
 
     # The following tables define which brick types go where in each level
     #
@@ -1662,7 +1790,7 @@ class Game(object):
     ]
 
     @classmethod
-    def get_number_levels(cls) -> int:
+    def get_max_level(cls) -> int:
         """
         Return the number of defined levels.
 
@@ -1777,22 +1905,27 @@ class Game(object):
                     return alpha - 0.5
         return alpha
 
-    def __init__(self) -> None:
+    def __init__(self, monitor: int | None = 0, resize: float = 1.0) -> None:
         """
-        Set up Pygame, graphics, audio, game state, and initial objects.
+        Set up graphics, audio, game state, and initial objects.
+
+        Args:
+            monitor: Index of the monitor to display on (0 is primary).
+            resize: Graphics resizing (downsampling) ratio.
 
         Side effects:
-            - Initialises `pygame`.
             - Creates `Graphics` and loads sprites and sounds.
             - Creates hero bat and ball.
             - Sets default difficulty, lives, and level, then calls `reset()`.
         """
 
-        # Initialise pygame
-        pygame.init()
-
         # Initialise the main window and other graphical elements
-        self.gfx = Graphics(base=Game.base_path, path=Game.sprites_path, brick_types=Game.num_brick_types)
+        self.gfx = Graphics(
+            monitor=monitor if monitor is not None else 0,
+            path=Game.sprites_path,
+            brick_types=Game.num_brick_types,
+            resize=resize
+        )
 
         # Game objects
         self.bats = []
@@ -1832,7 +1965,6 @@ class Game(object):
         # Initialise other important variables required in the game loops
         self.running = True
         self.paused = False
-        self.frame_count = 0
         self.dark_alpha = 0
         self.inversion = 0
         self.laser_count = 0
@@ -1854,64 +1986,65 @@ class Game(object):
             0
         )
 
-        # Get the level number from the first argument, or default to 1 if none is supplied
-        self.level = None
-        self.difficulty = 0
+        # Other useful globals
+        self._level = None
+        self._difficulty = 0
+        self._frame = 0
+        self.last_kill = 0
         self.reset()
 
         # Create the text overlay objects (lives remaining and current level)
         self.lives_text = Text(self.gfx, self, text="lives", colour=Graphics.colours['lives'])
         self.level_text = Text(self.gfx, self, text="level", colour=Graphics.colours['level'])
 
-    def get_difficulty(self) -> int:
-        """
-        Get the current difficulty setting.
+    @property
+    def frame(self) -> int:
+        """Current frame counter."""
 
-        Returns:
-            int: Difficulty level.
-        """
+        return self._frame
 
-        return self.difficulty
+    @frame.setter
+    def frame(self, value: int):
+        self._frame = int(value)
 
-    def set_difficulty(self, difficulty: int) -> None:
-        """
-        Set the game difficulty.
+    @property
+    def difficulty(self) -> int:
+        """Current difficulty."""
 
-        Args:
-            difficulty: New difficulty value.
-        """
+        return self._difficulty
 
-        self.difficulty = difficulty
+    @difficulty.setter
+    def difficulty(self, value: int):
+        self._difficulty = int(value)
 
-    def get_lives(self) -> int | None:
-        """
-        Get the hero ball's remaining lives.
-
-        Returns:
-            int | None: Remaining lives; None indicates an immortal ball.
-        """
+    @property
+    def lives(self) -> int | None:
+        """Current player lives remaining."""
 
         return self.hero_ball.lives
 
-    def set_lives(self, lives: int) -> None:
-        """
-        Set the hero ball's (the player's) remaining lives.
+    @lives.setter
+    def lives(self, value: int):
+        self.hero_ball.lives = int(value)
 
-        Args:
-            lives: Number of lives to assign.
-        """
+    @property
+    def level(self) -> int | None:
+        """Current level."""
 
-        self.hero_ball.lives = lives
+        return self._level
 
-    def get_current_level(self) -> int:
+    @level.setter
+    def level(self, value: int):
+        self._level = int(value)
+
+    def get_fps(self) -> int:
         """
-        Get the current 1-indexed level number.
+        Get the current frame rate.
 
         Returns:
-            int: Current level.
+            int: Smoothed frames per second over recent frames (as an integer).
         """
-
-        return self.level
+        return int(self.clock.get_fps())
 
     def reset(self, level: int = 1) -> None:
         """
@@ -1921,7 +2054,7 @@ class Game(object):
             level: Level to reset to (defaults to 1).
 
         Behaviour:
-            - Sets `self.level` from CLI arg 1 if present, else 1.
+            - Sets `self.level` (defaults to 1).
             - Sets hero ball lives based on `starting_lives` and difficulty bonus.
             - Rebuilds the background for the level.
             - Centres the hero bat and mouse horizontally.
@@ -1931,7 +2064,7 @@ class Game(object):
 
         # Set the hero ball lives to the starting value
         bonus_lives = 2 - self.difficulty
-        self.set_lives(Game.starting_lives + bonus_lives)
+        self.lives = Game.starting_lives + bonus_lives
         self.balls = [self.hero_ball]
 
         # Initialise the background surface for this level
@@ -1965,20 +2098,23 @@ class Game(object):
         # self.gfx.screen.blit(self.gfx.background, (0, 0))
 
         # Initialise the bricks (and draw them)
-        self.gfx.brick_images = self.gfx.scale_brick_images(self.get_current_level())
+        self.gfx.brick_images = self.gfx.scale_brick_images(self.level)
         self.create_bricks()
 
-        # Reset the hero ball position and motion
+        # Reset the hero ball position
         self.gfx.set_mouse_pos(self.gfx.window_width // 2, self.gfx.window_height)
         self.hero_ball.x = self.gfx.mouse_x
         self.hero_ball.y = self.bats[0].y - self.hero_ball.height
-        self.hero_ball.vx = randint(-1, 1) * self.gfx.scale_ratio
 
+        # Initalise the hero ball's velocity
+        vx = randint(-1, 1) * self.gfx.scale_ratio
         vy = -2 * (self.level + 1)
         vy -= 2 - self.difficulty
-        vy = vy * self.gfx.scale_ratio
+        self.hero_ball.vx, self.hero_ball.vy = vx, vy * self.gfx.scale_ratio
 
-        self.hero_ball.vy = vy
+        # Start at frame zero and set the last brick kill time to now
+        self.frame = 0
+        self.last_kill = time.time() + Game.boring_timeout
 
         # We're not darkening the screen at the moment
         self.dark_alpha = None
@@ -1987,6 +2123,10 @@ class Game(object):
         self.inversion = 0
         for bat in self.bats + self.extra_bats:
             bat.restore()
+
+        # Move any active extra bats back into the pool (leave only the hero bat)
+        while len(self.bats) > 1:
+            self.extra_bats.append(self.bats.pop())
 
         # Delete all balls except the hero ball
         while len(self.balls) > 1:
@@ -2020,6 +2160,7 @@ class Game(object):
             self.restore_sound = pygame.mixer.Sound(os.path.join(path, "restore.wav"))
             self.wall_hit_sound = pygame.mixer.Sound(os.path.join(path, "wall-hit.wav"))
             self.win_sound = pygame.mixer.Sound(os.path.join(path, "win.wav"))
+            self.bonus_sound = pygame.mixer.Sound(os.path.join(path, "bonus.wav"))
 
             # Each brick has its own sound for when it's destroyed
             self.explode_sounds = []
@@ -2141,6 +2282,47 @@ class Game(object):
             # Recurse (which might include destroying other cascading bricks)
             self.kill_a_brick(brick)
 
+    def _add_bonus_ball(self, lives: int | None = 2) -> int:
+        """
+        Introduce a bonus ball from either the bottom-left or bottom-right of the screen.
+
+        Args:
+            lives: Number of lives to give the bonus ball.
+
+        Returns:
+            int: The x coordinate of the ball that was added.
+        """
+
+        if randint(0, 1) == 0:
+            # Appear from left
+            x = 0
+        else:
+            # Appear from right
+            x = self.gfx.window_width - 1
+
+        # Bonus balls appear from the sides at a random angle - never quite straight up or
+        # straight across. They move at between 50% and 100% of the hero ball's speed.
+        angle = uniform(5, 85)
+        speed = math.hypot(self.hero_ball.vx, self.hero_ball.vy)
+        speed = speed * uniform(0.5, 1.0)
+        vx = math.sin(math.radians(angle))
+        vy = -math.cos(math.radians(angle))
+
+        bonus_ball = Ball(
+            image=self.gfx.bonus_ball_img,
+            glow=self.gfx.red_glow_img,
+            gfx=self.gfx,
+            game=self,
+            x=x,
+            y=self.gfx.window_height * 0.8,
+            vx=-vx if x else vx,    # Reverse x component if ball is on the right
+            vy=vy,
+            lives=lives
+        )
+        self.balls.append(bonus_ball)
+
+        return x
+
     def kill_a_brick(self, brick: Brick) -> None:
         """
         Handle bonuses/effects when a brick reaches zero lives.
@@ -2162,24 +2344,7 @@ class Game(object):
 
         # Red bricks add some temporary balls
         if brick.type == 1:
-            if randint(0, 1) == 0:
-                # Appear from left
-                x = 0
-            else:
-                # Appear from right
-                x = self.gfx.window_width - 1
-
-            bonus_ball = Ball(
-                self.gfx.bonus_ball_img,
-                self.gfx.red_glow_img,
-                self.gfx,
-                self,
-                x,
-                self.gfx.window_height * 0.8,
-                vx=-randint(1, 4) * self.gfx.scale_ratio,
-                vy=-randint(1, 4) * self.gfx.scale_ratio
-            )
-            self.balls.append(bonus_ball)
+            self._add_bonus_ball()
 
         # Green bricks add a new bat
         elif brick.type == 2:
@@ -2203,7 +2368,7 @@ class Game(object):
                 self.gfx.get_mouse_pos()
                 self.gfx.mouse_x = self.gfx.window_width - self.gfx.mouse_x
                 self.gfx.set_mouse_pos(self.gfx.mouse_x, self.gfx.mouse_y)
-            self.inversion = 120 * 6
+            self.inversion = self.get_fps() * Game.inversion_seconds
             for bat in self.bats + self.extra_bats:
                 bat.invert()
 
@@ -2221,9 +2386,16 @@ class Game(object):
             # Run the cascade
             self._brick_cascade(cascade)
 
+        # Metal bricks are immortal!
+        elif brick.type == 7:
+            return
+
         # Laser bricks restart (or increase) the laser shooting duration
         elif brick.type == 8:
-            self.laser_count += Game.laser_duration
+            duration = Laser.duration * self.get_fps()
+            self.laser_count += duration
+
+        self.last_kill = time.time() + Game.boring_timeout
 
     def draw_all_objects(self) -> bool:
         """
@@ -2267,9 +2439,12 @@ class Game(object):
         # self.lives_text.undraw()
         # self.level_text.undraw()
 
-    def display(self):
+    def display(self, fps: int = 60):
         """
         Update the display with the latest frame.
+
+        Args:
+            fps: Maximum frame rate.
         """
         self.gfx.display.blit(self.gfx.screen, (0, 0))
         self.dark_alpha = Game.get_next_alpha(self.dark_alpha)
@@ -2279,6 +2454,12 @@ class Game(object):
         # After each frame, we do a liner fade of the glowing trails (towards transparent)
         fade = 10  # 0..255 to subtract this frame
         self.gfx.trail_sfc.fill((0, 0, 0, fade), special_flags=pygame.BLEND_RGBA_SUB)  # RGB unchanged, alpha -= fade
+
+        # Increment the frame counter
+        self.frame += 1
+
+        # Cap the frame rate to 60 frames per second
+        self.clock.tick(fps)
 
     def check_inversion_mode(self) -> None:
         """
@@ -2291,13 +2472,17 @@ class Game(object):
         """
 
         if self.inversion > 0:
-            if (self.inversion % 120) == 0:
+            fps = 120 if self.get_fps() == 120 else 60
+            if (self.inversion % fps) == 0:
                 pan = self.gfx.mouse_x / self.gfx.window_width
-                if self.inversion == 120:
+                if self.inversion == fps:
+                    # Play one second before restoration
                     Game.play_stereo_sound(self.restore_sound, stereo=pan)
                 else:
                     Game.play_stereo_sound(self.tick_sound, stereo=pan)
+
             self.inversion -= 1
+
             if self.inversion == 0:
                 for bat in self.bats + self.extra_bats:
                     bat.restore()
@@ -2343,9 +2528,11 @@ class Game(object):
 
         # Are we still emitting laser beams?
         if self.laser_count > 0:
+            fps = 120 if self.get_fps() == 120 else 60
+
             # Each active bat emits at a slightly different frame offset
             for idx, bat in enumerate(self.bats):
-                if self.frame_count % 60 == idx * 8:
+                if self.frame % fps == idx * (fps >> 3):
                     image = self.gfx.blue_laser_img if idx == 0 else self.gfx.green_laser_img
                     laser = Laser(image, self.gfx, bat.x, bat.y + bat.h2)
                     self.lasers.append(laser)
@@ -2353,6 +2540,19 @@ class Game(object):
                     pan = bat.x / self.gfx.window_width
                     Game.play_stereo_sound(self.laser_sounds[rnd], stereo=pan)
             self.laser_count -= 1
+
+    def check_boring(self) -> None:
+        """
+        If gameplay looks stale - a brick hasn't been killed for a while - then add a bonus
+        ball into play, and give it more lives than the normal bonus balls.
+        """
+
+        now = time.time()
+        if now > self.last_kill:
+            self.last_kill = now + Game.boring_timeout
+            x = self._add_bonus_ball(lives=3)
+            pan = x / self.gfx.window_width
+            Game.play_stereo_sound(self.bonus_sound, stereo=pan)
 
     def animate_bats(self) -> None:
         """
@@ -2384,11 +2584,10 @@ class Game(object):
 
         # Move the ball(s) and check for collisions with the bat(s)
         lost = []
-        level = self.get_current_level()
 
         for ball in self.balls:
             # Move the ball and see if it hit a bat
-            ball.move(level)
+            ball.move(self.level)
             for bat in self.bats:
                 ball.check_bat_collision(bat)
 
@@ -2416,15 +2615,27 @@ class Game(object):
             for j in range(i + 1, len(self.balls)):
                 self.balls[i].check_ball_collision(self.balls[j])
 
+    def kick_all_balls(self, ratio=1.25) -> None:
+        """
+        Give all of the balls a kick of extra speed.
 
-def intro(gfx: Graphics, game: Game, image_path: str) -> bool:
+        Args:
+            ratio: The speed kick ratio (e.g. 1.25 == 25% faster).
+        """
+
+        for ball in self.balls:
+            ball.kick(ratio)
+
+
+def intro(gfx: Graphics, game: Game, widget: MonitorSelector, image_path: str) -> bool:
     """
     Run the animated intro scene with a rotating, perspective-warped image card, a swarm of bouncing intro
-    balls, and a difficulty selection menu.
+    balls, and a difficulty menu.
 
     Args:
         gfx: Graphics context.
         game: Game context.
+        widget: The monitor selection widget (for multi-head systems).
         image_path: Path to an image that will be warped onto a rotating 3D rectangle.
 
     Behaviour:
@@ -2437,9 +2648,10 @@ def intro(gfx: Graphics, game: Game, image_path: str) -> bool:
         - Exits the loop on any key press or mouse click, or returns early on quit.
 
     Returns:
-        bool: True if the user quit from the intro (for example window close, Q, or Esc),
-              False if the intro completed and the game should continue. On completion, sets the game
-              difficulty based on the selected menu item.
+        str | None:
+            None: the user quit from the intro (for example window close, Q, or Esc),
+            "start": the intro completed and the game should continue.
+            "monitor": the monitor selection widget has been clicked.
     """
 
     # Load the image using OpenCV
@@ -2528,9 +2740,9 @@ def intro(gfx: Graphics, game: Game, image_path: str) -> bool:
             game,
             randint(0, gfx.window_width - 1),
             randint(0, gfx.window_height - 1),
-            vx=randint(-5, 5),
-            vy=randint(-5, 5),
-            lives=3,
+            vx=randint(-5, 5) * gfx.scale_ratio,
+            vy=randint(-5, 5) * gfx.scale_ratio,
+            lives=1,
             intro=True
         )
         intro_balls.append(intro_ball)
@@ -2538,20 +2750,21 @@ def intro(gfx: Graphics, game: Game, image_path: str) -> bool:
     intro_hero_ball = intro_balls[0]
     gfx.mouse_x, gfx.mouse_y = pygame.mouse.get_pos()
 
-    # We can select the game mode from the intro screen:
+    # Create menu text for the game modes
     #
     # 0 - easy
     # 1 - medium
     # 2 - hard
     #
-    selected_item = 0
-
-    # Create menu text for the game modes
     x = gfx.window_width // 2
     menu = []
-    menu.append(Text(gfx, game, "Easy", Graphics.colours['selitem'], x, gfx.window_height * 0.7, size=100, alpha=224, bold=True))
+    menu.append(Text(gfx, game, "Easy", Graphics.colours['item'], x, gfx.window_height * 0.7, size=100, alpha=224))
     menu.append(Text(gfx, game, "Medium", Graphics.colours['item'], x, gfx.window_height * 0.8, size=100, alpha=224))
     menu.append(Text(gfx, game, "Hard", Graphics.colours['item'], x, gfx.window_height * 0.9, size=100, alpha=224))
+
+    # Select the default item
+    difficulty = game.difficulty
+    menu[difficulty].restyle(colour=Graphics.colours['selitem'], bold=True)
 
     # Plot the menu text to initialise the bounding boxes
     for text in menu:
@@ -2567,23 +2780,28 @@ def intro(gfx: Graphics, game: Game, image_path: str) -> bool:
 
     # Main intro loop
     more = True
-    frame = 0
+    game.frame = 0
     while more:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
-                return True
+                return None
 
             # Check for any keypress
             elif event.type == pygame.KEYUP:
                 if event.key == pygame.K_q:
-                    return True
+                    return None
                 elif event.key == pygame.K_ESCAPE:
-                    return True
+                    return None
                 else:
                     more = False
 
             # Check for mouse button click
             elif event.type == pygame.MOUSEBUTTONUP:
+                x, y = pygame.mouse.get_pos()
+                if widget.is_over(x, y):
+                    widget.select(game)
+                    return "monitor"
+
                 more = False
 
         # Move all of the balls
@@ -2634,15 +2852,18 @@ def intro(gfx: Graphics, game: Game, image_path: str) -> bool:
 
         # Check for the mouse being over a different menu item than the one that is currently selected
         for idx, text in enumerate(menu):
-            if selected_item != idx and text.bbox.collidepoint((int(intro_hero_ball.x), int(intro_hero_ball.y))):
-                menu[selected_item].restyle(colour=Graphics.colours['item'], bold=False)
+            if difficulty != idx and text.bbox.collidepoint((int(intro_hero_ball.x), int(intro_hero_ball.y))):
+                menu[difficulty].restyle(colour=Graphics.colours['item'], bold=False)
                 text.restyle(colour=Graphics.colours['selitem'], bold=True)
                 Game.play_stereo_sound(game.click_sound)
-                selected_item = idx
+                difficulty = idx
+
+                # Set the game difficulty based upon the selected menu item
+                game.difficulty = difficulty
                 break
 
         # Pulse the colour of the title text
-        wave = int(64 * math.sin(math.radians(frame)))
+        wave = int(64 * math.sin(math.radians(game.frame)))
         red = Graphics.colours['title'][0] + wave
         grn = Graphics.colours['title'][1] + wave
         blu = Graphics.colours['title'][2] + wave
@@ -2656,6 +2877,10 @@ def intro(gfx: Graphics, game: Game, image_path: str) -> bool:
         for text in messages:
             text.draw(surface=gfx.display)
 
+        # Draw the monitor selection widget (if it is enabled)
+        widget.draw(surface=gfx.display, image=gfx.monitors_img)
+
+        # Draw the glowing ball trails
         gfx.display.blit(gfx.trail_sfc, (0, 0))
 
         # Draw all of the balls
@@ -2668,13 +2893,11 @@ def intro(gfx: Graphics, game: Game, image_path: str) -> bool:
         fade = 10  # 0..255 to subtract this frame
         gfx.trail_sfc.fill((0, 0, 0, fade), special_flags=pygame.BLEND_RGBA_SUB)  # RGB unchanged, alpha -= fade
 
-        game.clock.tick(60)
-        frame += 1
+        # Cap the frame rate to 120 frames per second
+        game.clock.tick(120)
+        game.frame += 1
 
-    # Set the game difficulty based upon the selected menu item
-    game.set_difficulty(selected_item)
-
-    return False
+    return "start"
 
 
 def splash_screen(
@@ -2733,64 +2956,52 @@ def splash_screen(
         banner.draw()
 
         # Flip the gfx.display after applying the darkening effect
-        game.display()
-
-        # Cap the frame rate to 120 frames per second
-        game.clock.tick(120)
+        game.display(fps=60)
 
     # Return False if the user didn't quit
     return False
 
 
-def main(argv: Optional[Sequence[str]] = None) -> int:
-    # Create the Game and get a reference to its Graphics object
-    game = Game()
-    gfx = game.gfx
+def game_loop(game: object, gfx: object):
+    # Reset to the starting level state
+    game.reset()
 
-    # Main loop: keep offering new games until the user quits
-    while game.running:
-        # Run the intro (user may quit here)
-        quit = intro(gfx, game, os.path.join(Game.base_path, "sprites", "intro.png"))
-        if quit:
-            break
+    # Show a splash screen for the first level (user may quit here)
+    splash = f"Level {game.level}..."
+    splash_col = Graphics.colours['advance']
+    gfx.screen.blit(gfx.background, (0, 0))
+    quit = splash_screen(gfx, game, splash, splash_col)
+    if quit:
+        return False
 
-        # Reset to initial level state
-        game.reset()
+    # Main loops: outer loop progresses levels; inner loop runs a single level
+    while game.running and game.level <= Game.get_max_level() and game.lives > 0:
+        # Prepare this level
+        game.initialise_level()
 
-        # Show a splash screen for the first level (user may quit here)
-        splash = f"Level {game.get_current_level()}..."
-        splash_col = Graphics.colours['advance']
-        gfx.screen.blit(gfx.background, (0, 0))
-        quit = splash_screen(gfx, game, splash, splash_col)
-        if quit:
-            break
+        while game.running:
+            # Restore background over previously drawn objects
+            game.undraw_all_objects()
 
-        # Main loops: outer loop progresses levels; inner loop runs a single level
-        while game.running and game.get_current_level() <= Game.get_number_levels() and game.get_lives() > 0:
-            # Prepare this level
-            game.initialise_level()
+            # Handle pending events
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    return True
 
-            # Frame counter: increment once per frame
-            game.frame_count = 0
-
-            while game.running:
-                # Restore background over previously drawn objects
-                game.undraw_all_objects()
-
-                # Handle pending events
-                for event in pygame.event.get():
-                    if event.type == pygame.QUIT:
-                        game.running = False
-
-                    elif event.type == pygame.KEYDOWN:
-                        if event.key == pygame.K_q:
-                            game.running = False
-                        elif event.key == pygame.K_ESCAPE:
-                            game.running = False
-                        elif event.key == pygame.K_SPACE:
-                            game.paused = not game.paused
+                elif event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_q:
+                        return True
+                    elif event.key == pygame.K_ESCAPE:
+                        return True
+                    elif event.key == pygame.K_SPACE:
+                        game.paused = not game.paused
 
                     # # Debugging cheats...
+                    # elif event.key == pygame.K_d:
+                    #     for brick in game.bricks:
+                    #         brick.hit(x=0, kill=True)
+
+                    # # More debugging cheats...
                     # elif event.type == pygame.MOUSEBUTTONDOWN:
                     #     if event.button == 1:
                     #         # Left click: destroy the brick under the cursor
@@ -2812,76 +3023,162 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                     #         # Right button released: show cursor
                     #         pygame.mouse.set_visible(True)
 
-                    elif event.type == pygame.MOUSEMOTION:
-                        # Update cached mouse position; apply inversion if active
-                        gfx.mouse_x, gfx.mouse_y = pygame.mouse.get_pos()
-                        if game.inversion > 0:
-                            gfx.mouse_x = gfx.window_width - gfx.mouse_x
+                elif event.type == pygame.MOUSEMOTION:
+                    # Update cached mouse position; apply inversion if active
+                    gfx.mouse_x, gfx.mouse_y = pygame.mouse.get_pos()
+                    if game.inversion > 0:
+                        gfx.mouse_x = gfx.window_width - gfx.mouse_x
 
-                if not game.paused:
-                    game.check_inversion_mode()
-                    game.check_lasers_mode()
-                    game.animate_bats()
-                    game.animate_balls()
+                elif event.type == pygame.MOUSEBUTTONDOWN:
+                    if event.button == 1:
+                        # Left click: give all of the balls a bit of a speed kick
+                        game.kick_all_balls()
 
-                # Stop if no lives remain
-                if game.get_lives() <= 0:
-                    game.running = False
-
-                # Draw everything; report completion if all destroyable bricks are gone
-                complete = game.draw_all_objects()
-                if complete:
-                    # All bricks disintegrated
-                    break
-
-                # Present the frame, optionally blending with black
-                game.display()
-                game.frame_count += 1
-
-                # Cap frame rate to 120 FPS
-                game.clock.tick(120)
-
-            # Left the inner loop due to one of:
-            # - Out of lives, or
-            # - Level cleared, or
-            # - Quit requested
-            if game.get_lives() == 0:
-                # Out of lives
-                Game.play_stereo_sound(game.die_sound)
-                splash = "Game Over!"
-                splash_col = Graphics.colours['die']
-                game.running = True
-
-            elif game.running:
-                # Level cleared
-                game.level_up()
-                if game.get_current_level() < Game.get_number_levels():
-                    # Award a bonus life and show next level splash
-                    game.set_lives(1 + game.get_lives())
-                    splash = f"Level {game.get_current_level()}..."
-                    splash_col = Graphics.colours['advance']
-                else:
-                    # Final level completed: play win sound and show win splash
-                    Game.play_stereo_sound(game.win_sound)
-                    splash = "YOU WIN!"
-                    splash_col = Graphics.colours['win']
+            if not game.paused:
+                game.check_inversion_mode()
+                game.check_lasers_mode()
+                game.animate_bats()
+                game.animate_balls()
+                game.check_boring()
             else:
-                # Quitting
-                splash = None
-                splash_col = None
+                game.last_kill += 1.0 / game.get_fps()
 
-            # If advancing to the next level, refresh the background
-            if game.running:
-                gfx.initialise_background(game.level)
-                gfx.screen.blit(gfx.background, (0, 0))
-
-            # Optionally show a splash; quit if the user exits during it
-            if splash_screen(gfx, game, splash, splash_col):
+            # Stop if no lives remain
+            if game.lives <= 0:
                 game.running = False
 
-    # Quit pygame
-    pygame.quit()
+            # Draw everything; report completion if all destroyable bricks are gone
+            complete = game.draw_all_objects()
+            if complete:
+                # All bricks disintegrated
+                break
+
+            # Present the frame, optionally blending with black
+            game.display(fps=60)
+
+        # Left the inner loop due to one of:
+        # - Out of lives, or
+        # - Level cleared, or
+        # - Quit requested
+        if game.lives == 0:
+            # Out of lives
+            Game.play_stereo_sound(game.die_sound)
+            splash = "Game Over!"
+            splash_col = Graphics.colours['die']
+            # Resume the running state so the main loop continues
+            game.running = True
+
+        elif game.running:
+            # Level cleared
+            game.level_up()
+            if game.level <= Game.get_max_level():
+                # Award a bonus life and show next level splash
+                game.lives += 1
+                splash = f"Level {game.level}..."
+                splash_col = Graphics.colours['advance']
+            else:
+                # Final level completed: play win sound and show win splash
+                Game.play_stereo_sound(game.win_sound)
+                splash = "YOU WIN!"
+                splash_col = Graphics.colours['win']
+        else:
+            # Quitting
+            splash = None
+            splash_col = None
+
+        # If advancing to the next level, refresh the background
+        if game.running:
+            gfx.initialise_background(game.level)
+            gfx.screen.blit(gfx.background, (0, 0))
+
+        # Optionally show a splash; quit if the user exits during it
+        if splash_screen(gfx, game, splash, splash_col):
+            return True
+
+    return False
+
+
+def menu_loop(args: argparse.Namespace) -> int:
+    # Create the initial Game and get a reference to the Graphics object
+    game = Game(monitor=args.monitor, resize=args.resize)
+    gfx = game.gfx
+
+    # Initialise a monitor selection widget
+    widget = MonitorSelector(choice=args.monitor, x=12 * gfx.scale_ratio, y=12 * gfx.scale_ratio)
+    widget.reposition(gfx=gfx, image=gfx.monitors_img)
+
+    # Don't check `game.running` here - because the `game` object itself can end up deleted and recreated, which could leave
+    # the loop looking at a deleted object (if python decides to cache things)
+    while True:
+        # The intro screen loop - iterate while the user is selecting a monitor
+        while True:
+            # Run the intro (user may quit here)
+            option = intro(gfx, game, widget, os.path.join(Game.base_path, "sprites", "intro.png"))
+            # print(f"option is '{option}'")
+
+            if option is None:
+                # User has quit
+                return 0
+            elif option == "monitor":
+                # Quit and reinitialise the pygame display, so that out window can reopen on a different monitor
+                pygame.display.quit()
+                pygame.display.init()
+
+                # Make a note of the game difficulty setting, so we can preserve it
+                difficulty = game.difficulty
+
+                # Mark our Game and Graphics objects for garbage collection
+                del gfx
+                del game
+
+                # Create new Game and Graphics objects, having selected a different monitor
+                game = Game(monitor=widget.monitor, resize=args.resize)
+                gfx = game.gfx
+
+                # Restore the selected difficulty
+                game.difficulty = difficulty
+            else:
+                # Ready to start the game
+                break
+
+        # Run the main game loop
+        if game_loop(game, gfx):
+            # `game_loop()` returns `True` if we've quit
+            break
+
+        if not game.running:
+            break
+
     return 0
+
+
+def main(argv: Optional[Sequence[str]] = None) -> int:
+    parser = argparse.ArgumentParser(
+        description="Breakout. A different spin on the classic retro brick-breaker game."
+    )
+    parser.add_argument("--resize", "-r", type=float, default=1.0,
+                        help="Ratio for down-sizing the graphics for a more retro feel. Default: 1.0")
+    parser.add_argument("--monitor", "-m", type=int,
+                        help="Index of the monitor to display on (0 is primary).")
+    args = parser.parse_args()
+
+    # Initialise pygame
+    pygame.init()
+
+    # Run the outer game loop
+    try:
+        rc = menu_loop(args)
+    except KeyboardInterrupt:
+        print("\nInterrupted")
+        return 130
+    except Exception:
+        # Print the full traceback like the default handler
+        traceback.print_exc()
+        return 1
+    finally:
+        pygame.quit()
+
+    return rc
 
 
 if __name__ == "__main__":  # pragma: no cover

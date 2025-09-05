@@ -69,6 +69,21 @@ source .venv/bin/activate
 # 2) Start the game
 python breakout.py
 ```
+You can also pass the `--ratio` (or `-r`) parameter to scale the graphics down by a specified amount, e.g.
+
+```bash
+python breakout.py -r 4
+```
+will down-scale all of the graphics by a factor of four (horizontally and vertically). Higher values give more retro vibes! If your machine struggles to play Breakout smoothly at full resolution, increasing the `-r` parameter should reduce CPU load.
+
+## Monitor selection
+
+If you have multiple monitors, you can pass the `--monitor` (or `-m`) parameter to specify the desired monitor number (with 0 being the primary display).
+
+```bash
+python breakout.py -m 2
+```
+If this parameter isn't passed and there are multiple monitors detected, you will see a monitor selection icon in the top-left of the intro screen. Clicking this will move the game to each monitor in turn.
 
 ## How to play
 
@@ -79,6 +94,7 @@ python breakout.py
 ### Controls
 
 - **Mouse**: Move the bat horizontally
+- **Left click**: Speed all of the balls up a little
 - **Space**: Pause or resume
 - **Q / Esc**: Quit
 - **Intro screen**: Move the mouse over the menu to select a difficulty, then click or press any key
@@ -97,7 +113,7 @@ python breakout.py
 | ![Metal](./sprites/sm-brick7.png) | **Metal** | Indestructible |
 | ![Warning triangle](./sprites/sm-brick8.png) | **Warning triangle** | Enables laser mode for a duration |
 
-Different brick types require different numbers of hits to destroy.
+Different brick types require different numbers of hits to destroy. If no brick is destroyed for a while, an extra bonus ball is introduced.
 
 ## Troubleshooting
 
