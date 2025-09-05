@@ -750,7 +750,10 @@ class Brick():
         if self.lives < 99 and self.expired():
             return False
 
-        if self.lives < 1:
+        if self.lives < -20:
+            # Don't draw anything
+            pass
+        elif self.lives < 1:
             radius = self.h2
             if self.lives != 0:
                 radius = int((radius / 20) * (20 + self.lives))
@@ -1401,6 +1404,7 @@ class Graphics():
 
         # Hide the mouse pointer
         pygame.mouse.set_visible(False)
+        pygame.event.set_grab(True)
         self.mouse_x = 0
         self.mouse_y = 0
 
@@ -2995,6 +2999,13 @@ def game_loop(game: object, gfx: object):
                         return True
                     elif event.key == pygame.K_SPACE:
                         game.paused = not game.paused
+                        if game.paused:
+                            pygame.mouse.set_visible(True)
+                            pygame.event.set_grab(False)
+                        else:
+                            pygame.mouse.set_visible(False)
+                            pygame.mouse.set_pos(gfx.mouse_x, gfx.mouse_y)
+                            pygame.event.set_grab(True)
 
                     # # Debugging cheats...
                     # elif event.key == pygame.K_d:
@@ -3025,9 +3036,10 @@ def game_loop(game: object, gfx: object):
 
                 elif event.type == pygame.MOUSEMOTION:
                     # Update cached mouse position; apply inversion if active
-                    gfx.mouse_x, gfx.mouse_y = pygame.mouse.get_pos()
-                    if game.inversion > 0:
-                        gfx.mouse_x = gfx.window_width - gfx.mouse_x
+                    if not game.paused:
+                        gfx.mouse_x, gfx.mouse_y = pygame.mouse.get_pos()
+                        if game.inversion > 0:
+                            gfx.mouse_x = gfx.window_width - gfx.mouse_x
 
                 elif event.type == pygame.MOUSEBUTTONDOWN:
                     if event.button == 1:
