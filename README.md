@@ -10,7 +10,7 @@ A modern, Pygame-based take on the classic brick-breaker. Clear all destroyable 
 - Multiple brick types with unique effects and hit points
 - Bonus balls, extra bats, control inversion, laser mode, and blackout mode
 - Stereo-panned sound effects
-- DPI-aware window sizing on Windows, dynamic scaling everywhere
+- Multi-monitor aware with dynamic resizing
 - Smooth intro scene with perspective-warped card and animated balls
 
 ## Requirements
@@ -25,14 +25,12 @@ Installed via `pip`:
 - `pygame` – rendering, input, audio
 - `opencv-python` – intro image warping
 - `numpy` – array ops and masks
-- `screeninfo` – obtaining primary monitor dimensions
 
 #### Dependencies
 
 ```txt
 pygame>=2.5
 opencv-python>=4.9
-screeninfo>=0.8
 numpy>=1.24
 ```
 
@@ -54,7 +52,7 @@ source .venv/bin/activate
 python -m pip install -U pip
 
 # 4) Install dependencies
-pip install pygame opencv-python screeninfo numpy
+pip install pygame opencv-python numpy
 ```
 
 ## Running the game
@@ -94,7 +92,7 @@ If this parameter isn't passed and there are multiple monitors detected, you wil
 ### Controls
 
 - **Mouse**: Move the bat horizontally
-- **Left click**: Speed all of the balls up a little
+- **Left click**: Speed all the balls up a little
 - **Space**: Pause or resume
 - **Q / Esc**: Quit
 - **Intro screen**: Move the mouse over the menu to select a difficulty, then click or press any key
