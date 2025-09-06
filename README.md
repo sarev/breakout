@@ -125,6 +125,7 @@ Different brick types require different numbers of hits to destroy. If no brick 
 - Pygame community (https://www.pygame.org/contribute.html) for an excellent Python module
 - The very useful sfxr (https://sfxr.me/) for sound effect generation
 - A nod to Arkanoid, Fireball 2 (Archimedes), and other classics
+- Final level background: Rosette Nebula (Dylan O'Donnell, https://deography.com/will-you-accept-this-rose-ngc2237/)
 - Thanks to ChatGPT for art assistance
 
 ---

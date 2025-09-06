@@ -306,7 +306,7 @@ class Text():
 
 class Laser():
     # Vertical speed of a laser bolt
-    speed: int = 20
+    speed: int = 1
 
     # Duration of the laser power-up (seconds)
     duration: int = 6
@@ -456,7 +456,7 @@ class Bat():
         self.w2, self.h2 = max(1, self.width // 2), max(1, self.height // 2)
         self.dx = dx                                         # Horizontal delta (offset) for this bat's position (pixels)
         self.x = (gfx.window_width // 2) + dx                # Horizontal centre of bat (pixels)
-        self.vx = vx                                         # Horitontal speed (pixels per frame)
+        self.vx = vx                                         # Horizontal speed (pixels per frame)
         self.y = gfx.window_height - int(self.height * 1.3)  # Vertical top edge of bat (pixels)
         self.inv_image = invert_image(self.image)
         self.inverted = False
@@ -465,15 +465,18 @@ class Bat():
         else:
             self.expire = time.time() + exp
 
-    def invert(self, force: bool = False) -> None:
+    def invert(self, force: bool | None = None) -> None:
         """
-        Swap the bat's normal and inverted images, toggling the `inverted` flag.
+        Swap or set the bat's normal and inverted images, toggling the `inverted` flag if needed.
 
         Args:
-            force: If True, perform the swap even if already inverted.
+            force:
+                If None, then swap inversion state.
+                If True, force inversion state to True if not already.
+                If False, force inversion state to False if not already.
         """
 
-        if force or not self.inverted:
+        if force is None or force != self.inverted:
             self.image, self.inv_image = self.inv_image, self.image
             self.inverted = not self.inverted
 
@@ -482,8 +485,7 @@ class Bat():
         Ensure the bat is using the normal (non-inverted) image.
         """
 
-        if self.inverted:
-            self.invert(force=True)
+        self.invert(force=False)
 
     def bbox(self) -> pygame.Rect:
         """
@@ -672,7 +674,7 @@ class Brick():
             game: Game context.
             x: Horizontal centre position in pixels.
             y: Vertical centre position in pixels.
-            type: Brick kind index used to pick image, sound, colour, and lives.
+            brick_type: Brick kind index used to pick image, sound, colour, and lives.
         """
 
         self.id = id
@@ -726,43 +728,50 @@ class Brick():
         else:
             return pygame.Rect(-1, -1, 0, 0)
 
+    def expired(self) -> bool:
+        """
+        Determine whether the brick should be removed from play.
+
+        Returns:
+            bool: True if the destruction animation has run past its limit (`lives < -20`) or the brick is
+                  indestructible (`lives == 99`), else False.
+        """
+
+        return self.lives < -20 or self.lives == 99
+
     def draw(self, surface: pygame.Surface | None = None, force: bool = False) -> bool:
         """
         Draw the brick or its destruction animation.
 
+        Normally, we only plot bricks during the level setup (using force=True). During gameplay, we don't need to
+        keep plotting bricks over themselves!
+
+        If the brick is in the process of being destroyed (lives < 1 and lives >= -20) then we plot a filled circle
+        in the position of the brick and decrement the lives. Once lives is < -20 then nothing is plotted.
+
         Args:
             surface: Target surface to draw on. Defaults to `self.gfx.screen`.
-            force: If True and the brick is alive (`lives > 0`), blit the image even if it would otherwise be skipped.
-
-        Behaviour:
-            - If `lives == 99` and `expired()` is True, nothing is drawn, returns False.
-            - If `lives < 1`, draws a fading explosion circle and decrements `lives`.
-            - Otherwise, blits the brick image when `force` is True.
+            force: If True, blit the image even if it would otherwise be skipped.
 
         Returns:
-            bool: True while the brick is drawable or animating (`lives < 99`), else False for indestructible
-                  bricks that should not be drawn here.
+            bool: False if the brick is immortal or has been destroyed, else True.
         """
 
         if surface is None:
             surface = self.gfx.screen
 
-        if self.lives < 99 and self.expired():
-            return False
-
-        if self.lives < -20:
-            # Don't draw anything
-            pass
-        elif self.lives < 1:
+        # Is this brick being forcibly drawn?
+        if force:
+            surface.blit(self.image, (self.x - self.w2, self.y - self.h2))
+        elif self.lives < 1 and self.lives >= -20:
+            # The brick is in its destruction animation - a shrinking filled circle
             radius = self.h2
             if self.lives != 0:
                 radius = int((radius / 20) * (20 + self.lives))
             pygame.draw.circle(self.gfx.screen, self.colour, (self.x, self.y), radius)
             self.lives -= 1
-        elif force:
-            surface.blit(self.image, (self.x - self.w2, self.y - self.h2))
 
-        return self.lives < 99
+        return not self.expired()
 
     def undraw(self, surface: pygame.Surface | None = None) -> None:
         """
@@ -822,17 +831,6 @@ class Brick():
         else:
             # Destruction sound (volume not dependent upon impact speed)
             Game.play_stereo_sound(self.sound, stereo=pan)
-
-    def expired(self) -> bool:
-        """
-        Determine whether the brick should be removed from play.
-
-        Returns:
-            bool: True if the destruction animation has run past its limit (`lives < -20`) or the brick is
-                  indestructible (`lives == 99`), else False.
-        """
-
-        return self.lives < -20 or self.lives == 99
 
 
 class Ball():
@@ -903,7 +901,7 @@ class Ball():
         self.w2, self.h2 = max(1, self.width // 2), max(1, self.height // 2)
         self.x = x              # Horizontal centre of ball (pixels)
         self.y = y              # Vertical centre of ball (pixels)
-        self.vx = vx            # Horitontal speed (pixels per frame)
+        self.vx = vx            # Horizontal speed (pixels per frame)
         self.vy = vy            # Vertical speed (pixels per frame)
         self.lives = lives      # Number of times this ball can fall (None means immortal)
         self.intro = intro
@@ -995,7 +993,7 @@ class Ball():
         """
 
         def enforce_minimum_speed(min_speed=2):
-            """Calculate the speed (magnitude of velocity vector)."""
+            """Ensure the ball's speed is not below the minimum speed (for the current scaling ratio)."""
 
             speed = math.hypot(self.vx, self.vy)
             min_speed = min_speed * self.gfx.scale_ratio
@@ -1104,7 +1102,7 @@ class Ball():
             bool: True if a collision occurred and was handled, else False.
         """
 
-        # Exit if the bat's bounding box isn't touching the ball's bounding boc
+        # Exit if the bat's bounding box isn't touching the ball's bounding box
         if not self.bbox().colliderect(bat.bbox()):
             return False
 
@@ -1266,7 +1264,7 @@ class Ball():
             bool: True if a collision occurred and was handled, else False.
         """
 
-        # Calculate the distance between the centers of the balls
+        # Calculate the distance between the centres of the balls
         dx = other.x - self.x
         dy = other.y - self.y
         dist = math.hypot(dx, dy)
@@ -1275,7 +1273,7 @@ class Ball():
         radius = self.w2    # or self.height / 2, assuming width == height
         sum_r = 2 * radius
 
-        # If the distance between centers is less than the sum of radii, we have a collision
+        # If the distance between centres is less than the sum of radii, we have a collision
         if dist < sum_r and dist != 0:
             # Calculate the overlap
             overlap = sum_r - dist
@@ -1405,8 +1403,7 @@ class Graphics():
         # Hide the mouse pointer
         pygame.mouse.set_visible(False)
         pygame.event.set_grab(True)
-        self.mouse_x = 0
-        self.mouse_y = 0
+        self.get_mouse_pos()
 
         # Load all of our sprites (apart from the background tile)
         self.path = path
@@ -1425,7 +1422,7 @@ class Graphics():
         while maintaining its aspect ratio.
 
         Args:
-            scr_img: The image to resize.
+            src_img: The image to resize.
             pcnt: The window height percentage to scale to.
 
         Returns:
@@ -1530,27 +1527,36 @@ class Graphics():
 
         return brick_images
 
-    def get_mouse_pos(self) -> tuple[int, int]:
+    def get_mouse_pos(self, cache: bool = True) -> tuple[int, int]:
         """
         Query the current mouse position.
+
+        Args:
+            cache: If True, store a cached copy of the current mouse coordinates.
 
         Returns:
             tuple[int, int]: (x, y) in window pixels.
         """
 
-        self.mouse_x, self.mouse_y = pygame.mouse.get_pos()
-        return self.mouse_x, self.mouse_y
+        x, y = pygame.mouse.get_pos()
+        if cache:
+            self.mouse_x, self.mouse_y = x, y
 
-    def set_mouse_pos(self, x: int, y: int) -> None:
+        return x, y
+
+    def set_mouse_pos(self, x: int, y: int, cache: bool = True) -> None:
         """
         Set the mouse position and cache it.
 
         Args:
             x: Target x position in pixels.
             y: Target y position in pixels.
+            cache: If True, store a cached copy of the current mouse coordinates.
         """
 
-        self.mouse_x, self.mouse_y = x, y
+        if cache:
+            self.mouse_x, self.mouse_y = x, y
+
         pygame.mouse.set_pos(x, y)
 
     def initialise_background(self, level: int) -> None:
@@ -1573,7 +1579,7 @@ class Graphics():
             pygame.quit()
             sys.exit()
 
-        # Ensure the tile image scaled appropriately for the display height
+        # Ensure the tile image is scaled appropriately for the display height
         tile_image = self._rescale_image(tile_image, 100)
         tile_width, tile_height = tile_image.get_size()
 
@@ -1584,7 +1590,7 @@ class Graphics():
         y_offset = tile_height - (self.window_height % tile_height)
         x_offset = tile_width - (((self.window_width - tile_width) // 2) % tile_width)
 
-        # Fill the background with the tiled image, starting aligned to the bottom and horizontally centered
+        # Fill the background with the tiled image, starting aligned to the bottom and horizontally centred
         for x in range(-x_offset, self.window_width, tile_width):
             for y in range(-y_offset, self.window_height, tile_height):
                 self.background.blit(tile_image, (x, y))
@@ -1603,7 +1609,7 @@ class Graphics():
         """
 
         # Set the alpha of the screen darkening gfx.black_screen and blit it to our screen
-        if alpha is not None:
+        if alpha:
             # Note: the alpha value may be negative, but we treat as positive. It might also be beyond 255, so we'll cap there.
             alpha = abs(int(alpha))
             alpha = min(255, alpha)
@@ -1743,6 +1749,8 @@ class Game():
         [
             # Level 1
             [7, 0, 0, 0, 4, 0, 0, 0, 0, 7],
+            # [5, 5, 5, 5, 5, 3, 5, 5, 8, 5]
+            # [8, 8, 8, 8, 8, 3, 8, 8, 8, 8]
             [0, 0, 0, 0, 0, 3, 0, 0, 8, 0]
         ],
         [
@@ -1954,7 +1962,7 @@ class Game():
         self.win_sound = None
         self._load_sounds(path=Game.sounds_path, brick_types=Game.num_brick_types)
 
-        Laser.set_speed(self.gfx.window_height // 60)
+        Laser.set_speed(self.gfx.window_height // 32)
 
         # Create bat instances
         hero_bat = Bat(0, self.gfx.bat_img, self.gfx)
@@ -2074,10 +2082,10 @@ class Game():
         # Initialise the background surface for this level
         self.gfx.initialise_background(self.level)
 
-        # Ensure the hero bat and mouse cursor are horizontally centred
-        x = self.gfx.window_width // 2
-        self.bats[0].x = x
-        self.gfx.set_mouse_pos(x, self.gfx.mouse_y)
+        # Ensure the hero bat and mouse cursor are horizontally centred, cache mouse position
+        middle = self.gfx.window_width // 2
+        self.bats[0].x = middle
+        self.gfx.set_mouse_pos(middle, self.gfx.window_height)
 
     def level_up(self) -> None:
         """
@@ -2105,14 +2113,15 @@ class Game():
         self.gfx.brick_images = self.gfx.scale_brick_images(self.level)
         self.create_bricks()
 
-        # Reset the hero ball position
-        self.gfx.set_mouse_pos(self.gfx.window_width // 2, self.gfx.window_height)
-        self.hero_ball.x = self.gfx.mouse_x
+        # Reset the hero ball and mouse position, cache mouse position
+        middle = self.gfx.window_width // 2
+        self.gfx.set_mouse_pos(middle, self.gfx.window_height)
+        self.hero_ball.x = middle
         self.hero_ball.y = self.bats[0].y - self.hero_ball.height
 
-        # Initalise the hero ball's velocity
-        vx = randint(-1, 1) * self.gfx.scale_ratio
-        vy = -2 * (self.level + 1)
+        # Initialise the hero ball's velocity
+        vx = randint(-2, 2) * self.gfx.scale_ratio
+        vy = -randint(2, 4) * (self.level + 1)
         vy -= 2 - self.difficulty
         self.hero_ball.vx, self.hero_ball.vy = vx, vy * self.gfx.scale_ratio
 
@@ -2308,9 +2317,12 @@ class Game():
         # straight across. They move at between 50% and 100% of the hero ball's speed.
         angle = uniform(5, 85)
         speed = math.hypot(self.hero_ball.vx, self.hero_ball.vy)
-        speed = speed * uniform(0.5, 1.0)
-        vx = math.sin(math.radians(angle))
-        vy = -math.cos(math.radians(angle))
+        # print(f"hero_ball velocity [{self.hero_ball.vx},{self.hero_ball.vy}] hero_ball speed {speed}")
+        random = uniform(0.5, 1.0)
+        speed = speed * random
+        vx = math.sin(math.radians(angle)) * speed
+        vy = -math.cos(math.radians(angle)) * speed
+        # print(f"bonus_ball speed {speed} (random {random}) angle {angle} velocity [{vx}, {vy}]")
 
         bonus_ball = Ball(
             image=self.gfx.bonus_ball_img,
@@ -2368,13 +2380,16 @@ class Game():
 
         # Yellow bricks temporarily reverse the player controls
         elif brick.type == 5:
+            # If we're about to enter inversion mode...
             if self.inversion == 0:
-                self.gfx.get_mouse_pos()
-                self.gfx.mouse_x = self.gfx.window_width - self.gfx.mouse_x
-                self.gfx.set_mouse_pos(self.gfx.mouse_x, self.gfx.mouse_y)
+                # Reflect the mouse pointer to the opposite side of the screen
+                x, y = self.gfx.get_mouse_pos(cache=False)
+                self.gfx.set_mouse_pos(self.gfx.window_width - x, y)
+
             self.inversion = self.get_fps() * Game.inversion_seconds
+
             for bat in self.bats + self.extra_bats:
-                bat.invert()
+                bat.invert(force=True)
 
         # Fire bricks kill all bricks around them
         elif brick.type == 6:
@@ -2480,21 +2495,23 @@ class Game():
             if (self.inversion % fps) == 0:
                 pan = self.gfx.mouse_x / self.gfx.window_width
                 if self.inversion == fps:
-                    # Play one second before restoration
+                    # Play this only one second before restoration
                     Game.play_stereo_sound(self.restore_sound, stereo=pan)
                 else:
+                    # Play each second during inversion mode
                     Game.play_stereo_sound(self.tick_sound, stereo=pan)
 
             self.inversion -= 1
 
+            # If we're exiting inversion mode...
             if self.inversion == 0:
+                # Restore all of the bats
                 for bat in self.bats + self.extra_bats:
                     bat.restore()
 
-                # At the transition, reposition the mouse to avoid a sideways jump
-                self.gfx.get_mouse_pos()
-                self.gfx.mouse_x = self.gfx.window_width - self.gfx.mouse_x
-                self.gfx.set_mouse_pos(self.gfx.mouse_x, self.gfx.mouse_y)
+                # Reflect the mouse pointer to the opposite side of the screen
+                x, y = self.gfx.get_mouse_pos(cache=False)
+                self.gfx.set_mouse_pos(self.gfx.window_width - x, y)
 
     def check_lasers_mode(self) -> None:
         """
@@ -2532,11 +2549,9 @@ class Game():
 
         # Are we still emitting laser beams?
         if self.laser_count > 0:
-            fps = 120 if self.get_fps() == 120 else 60
-
             # Each active bat emits at a slightly different frame offset
             for idx, bat in enumerate(self.bats):
-                if self.frame % fps == idx * (fps >> 3):
+                if self.frame % 30 == idx * 4:
                     image = self.gfx.blue_laser_img if idx == 0 else self.gfx.green_laser_img
                     laser = Laser(image, self.gfx, bat.x, bat.y + bat.h2)
                     self.lasers.append(laser)
@@ -2671,7 +2686,7 @@ def intro(gfx: Graphics, game: Game, widget: MonitorSelector, image_path: str) -
     # Perspective projection parameters
     fov = 900.0
 
-    # Define the 3D vertices of a rectangle (centered at origin)
+    # Define the 3D vertices of a rectangle (centred at origin)
     rectangle_width = gfx.window_width * 0.4
     rectangle_height = rectangle_width * (image_height / image_width)
     vertices = [
@@ -2752,7 +2767,7 @@ def intro(gfx: Graphics, game: Game, widget: MonitorSelector, image_path: str) -
         intro_balls.append(intro_ball)
 
     intro_hero_ball = intro_balls[0]
-    gfx.mouse_x, gfx.mouse_y = pygame.mouse.get_pos()
+    gfx.get_mouse_pos()
 
     # Create menu text for the game modes
     #
@@ -2801,7 +2816,8 @@ def intro(gfx: Graphics, game: Game, widget: MonitorSelector, image_path: str) -
 
             # Check for mouse button click
             elif event.type == pygame.MOUSEBUTTONUP:
-                x, y = pygame.mouse.get_pos()
+                # Read mouse position without affecting cached coordinates
+                x, y = gfx.get_mouse_pos(cache=False)
                 if widget.is_over(x, y):
                     widget.select(game)
                     return "monitor"
@@ -2815,8 +2831,8 @@ def intro(gfx: Graphics, game: Game, widget: MonitorSelector, image_path: str) -
             if ball.lives < 1:
                 ball.lives = 1
 
-        # Control the hero ball with the mouse
-        x, y = pygame.mouse.get_pos()
+        # Control the hero ball with the mouse, calculate the velocity vector, and update our cached mouse coordinates
+        x, y = gfx.get_mouse_pos(cache=False)
         intro_hero_ball.x, intro_hero_ball.y = x, y
         intro_hero_ball.vx, intro_hero_ball.vy = x - gfx.mouse_x, y - gfx.mouse_y
         gfx.mouse_x, gfx.mouse_y = x, y
@@ -3000,46 +3016,48 @@ def game_loop(game: object, gfx: object):
                     elif event.key == pygame.K_SPACE:
                         game.paused = not game.paused
                         if game.paused:
+                            # Show the mouse pointer and allow it to move outside the pygame window
                             pygame.mouse.set_visible(True)
                             pygame.event.set_grab(False)
                         else:
+                            # Hide the mouse pointer, put it back where it was when we paused, lock it within the pygame window
                             pygame.mouse.set_visible(False)
-                            pygame.mouse.set_pos(gfx.mouse_x, gfx.mouse_y)
+                            gfx.set_mouse_pos(gfx.mouse_x, gfx.mouse_y, cache=False)
                             pygame.event.set_grab(True)
 
-                    # # Debugging cheats...
-                    # elif event.key == pygame.K_d:
-                    #     for brick in game.bricks:
-                    #         brick.hit(x=0, kill=True)
-
-                    # # More debugging cheats...
-                    # elif event.type == pygame.MOUSEBUTTONDOWN:
-                    #     if event.button == 1:
-                    #         # Left click: destroy the brick under the cursor
-                    #         x, y = pygame.mouse.get_pos()
-                    #         for brick in game.bricks:
-                    #             if not brick.expired():
-                    #                 bbox = brick.bbox()
-                    #                 if bbox.collidepoint((x, y)):
-                    #                     brick.hit(x, kill=True)
-                    #                     game.kill_a_brick(brick)
-                    #     elif event.button == 3:
-                    #         # Right click: no action
-                    #         pass
-                    # elif event.type == pygame.MOUSEBUTTONUP:
-                    #     if event.button == 1:
-                    #         # Left button released: hide cursor
-                    #         pygame.mouse.set_visible(False)
-                    #     elif event.button == 3:
-                    #         # Right button released: show cursor
-                    #         pygame.mouse.set_visible(True)
+                    # Debugging cheat...
+                    elif event.key == pygame.K_d:
+                        for brick in game.bricks:
+                            brick.hit(x=0, kill=True)
 
                 elif event.type == pygame.MOUSEMOTION:
                     # Update cached mouse position; apply inversion if active
                     if not game.paused:
-                        gfx.mouse_x, gfx.mouse_y = pygame.mouse.get_pos()
+                        gfx.get_mouse_pos()
                         if game.inversion > 0:
                             gfx.mouse_x = gfx.window_width - gfx.mouse_x
+
+                # More debugging cheats...
+                elif event.type == pygame.MOUSEBUTTONDOWN:
+                    if event.button == 1:
+                        # Left click: destroy the brick under the cursor
+                        x, y = gfx.get_mouse_pos(cache=False)
+                        for brick in game.bricks:
+                            if not brick.expired():
+                                bbox = brick.bbox()
+                                if bbox.collidepoint((x, y)):
+                                    brick.hit(x, kill=True)
+                                    game.kill_a_brick(brick)
+                    elif event.button == 3:
+                        # Right click: no action
+                        pass
+                elif event.type == pygame.MOUSEBUTTONUP:
+                    if event.button == 1:
+                        # Left button released: hide cursor
+                        pygame.mouse.set_visible(False)
+                    elif event.button == 3:
+                        # Right button released: show cursor
+                        pygame.mouse.set_visible(True)
 
                 elif event.type == pygame.MOUSEBUTTONDOWN:
                     if event.button == 1:
