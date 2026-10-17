@@ -87,7 +87,7 @@ There is also a browser version in the `web` folder, a straight port of the game
 python -m http.server 8000
 ```
 
-then open http://localhost:8000/web/ in a browser. Controls are as above, with these differences: click or tap the intro to start, the mouse pointer is captured while you play (**Esc** releases it and pauses), **Q** returns to the intro, and on a touch screen a finger moves the ball (intro) or drags the bat (play), a tap serves or kicks, and a two-finger tap pauses. Options go on the URL: `?music=0` starts silent, `?volume=0.25` sets the music volume, `?sensitivity=1.5` scales mouse movement, and `?debug=1` enables the cheats.
+then open http://localhost:8000/web/ in a browser. Controls are as above, with these differences: click or tap the title card and the intro to start, **Q** returns to the intro, and on a touch screen a finger moves the ball (intro) or drags the bat (play), a tap serves or kicks, and a two-finger tap pauses. The bat follows the mouse pointer normally; if you'd rather have the mouse captured so it can't wander off the page, press **L** during play (a message confirms it, and **Esc** or **L** releases it again). Options go on the URL: `?music=0` starts silent, `?volume=0.25` sets the music volume, `?sensitivity=1.5` scales mouse movement, and `?debug=1` enables the cheats.
 
 ## Monitor selection
 

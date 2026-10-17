@@ -1,10 +1,10 @@
 // Entry point: loads the assets, wires up input, and runs the scenes (intro, splash, game) on requestAnimationFrame.
 //
-// Controls: mouse moves the bat (the pointer is locked once a game starts), left click serves or kicks, Space
-// pauses, M toggles music, F toggles fullscreen, Q returns to the intro. On a touch screen a finger moves the
-// ball (intro) or drags the bat (play), a tap serves or kicks, and a two-finger tap pauses. ?debug=1 enables
-// the cheats (D clears the level, right-click shows the pointer, left-click destroys the brick under it).
-// ?music=0 starts silent, ?sensitivity=1.5 scales mouse movement, ?volume=0.3 sets the music volume.
+// Controls: mouse moves the bat, left click serves or kicks, Space pauses, M toggles music, F toggles fullscreen,
+// L captures the mouse (pointer lock; Esc releases it and pauses), Q returns to the intro. On a touch screen a
+// finger moves the ball (intro) or drags the bat (play), a tap serves or kicks, and a two-finger tap pauses.
+// ?debug=1 enables the cheats (D clears the level, left-click destroys the brick under the pointer). ?music=0
+// starts silent, ?sensitivity=1.5 scales mouse movement, ?volume=0.3 sets the music volume.
 
 import { AudioSystem, Music, Sfx } from './audio.js';
 import { loadAudioSet, loadImages } from './assets.js';
@@ -74,11 +74,27 @@ async function boot() {
   let scene = 'gate';
   let splash = null;   // {text, colour, next, elapsed}
   let gateElapsed = 0;
+  let notice = null;   // {text, until}: a short on-screen message (mouse captured / released)
+
+  function showNotice(text, seconds = 4) {
+    notice = { text, until: performance.now() / 1000 + seconds };
+  }
 
   function leaveGate() {
     audio.unlock();
     music.play('intro');
     scene = 'intro';
+  }
+
+  /**
+   * The real cursor is hidden only while a game is actually being played (the bat stands in for it) and on the
+   * intro (the hero ball does). It's visible on the gate, while paused, and on the splash screens, so a player
+   * is never left hunting for an invisible pointer.
+   */
+  function updateCursor() {
+    const hide = scene === 'intro' || (scene === 'game' && !game.paused);
+    const style = hide ? 'none' : 'default';
+    if (canvas.style.cursor !== style) canvas.style.cursor = style;
   }
 
   function showSplash(text, colour, next) {
@@ -99,7 +115,7 @@ async function boot() {
     game.running = true;
     scene = 'game';
     input.touchRelative = true;
-    if (input.wantLock) input.requestLock();
+    if (input.wantLock) input.requestLock();   // Only if the player opted in with L earlier
   }
 
   function leaveSplash() {
@@ -142,10 +158,20 @@ async function boot() {
     game.paused = flag;
     if (flag) {
       audio.pause();
-      input.releaseLock();
-      input.wantLock = true;   // Re-lock on resume
+      input.releaseLock(true);   // Free the mouse while paused; remember if the player had captured it
     } else {
       audio.resume();
+      if (input.wantLock) input.requestLock();
+    }
+  }
+
+  /** L: capture or release the mouse (pointer lock). Opt-in, and announced on screen either way. */
+  function toggleLock() {
+    if (scene !== 'game' || game.paused) return;
+    if (input.locked || input.wantLock) {
+      input.releaseLock();
+      showNotice('Mouse released');
+    } else {
       input.requestLock();
     }
   }
@@ -162,12 +188,11 @@ async function boot() {
   }
 
   /** The primary action (left click or tap): start, skip the splash, serve, or kick. */
-  function primaryAction(fromMouse) {
+  function primaryAction() {
     audio.unlock();
     if (scene === 'gate') {
       leaveGate();
     } else if (scene === 'intro') {
-      if (fromMouse) input.requestLock();
       startGame();
     } else if (scene === 'splash') {
       splash.elapsed = 1e9;
@@ -195,7 +220,10 @@ async function boot() {
     // The browser releases the lock on Esc (or when the tab loses focus): treat it as a pause
     if (scene === 'game' && !game.paused) setPaused(true);
   };
-  input.onTap = () => primaryAction(false);
+  input.onLockChange = (locked) => {
+    if (locked) showNotice('Mouse captured. Esc or L releases it.', 5);
+  };
+  input.onTap = () => primaryAction();
   input.onTwoFingerTap = () => {
     audio.unlock();
     if (scene === 'game') setPaused(!game.paused);
@@ -204,11 +232,7 @@ async function boot() {
   canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 
   canvas.addEventListener('mousedown', (e) => {
-    if (e.button === 0) {
-      primaryAction(true);
-    } else if (e.button === 2 && DEBUG && scene === 'game') {
-      input.releaseLock();
-    }
+    if (e.button === 0) primaryAction();
   });
 
   window.addEventListener('keydown', (e) => {
@@ -222,13 +246,14 @@ async function boot() {
       music.toggle();
       return;
     }
+    if (key === 'l') {
+      toggleLock();
+      return;
+    }
     if (scene === 'gate') {
       if (!e.repeat) leaveGate();
     } else if (scene === 'intro') {
-      if (key !== 'escape' && key !== 'q' && !e.repeat) {
-        input.requestLock();
-        startGame();
-      }
+      if (key !== 'escape' && key !== 'q' && !e.repeat) startGame();
     } else if (scene === 'splash') {
       if (key === 'q') quitToIntro(); else splash.elapsed = 1e9;
     } else if (scene === 'game') {
@@ -296,6 +321,15 @@ async function boot() {
         endOfLevel();
       }
     }
+    if (notice) {
+      const remaining = notice.until - now / 1000;
+      if (remaining <= 0) {
+        notice = null;
+      } else {
+        gfx.text(ctx, notice.text, { x: gfx.W / 2, y: gfx.H * 0.78, size: 60, colour: COLOURS.presskey, alpha: Math.min(0.85, remaining) });
+      }
+    }
+    updateCursor();
     gfx.end();
     requestAnimationFrame(frame);
   }

@@ -1,13 +1,17 @@
 // Pointer handling.
 //
-// Two modes. With the pointer locked (the browser's Pointer Lock API, requested when the game starts) we get raw
-// movement deltas and accumulate our own pointer position, which is what lets the bat be driven without the real
-// cursor hitting the edge of the screen. Without a lock (the intro, or a browser that refuses) we use the
-// absolute cursor position. Either way `playfield()` applies the mouse gain so crossing the playfield takes the
-// same hand travel on any screen.
+// Two modes. By default we use the absolute cursor position, like any other canvas game: the cursor stays
+// visible outside the playfield and nothing surprising happens to it. Optionally (the L key) the player can
+// capture the mouse with the browser's Pointer Lock API; then we get raw movement deltas and accumulate our own
+// pointer position, so the bat can be driven without the real cursor ever reaching the edge of the screen. A
+// locked mouse is alarming if you weren't expecting it, which is why it's opt-in and announced on screen, and
+// why losing the lock (Esc) pauses the game. Either way `playfield()` applies the mouse gain so crossing the
+// playfield takes the same hand travel on any screen.
 //
-// Inversion (the yellow brick) is handled here too: while inverted, the effective x is mirrored about the centre,
-// and the raw position is reflected at the moment the state changes so the bat doesn't jump.
+// Inversion (the yellow brick) is handled here too: while inverted, the effective x is mirrored about the centre.
+// In the relative modes (locked mouse, touch drag) the raw position is reflected at the moment the state changes
+// so the bat doesn't jump; in absolute mode the real cursor can't be moved, so the bat simply swaps sides, which
+// is disorienting in exactly the way the brick intends.
 //
 // Touch works the same way through the same `raw` position. With `touchRelative` off (the intro) a finger places
 // the pointer directly, like an unlocked mouse. With it on (in play) a drag moves the pointer by the finger's
@@ -28,6 +32,7 @@ export class Input {
     this.locked = false;
     this.wantLock = false;
     this.onLockLost = null;                       // Callback when the lock is released by the browser (Esc)
+    this.onLockChange = null;                     // Callback(locked) whenever the lock state changes
     this.onTap = null;                            // Callback for a short single-finger tap
     this.onTwoFingerTap = null;                   // Callback for a two-finger tap
     this.touchRelative = false;                   // Drag moves the pointer by deltas (play) or places it (intro)
@@ -40,8 +45,10 @@ export class Input {
     canvas.addEventListener('touchcancel', () => { this.touch = null; }, { passive: false });
     document.addEventListener('pointerlockchange', () => {
       const locked = document.pointerLockElement === canvas;
-      if (this.locked && !locked && this.onLockLost) this.onLockLost();
+      const lost = this.locked && !locked;
       this.locked = locked;
+      if (this.onLockChange) this.onLockChange(locked);
+      if (lost && this.onLockLost) this.onLockLost();
     });
     document.addEventListener('pointerlockerror', () => { this.locked = false; });
   }
@@ -126,10 +133,13 @@ export class Input {
     return this.gfx.pointerToPlayfield(this.effectiveX(), this.raw.y);
   }
 
-  /** Switch inversion on or off, reflecting the raw position so the effective position doesn't jump. */
+  /**
+   * Switch inversion on or off. In the relative modes the raw position is reflected so the effective position
+   * doesn't jump; in absolute mode the next cursor movement would overwrite that anyway, so it's left alone.
+   */
   setInverted(flag) {
     if (flag !== this.inverted) {
-      this.raw.x = this.gfx.W - 1 - this.raw.x;
+      if (this.locked || this.touch !== null) this.raw.x = this.gfx.W - 1 - this.raw.x;
       this.inverted = flag;
     }
   }
@@ -167,9 +177,14 @@ export class Input {
     }
   }
 
-  /** Release the pointer lock. */
-  releaseLock() {
-    this.wantLock = false;
+  /**
+   * Release the pointer lock.
+   *
+   * @param {boolean} keepWant True to remember that the player opted in, so a pause can release the lock and the
+   *                           resume can take it back.
+   */
+  releaseLock(keepWant = false) {
+    if (!keepWant) this.wantLock = false;
     if (this.locked && document.exitPointerLock) document.exitPointerLock();
   }
 }
