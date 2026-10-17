@@ -3921,6 +3921,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                              "left-click destroys the brick under it.")
     args = parser.parse_args()
 
+    # Ask Windows to treat us as per-monitor DPI aware. Without this, on a display with Windows scaling turned on
+    # (a 4K panel at 200%, say) SDL reports the scaled-down "logical" desktop size, the game renders at that size,
+    # and Windows stretches the result back up - blurry, and never at the display's real resolution. With it, SDL
+    # reports and uses the display's native pixels. The hint must be set before the video system starts, and it is
+    # ignored on other platforms.
+    os.environ.setdefault("SDL_WINDOWS_DPI_AWARENESS", "permonitorv2")
+
     # Initialise pygame
     pygame.init()
 

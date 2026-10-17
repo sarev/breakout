@@ -60,6 +60,7 @@ The game exposes a small set of command‑line flags to control display placemen
 - Logical layout is designed for a 1080p baseline and then scaled using the height of the 16:9 logical playfield (see *Graphics*).  
 - The window is created borderless and full‑screen on the target display, with black bars if the display is wider than 16:9 or narrower than 4:3.  
 - An out-of-range `-m` index is rejected with a message listing how many displays were found (exit code 2).  
+- `main()` sets the SDL hint `SDL_WINDOWS_DPI_AWARENESS=permonitorv2` before `pygame.init()`. Without it a Windows display with scaling enabled reports its scaled-down logical size (a 3456×2160 panel at 200% looks like 1728×1080), the game renders at that size and Windows blurs it back up. With it, SDL reports native pixels and the playfield is built at the display's true resolution. The hint is ignored on other platforms, and `setdefault` means an environment override still wins.  
 - When `-m` is omitted and multiple displays exist, the intro screen shows a small monitor icon. Clicking it cycles through the available displays and re‑initialises the window on the chosen one, without restarting the process.
 
 - `--debug`  

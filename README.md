@@ -119,6 +119,7 @@ Different brick types require different numbers of hits to destroy. If no brick 
 - **OpenCV import errors**: Use `opencv-python` wheels rather than `opencv`. On some Linux distros you may need system OpenGL packages.
 - **Fonts missing**: The code uses the default Pygame font; if you change it (e.g. to a system font), ensure it is installed.
 - **Black bars**: on a monitor wider than 16:9 (or narrower than 4:3) the playfield is letterboxed so the brick layout stays playable. This is deliberate.
+- **Windows display scaling**: the game declares itself DPI-aware so that a high-resolution monitor with Windows scaling (for example a 4K panel at 200%) is used at its native resolution rather than the scaled-down size. If you need the old behaviour, set the environment variable `SDL_WINDOWS_DPI_AWARENESS=unaware` before running.
 
 ## Debugging
 
