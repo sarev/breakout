@@ -1,0 +1,288 @@
+// Entry point: loads the assets, wires up input, and runs the scenes (intro, splash, game) on requestAnimationFrame.
+//
+// Controls: mouse moves the bat (the pointer is locked once a game starts), left click serves or kicks, Space
+// pauses, M toggles music, F toggles fullscreen, Q returns to the intro. On a touch screen a finger moves the
+// ball (intro) or drags the bat (play), a tap serves or kicks, and a two-finger tap pauses. ?debug=1 enables
+// the cheats (D clears the level, right-click shows the pointer, left-click destroys the brick under it).
+// ?music=0 starts silent, ?sensitivity=1.5 scales mouse movement, ?volume=0.3 sets the music volume.
+
+import { AudioSystem, Music, Sfx } from './audio.js';
+import { loadAudioSet, loadImages } from './assets.js';
+import { COLOURS, MAX_FRAME_DT, MUSIC_FILES, SOUND_NAMES } from './config.js';
+import { Game } from './game.js';
+import { Graphics } from './graphics.js';
+import { Input } from './input.js';
+import { Intro } from './intro.js';
+
+const params = new URLSearchParams(window.location.search);
+const DEBUG = params.get('debug') === '1';
+const SENSITIVITY = parseFloat(params.get('sensitivity') || '1') || 1;
+const MUSIC_ON = params.get('music') !== '0';
+const MUSIC_VOLUME = params.has('volume') ? parseFloat(params.get('volume')) : null;
+
+const ASSET_BASE = '../';   // The page lives in web/; the assets are the repository's own folders
+
+const canvas = document.getElementById('game');
+
+/** Show a line of text on an otherwise black canvas (loading and error messages). */
+function message(text) {
+  const ctx = canvas.getContext('2d');
+  canvas.width = window.innerWidth * (window.devicePixelRatio || 1);
+  canvas.height = window.innerHeight * (window.devicePixelRatio || 1);
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = '#8aa8ff';
+  ctx.font = `${Math.round(canvas.height / 30)}px Arial, sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, canvas.width / 2, canvas.height / 2);
+}
+
+async function boot() {
+  message('Loading…');
+
+  const imageNames = {
+    ball: 'ball.png', bonusBall: 'extra-ball.png', blueGlow: 'blue-glow.png', redGlow: 'red-glow.png',
+    bat: 'bat.png', bonusBat: 'extra-bat.png', blueLaser: 'blue.png', greenLaser: 'green.png', intro: 'intro.png',
+  };
+  for (let i = 0; i < 9; i++) imageNames[`brick${i}`] = `brick${i}.png`;
+  for (let i = 1; i <= 6; i++) imageNames[`tile${i}`] = `tile${i}.png`;
+
+  const audio = new AudioSystem();
+  const soundNames = Object.fromEntries(SOUND_NAMES.map((n) => [n, `${n}.wav`]));
+  const [images, sounds, tracks] = await Promise.all([
+    loadImages(`${ASSET_BASE}sprites/`, imageNames),
+    loadAudioSet(audio.ctx, `${ASSET_BASE}sounds/`, soundNames),
+    loadAudioSet(audio.ctx, `${ASSET_BASE}music/`, MUSIC_FILES),
+  ]);
+  audio.sfx = new Sfx(audio.ctx, sounds);
+  audio.music = new Music(audio.ctx, tracks, MUSIC_ON, MUSIC_VOLUME);
+
+  const gfx = new Graphics(canvas, images, SENSITIVITY);
+  const input = new Input(canvas, gfx);
+  const game = new Game(gfx, audio.sfx, input, { debug: DEBUG });
+  const intro = new Intro(gfx, game, audio.sfx, input, images.intro);
+  const music = audio.music;
+
+  // --- Scenes -----------------------------------------------------------------------------------------------
+  // 'intro' -> 'splash' (Level 1...) -> 'game' -> 'splash' (Level N... / Game Over! / YOU WIN!) -> ...
+  let scene = 'intro';
+  let splash = null;   // {text, colour, next, elapsed}
+
+  function showSplash(text, colour, next) {
+    splash = { text, colour, next, elapsed: 0 };
+    game.darkAlpha = 192;
+    scene = 'splash';
+  }
+
+  function startGame() {
+    game.reset();
+    music.play('intro');   // keeps playing under the first splash, as in the Python version
+    showSplash('Level 1...', COLOURS.advance, 'level');
+  }
+
+  function startLevel() {
+    game.initialiseLevel();
+    music.play(...Music.levelTrack(game.level));
+    game.running = true;
+    scene = 'game';
+    input.touchRelative = true;
+    if (input.wantLock) input.requestLock();
+  }
+
+  function leaveSplash() {
+    const next = splash.next;
+    splash = null;
+    if (next === 'level') {
+      startLevel();
+    } else {
+      // Back to the intro
+      input.releaseLock();
+      input.touchRelative = false;
+      intro.relayout();
+      music.play('intro');
+      scene = 'intro';
+    }
+  }
+
+  function endOfLevel() {
+    // Called when the game loop ends a level: out of lives, or all bricks gone
+    if (game.lives <= 0) {
+      music.stop();
+      audio.sfx.play('die');
+      showSplash('Game Over!', COLOURS.die, 'intro');
+      return;
+    }
+    game.level += 1;
+    if (game.level <= Game.maxLevel) {
+      game.lives += 1;
+      gfx.buildBackground(game.level);
+      showSplash(`Level ${game.level}...`, COLOURS.advance, 'level');
+    } else {
+      music.stop();
+      audio.sfx.play('win');
+      showSplash('YOU WIN!', COLOURS.win, 'intro');
+    }
+  }
+
+  function setPaused(flag) {
+    if (scene !== 'game' || game.paused === flag) return;
+    game.paused = flag;
+    if (flag) {
+      audio.pause();
+      input.releaseLock();
+      input.wantLock = true;   // Re-lock on resume
+    } else {
+      audio.resume();
+      input.requestLock();
+    }
+  }
+
+  function quitToIntro() {
+    music.stop(false);
+    input.releaseLock();
+    input.touchRelative = false;
+    audio.resume();
+    game.paused = false;
+    intro.relayout();
+    music.play('intro');
+    scene = 'intro';
+  }
+
+  /** The primary action (left click or tap): start, skip the splash, serve, or kick. */
+  function primaryAction(fromMouse) {
+    audio.unlock();
+    if (scene === 'intro') {
+      if (fromMouse) input.requestLock();
+      startGame();
+    } else if (scene === 'splash') {
+      splash.elapsed = 1e9;
+    } else if (scene === 'game') {
+      if (game.paused) {
+        setPaused(false);
+        return;
+      }
+      if (game.serving) game.serve(); else game.kickAllBalls();
+      if (DEBUG) {
+        const p = input.playfield();
+        for (const brick of game.bricks) {
+          const b = brick.bbox();
+          if (b && !brick.expired() && p.x >= b.x && p.x < b.x + b.w && p.y >= b.y && p.y < b.y + b.h) {
+            brick.hit(p.x, null, true);
+            game.killBrick(brick);
+          }
+        }
+      }
+    }
+  }
+
+  // --- Input ------------------------------------------------------------------------------------------------
+  input.onLockLost = () => {
+    // The browser releases the lock on Esc (or when the tab loses focus): treat it as a pause
+    if (scene === 'game' && !game.paused) setPaused(true);
+  };
+  input.onTap = () => primaryAction(false);
+  input.onTwoFingerTap = () => {
+    audio.unlock();
+    if (scene === 'game') setPaused(!game.paused);
+  };
+
+  canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+
+  canvas.addEventListener('mousedown', (e) => {
+    if (e.button === 0) {
+      primaryAction(true);
+    } else if (e.button === 2 && DEBUG && scene === 'game') {
+      input.releaseLock();
+    }
+  });
+
+  window.addEventListener('keydown', (e) => {
+    audio.unlock();
+    const key = e.key.toLowerCase();
+    if (key === 'f') {
+      if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen();
+      return;
+    }
+    if (key === 'm') {
+      music.toggle();
+      return;
+    }
+    if (scene === 'intro') {
+      if (key !== 'escape' && key !== 'q' && !e.repeat) {
+        input.requestLock();
+        startGame();
+      }
+    } else if (scene === 'splash') {
+      if (key === 'q') quitToIntro(); else splash.elapsed = 1e9;
+    } else if (scene === 'game') {
+      if (key === ' ') {
+        e.preventDefault();
+        setPaused(!game.paused);
+      } else if (key === 'q') {
+        quitToIntro();
+      } else if (key === 'd' && DEBUG) {
+        for (const brick of game.bricks) brick.hit(0, null, true);
+      }
+    }
+  });
+
+  window.addEventListener('resize', () => {
+    const oldW = gfx.W;
+    const oldH = gfx.H;
+    if (gfx.resize()) {
+      const sx = gfx.W / oldW;
+      const sy = gfx.H / oldH;
+      input.relayout(sx, sy);
+      game.relayout(sx, sy);
+      intro.relayout();
+    }
+  });
+
+  // --- Main loop --------------------------------------------------------------------------------------------
+  let last = performance.now();
+  function frame(now) {
+    const dt = Math.min((now - last) / 1000, MAX_FRAME_DT);
+    last = now;
+
+    const ctx = gfx.begin();
+    if (scene === 'intro') {
+      intro.update(dt);
+      intro.draw(ctx);
+    } else if (scene === 'splash') {
+      splash.elapsed += dt;
+      game.darkAlpha = Game.nextAlpha(game.darkAlpha, dt);
+      ctx.drawImage(gfx.background, 0, 0);
+      // The banner fades in, like the Python version's repeated low-alpha blits
+      gfx.text(ctx, splash.text, {
+        x: gfx.W / 2, y: gfx.H / 2, size: 300, colour: splash.colour, bold: true, italic: true,
+        alpha: Math.min(0.9, splash.elapsed / 1.2),
+      });
+      game.drawBlackout(ctx);
+      if (splash.elapsed >= 3) leaveSplash();
+    } else if (scene === 'game') {
+      game.update(dt);
+      const complete = game.draw(ctx);
+      game.advanceEffects(dt);
+      if (game.paused) {
+        gfx.text(ctx, 'Paused', { x: gfx.W / 2, y: gfx.H / 2, size: 200, colour: COLOURS.white, alpha: 0.7, bold: true });
+        gfx.text(ctx, 'Space, click or tap to continue', { x: gfx.W / 2, y: gfx.H * 0.6, size: 60, colour: COLOURS.presskey, alpha: 0.7 });
+      } else if (game.lives <= 0 || complete) {
+        endOfLevel();
+      }
+    }
+    gfx.end();
+    requestAnimationFrame(frame);
+  }
+
+  // Expose the live objects for poking at from the console (and for the automated smoke test)
+  window.breakout = { game, gfx, input, intro, audio, get scene() { return scene; } };
+
+  music.play('intro');   // Silent until the first gesture resumes the context, then it starts
+  requestAnimationFrame(frame);
+}
+
+boot().catch((e) => {
+  console.error(e);
+  message(`Something went wrong: ${e.message}. Is the page being served over HTTP from the repository root?`);
+});

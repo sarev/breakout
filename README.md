@@ -78,6 +78,17 @@ will down-scale all of the graphics by a factor of four (horizontally and vertic
 
 Pointer movement is scaled so that moving the bat from one side of the playfield to the other takes the same hand movement on any monitor, whatever its resolution. If you'd like it quicker or slower, pass `--sensitivity` (or `-s`): `-s 1.5` needs a third less movement, `-s 0.75` a third more.
 
+## Web version
+
+There is also a browser version in the `web` folder, a straight port of the game to JavaScript and the HTML canvas. It uses the same sprites, sounds and music, fills the browser tab (press **F** for fullscreen), and supports touch as well as the mouse. It needs to be served over HTTP rather than opened as a file, because browsers won't let a page fetch audio from disk:
+
+```bash
+# From the repository root
+python -m http.server 8000
+```
+
+then open http://localhost:8000/web/ in a browser. Controls are as above, with these differences: click or tap the intro to start, the mouse pointer is captured while you play (**Esc** releases it and pauses), **Q** returns to the intro, and on a touch screen a finger moves the ball (intro) or drags the bat (play), a tap serves or kicks, and a two-finger tap pauses. Options go on the URL: `?music=0` starts silent, `?volume=0.25` sets the music volume, `?sensitivity=1.5` scales mouse movement, and `?debug=1` enables the cheats.
+
 ## Monitor selection
 
 If you have multiple monitors, you can pass the `--monitor` (or `-m`) parameter to specify the desired monitor number (with 0 being the primary display).
