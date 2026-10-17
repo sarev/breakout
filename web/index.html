@@ -5,13 +5,47 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Breakout</title>
   <style>
-    html, body { margin: 0; padding: 0; background: #000; overflow: hidden; height: 100%; }
+    html, body { margin: 0; padding: 0; background: #000; overflow: hidden; height: 100%;
+                 font-family: Arial, Helvetica, sans-serif; }
     /* The cursor is hidden from script only while a game is actually being played; see main.js updateCursor() */
     canvas { display: block; touch-action: none; -webkit-user-select: none; user-select: none; }
+
+    /* Help / Credits: an overlay that blurs the game behind it, with a scrolling panel in the middle */
+    #modal { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+             background: rgba(0, 0, 0, 0.45); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+             cursor: default; z-index: 10; }
+    #modal[hidden] { display: none; }
+    #modal .panel { position: relative; box-sizing: border-box; width: min(92vw, 760px); max-height: 88vh;
+                    overflow-y: auto; padding: 28px 36px 32px; border-radius: 14px;
+                    background: rgba(12, 18, 36, 0.92); color: #dde6ff; border: 1px solid rgba(128, 168, 255, 0.35);
+                    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6); font-size: 17px; line-height: 1.45; }
+    #modal .close { position: absolute; top: 10px; right: 12px; width: 40px; height: 40px; border: 0; border-radius: 50%;
+                    background: rgba(128, 168, 255, 0.15); color: #8aa8ff; font-size: 26px; line-height: 40px;
+                    cursor: pointer; }
+    #modal .close:hover { background: rgba(128, 168, 255, 0.35); color: #fff; }
+    #modal h2 { margin: 0 0 12px; color: #8aa8ff; font-style: italic; font-size: 30px; }
+    #modal h3 { margin: 22px 0 8px; color: #40e0e0; font-size: 20px; }
+    #modal p { margin: 8px 0; }
+    #modal a { color: #40e0e0; }
+    #modal table { border-collapse: collapse; width: 100%; }
+    #modal td { padding: 6px 10px 6px 0; vertical-align: top; }
+    #modal .keys td:first-child { width: 90px; color: #40e0e0; font-weight: bold; white-space: nowrap; }
+    #modal .bricks td:first-child { width: 56px; }
+    #modal .bricks td:nth-child(2) { width: 150px; font-weight: bold; color: #fff; }
+    #modal .bricks img { width: 44px; height: 44px; display: block; border-radius: 4px; }
+    #modal ul { padding-left: 22px; }
+    #modal li { margin: 6px 0; }
+    #modal .dedication { margin-top: 22px; color: #8aa8ff; font-style: italic; }
   </style>
 </head>
 <body>
   <canvas id="game"></canvas>
+  <div id="modal" hidden>
+    <div class="panel">
+      <button class="close" type="button" aria-label="Close">&times;</button>
+      <div id="modal-body"></div>
+    </div>
+  </div>
   <script type="module" src="js/main.js"></script>
 </body>
 </html>

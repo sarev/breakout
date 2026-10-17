@@ -66,7 +66,20 @@ export class Intro {
     this.grid = 10;   // Card subdivision per side
     this.difficulty = game.difficulty;
     this.menuBoxes = [null, null, null];
+    this.linkBoxes = { help: null, credits: null };   // Hit boxes for the Help / Credits links
     this.spawnBalls();
+  }
+
+  /**
+   * Which link, if any, is under a playfield point.
+   *
+   * @returns {'help'|'credits'|null}
+   */
+  linkAt(x, y) {
+    for (const [name, box] of Object.entries(this.linkBoxes)) {
+      if (box && x >= box.x && x <= box.x + box.w && y >= box.y && y <= box.y + box.h) return name;
+    }
+    return null;
   }
 
   spawnBalls() {
@@ -188,9 +201,27 @@ export class Intro {
     ['Easy', 'Medium', 'Hard'].forEach((label, i) => {
       const selected = i === this.difficulty;
       this.menuBoxes[i] = gfx.text(ctx, label, {
-        x, y: gfx.H * (0.7 + 0.1 * i), size: 100, alpha: 224 / 255,
+        x, y: gfx.H * (0.6 + 0.08 * i), size: 100, alpha: 224 / 255,
         colour: selected ? COLOURS.selitem : COLOURS.item, bold: selected,
       });
+    });
+
+    // Help and Credits links, underlined, lit up when the hero ball is over them. The hit boxes are padded a
+    // little so a ball or a finger doesn't have to land exactly on the letters.
+    const hover = this.linkAt(this.hero.x, this.hero.y);
+    [['help', 'Help', gfx.W * 0.42], ['credits', 'Credits', gfx.W * 0.58]].forEach(([name, label, lx]) => {
+      const lit = hover === name;
+      const box = gfx.text(ctx, label, {
+        x: lx, y: gfx.H * 0.88, size: 60, alpha: lit ? 1 : 0.8, colour: lit ? COLOURS.white : COLOURS.presskey,
+      });
+      ctx.strokeStyle = lit ? 'rgba(255,255,255,0.9)' : 'rgba(64,224,224,0.6)';
+      ctx.lineWidth = Math.max(1, 2 * gfx.scale);
+      ctx.beginPath();
+      ctx.moveTo(box.x, box.y + box.h + 4 * gfx.scale);
+      ctx.lineTo(box.x + box.w, box.y + box.h + 4 * gfx.scale);
+      ctx.stroke();
+      const pad = 16 * gfx.scale;
+      this.linkBoxes[name] = { x: box.x - pad, y: box.y - pad, w: box.w + 2 * pad, h: box.h + 2 * pad };
     });
 
     gfx.drawTrails(ctx);

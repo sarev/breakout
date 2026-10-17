@@ -1,7 +1,8 @@
 // Entry point: loads the assets, wires up input, and runs the scenes (intro, splash, game) on requestAnimationFrame.
 //
 // Controls: mouse moves the bat, left click serves or kicks, Space pauses, M toggles music, F toggles fullscreen,
-// L captures the mouse (pointer lock; Esc releases it and pauses), Q returns to the intro. On a touch screen a
+// L captures the mouse (pointer lock; Esc releases it and pauses), Q returns to the intro, and on the intro H and
+// C (or the on-screen links) open the Help and Credits pages. On a touch screen a
 // finger moves the ball (intro) or drags the bat (play), a tap serves or kicks, and a two-finger tap pauses.
 // ?debug=1 enables the cheats (D clears the level, left-click destroys the brick under the pointer). ?music=0
 // starts silent, ?sensitivity=1.5 scales mouse movement, ?volume=0.3 sets the music volume.
@@ -13,6 +14,7 @@ import { Game } from './game.js';
 import { Graphics } from './graphics.js';
 import { Input } from './input.js';
 import { Intro } from './intro.js';
+import { closeModal, modalOpen, openModal } from './ui.js';
 
 const params = new URLSearchParams(window.location.search);
 const DEBUG = params.get('debug') === '1';
@@ -190,10 +192,14 @@ async function boot() {
   /** The primary action (left click or tap): start, skip the splash, serve, or kick. */
   function primaryAction() {
     audio.unlock();
+    if (modalOpen()) return;
     if (scene === 'gate') {
       leaveGate();
     } else if (scene === 'intro') {
-      startGame();
+      // A click or tap on one of the links opens its page instead of starting a game
+      const p = input.playfield();
+      const link = intro.linkAt(p.x, p.y);
+      if (link) openModal(link); else startGame();
     } else if (scene === 'splash') {
       splash.elapsed = 1e9;
     } else if (scene === 'game') {
@@ -238,6 +244,11 @@ async function boot() {
   window.addEventListener('keydown', (e) => {
     audio.unlock();
     const key = e.key.toLowerCase();
+    if (modalOpen()) {
+      // The page has the keyboard: only Escape (close) is ours
+      if (key === 'escape') closeModal();
+      return;
+    }
     if (key === 'f') {
       if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen();
       return;
@@ -253,7 +264,9 @@ async function boot() {
     if (scene === 'gate') {
       if (!e.repeat) leaveGate();
     } else if (scene === 'intro') {
-      if (key !== 'escape' && key !== 'q' && !e.repeat) startGame();
+      if (key === 'h') openModal('help');
+      else if (key === 'c') openModal('credits');
+      else if (key !== 'escape' && key !== 'q' && !e.repeat) startGame();
     } else if (scene === 'splash') {
       if (key === 'q') quitToIntro(); else splash.elapsed = 1e9;
     } else if (scene === 'game') {
