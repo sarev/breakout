@@ -19,7 +19,7 @@ The intro screen features a rotating rectangular “card” that is perspectivel
 
 1. Compute the card’s 3D orientation and project the quad into screen space.
 2. Build a perspective transform that maps the source texture onto the projected quad.
-3. Render the warped texture into the frame.
+3. Warp only the bounding box of the projected quad (clipped to the window), by shifting the transform so the box lands at the origin of a box-sized output image, and blit the result at the box's position. Warping a whole window-sized image that was mostly black was the most expensive part of the intro at 4K.
 
 **Edge-on optimisation:** when the projected quad is nearly edge-on, the code skips the expensive warp step to avoid aliasing and save time. The skip decision uses a simple threshold on the quad’s projected width/area to detect the near-degenerate case. Frames that are skipped fall back to a cheaper path so the animation remains smooth and visually stable.
 
@@ -179,7 +179,7 @@ Rendering is resolution‑independent and anchored to a 1080p logical baseline. 
 - **`display`**: the present surface tied to the active window. Final composites are drawn here before `pygame.display.flip()`.  
 - **`screen`**: off‑screen world surface used for most gameplay drawing. This allows cheap clears and post effects before presenting to `display`.  
 - **`background`**: a cached, full-screen, pre‑tiled level background. Used to quickly undraw moving sprites and to reset dirty regions.  
-- **`trail_sfc`**: a per‑pixel‑alpha surface for glow trails. On each displayed frame, this surface is faded towards transparent using a subtractive blend and new light blobs are added for each ball at the same time they are rendering to `screen`. 
+- **`trail_sfc`**: a per‑pixel‑alpha surface for glow trails. On each displayed frame, this surface is faded towards transparent using a subtractive blend and new light blobs are added for each ball at the same time they are rendering to `screen`. Every blob is added through `Graphics.add_glow()`, which records its rectangle and the time; `fade_trails()` forgets blobs older than the fade lifetime (`255 / rate` seconds), groups the rest into non-overlapping boxes (one per ball's recent path, in practice), and both it and `blit_trails()` only touch those boxes. Fading and compositing the full surface every frame was the biggest single cost at 4K, and a single box around all the blobs would be nearly as bad whenever several balls are spread out. 
 - **`black_screen`**: a full‑window black surface used for fades and splash transitions by adjusting its alpha and blitting over `display`.
 
 ### Typical draw order
@@ -226,6 +226,7 @@ Text in the game is designed for clarity and low-overhead updates, especially fo
 
 * Rendering is alpha-aware and centres text at a target point. This makes it easy to align labels visually without fiddly offsets.
 * The renderer returns the bounding rectangle used for later erasure, which keeps the draw/undraw cycle self-contained.
+* Fonts and renders are cached in `Graphics` (`get_font()` / `render_text()`). Glyphs are rendered once in white per (text, size, style) and tinted with a multiply blend, which gives exactly the same pixels as rendering in colour; the final coloured surfaces sit in a small most-recently-used cache. Static labels are therefore a dictionary lookup per frame, and the intro's pulsing title (a new colour every frame) costs a copy and a tint rather than a font load and a render.
 
 ## Practical tips
 

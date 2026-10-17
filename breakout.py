@@ -532,6 +532,11 @@ class Bat():
         # game sets it when laser mode starts (or when the bat joins play during laser mode).
         self.next_fire = 0.0
 
+        # A translucent copy of the current image for the expiry fade, built on demand and reused frame to frame
+        # (see `draw()`). `fade_source` records which image it was copied from, since the image swaps on inversion.
+        self.fade_image = None
+        self.fade_source = None
+
     def invert(self, force: bool | None = None) -> None:
         """
         Swap or set the bat's normal and inverted images, toggling the `inverted` flag if needed.
@@ -590,10 +595,13 @@ class Bat():
             remain = max(0.0, self.expire - self.game.time)
             if remain < Bat.fade_seconds:
                 # Blit the image with some transparency when the bat is about to expire: alpha ramps from 255 down
-                # to 55 over the fade period, so the bat never quite disappears before it goes
-                temp_surface = self.image.convert_alpha()
-                temp_surface.set_alpha(55 + int(200 * remain / Bat.fade_seconds))
-                image = temp_surface
+                # to 55 over the fade period, so the bat never quite disappears before it goes. The translucent
+                # copy is made once and reused rather than allocated every frame.
+                if self.fade_source is not self.image:
+                    self.fade_image = self.image.convert_alpha()
+                    self.fade_source = self.image
+                self.fade_image.set_alpha(55 + int(200 * remain / Bat.fade_seconds))
+                image = self.fade_image
 
         surface.blit(image, (self.x - self.w2, self.y))
 
@@ -1019,8 +1027,8 @@ class Ball():
         pos = (self.x - self.w2, self.y - self.h2)
         surface.blit(self.image, pos)
 
-        # Plot a glow into the trail surface
-        self.gfx.trail_sfc.blit(self.glow, pos)
+        # Plot a glow into the trail surface (which notes where, so only that area needs fading and compositing)
+        self.gfx.add_glow(self.glow, pos)
 
         return True
 
@@ -1588,6 +1596,22 @@ class Graphics():
         # Fractional trail fade carried over between frames (see `fade_trails()`)
         self.trail_fade_acc = 0.0
 
+        # Where the trails are. Fading and compositing the whole trail surface every frame was the single most
+        # expensive thing the game did at 4K, so we remember every glow drawn into it recently - as (time, rect)
+        # pairs on a private clock - and only touch the box around them. See `add_glow()` and `trail_rect()`.
+        self.trail_marks: list[tuple[float, pygame.Rect]] = []
+        self.trail_boxes: list[pygame.Rect] = []   # Non-overlapping boxes around the live marks (see `fade_trails()`)
+        self.trail_clock = 0.0
+        self.trail_lifetime = 255.0 / 600.0   # Seconds until a fresh glow has faded to nothing (updated per fade)
+
+        # Caches for text rendering. Creating a pygame Font is slow (it loads the font file every time) and
+        # rendering a large string isn't cheap either; the HUD draws two labels every frame and the intro seven.
+        # See `render_text()`.
+        self._font_cache: dict[tuple, pygame.font.Font] = {}
+        self._glyph_cache: dict[tuple, pygame.Surface] = {}    # White renders, keyed by (text, size, bold, italic)
+        self._text_cache: dict[tuple, pygame.Surface] = {}     # Final coloured renders, keyed by everything
+        self._text_cache_limit = 32
+
         # Set the name of the window
         pygame.display.set_caption("Breakout")
 
@@ -1796,6 +1820,69 @@ class Graphics():
         # Apply the darkening effect to our background image
         self.darken_screen(self.background, 130)
 
+    def add_glow(self, glow: pygame.Surface, pos: tuple[float, float]) -> None:
+        """
+        Draw a glow blob into the trail surface and remember where it went.
+
+        Args:
+            glow: The glow image.
+            pos: Top-left position to draw it at.
+        """
+
+        self.trail_sfc.blit(glow, pos)
+        self.trail_marks.append((self.trail_clock, pygame.Rect(pos, glow.get_size())))
+
+    def _cluster_trail_marks(self) -> list[pygame.Rect]:
+        """
+        Group the live glow rectangles into boxes that don't overlap one another.
+
+        Returns:
+            list[pygame.Rect]: One box per cluster of touching glows - in practice one per ball's recent path.
+
+        Notes:
+            A single box around *all* the glows would be nearly the whole screen whenever the balls are spread
+            out (the intro has fifteen of them), which brings back the full-screen cost we're trying to avoid.
+            Separate boxes must not overlap, or the pixels in the overlap would be faded and composited twice.
+            Each mark is merged into the first box it touches; because merging can make boxes grow into each
+            other, we repeat the merge over the boxes themselves until nothing overlaps.
+        """
+
+        boxes: list[pygame.Rect] = []
+        for _, rect in self.trail_marks:
+            for i, box in enumerate(boxes):
+                if box.colliderect(rect):
+                    boxes[i] = box.union(rect)
+                    break
+            else:
+                boxes.append(rect.copy())
+
+        merged = True
+        while merged:
+            merged = False
+            out: list[pygame.Rect] = []
+            for box in boxes:
+                for i, other in enumerate(out):
+                    if other.colliderect(box):
+                        out[i] = other.union(box)
+                        merged = True
+                        break
+                else:
+                    out.append(box)
+            boxes = out
+
+        return boxes
+
+    def blit_trails(self, surface: pygame.Surface) -> None:
+        """
+        Composite the glowing trails onto a surface, touching only the areas that have any trail in them.
+
+        Args:
+            surface: Target surface (the game's `screen`, or the intro's `display`).
+        """
+
+        for box in self.trail_boxes:
+            surface.blit(self.trail_sfc, box.topleft, box)
+
     def fade_trails(self, dt: float, rate: float = 600.0) -> None:
         """
         Fade the glowing ball trails towards transparent.
@@ -1805,16 +1892,115 @@ class Graphics():
             rate: Alpha units (0..255) to subtract per second. 600 is the game's rate; the intro uses a faster one.
 
         Notes:
-            The fade is a whole-number alpha subtraction across the trail surface, so the fractional part of
-            `rate * dt` is carried over to the next frame. That keeps the fade rate steady at any frame rate
-            instead of rounding it away on fast machines.
+            The fade is a whole-number alpha subtraction, so the fractional part of `rate * dt` is carried over to
+            the next frame. That keeps the fade rate steady at any frame rate instead of rounding it away on fast
+            machines. Only the boxes around the live glows are faded; glows older than `trail_lifetime` have faded
+            to nothing by construction and are forgotten. The boxes are worked out here, once per frame, and
+            reused by `blit_trails()` on the next frame.
         """
+
+        self.trail_clock += dt
+        self.trail_lifetime = 255.0 / rate
+
+        # Forget glows that have faded completely (the list is in time order, so trim from the front)
+        cutoff = self.trail_clock - self.trail_lifetime
+        drop = 0
+        for when, _ in self.trail_marks:
+            if when >= cutoff:
+                break
+            drop += 1
+        if drop:
+            del self.trail_marks[:drop]
+
+        self.trail_boxes = self._cluster_trail_marks()
 
         self.trail_fade_acc += rate * dt
         fade = int(self.trail_fade_acc)
         if fade > 0:
             self.trail_fade_acc -= fade
-            self.trail_sfc.fill((0, 0, 0, min(255, fade)), special_flags=pygame.BLEND_RGBA_SUB)  # RGB unchanged, alpha -= fade
+            colour = (0, 0, 0, min(255, fade))
+            for box in self.trail_boxes:
+                # RGB unchanged, alpha -= fade, within the box only
+                self.trail_sfc.fill(colour, box, special_flags=pygame.BLEND_RGBA_SUB)
+
+    def get_font(self, size: int, bold: bool, italic: bool) -> pygame.font.Font:
+        """
+        Get a (cached) font object.
+
+        Args:
+            size: Font size in pixels.
+            bold: Whether the font is bold.
+            italic: Whether the font is italic.
+
+        Returns:
+            pygame.font.Font: A font configured as requested, shared between callers.
+        """
+
+        key = (size, bold, italic)
+        font = self._font_cache.get(key)
+        if font is None:
+            font = pygame.font.Font(None, size)
+            font.set_bold(bold)
+            font.set_italic(italic)
+            self._font_cache[key] = font
+        return font
+
+    def render_text(
+        self,
+        text: str,
+        colour: tuple[int, int, int],
+        font_size: int,
+        alpha: int,
+        bold: bool,
+        italic: bool,
+    ) -> pygame.Surface:
+        """
+        Render text to a surface, with caching.
+
+        Args:
+            text: Text to render.
+            colour: RGB colour triplet.
+            font_size: Font size in pixels.
+            alpha: Opacity 0..255.
+            bold: Whether to render in bold.
+            italic: Whether to render in italic.
+
+        Returns:
+            pygame.Surface: The rendered text. Shared with the cache, so don't modify it.
+
+        Notes:
+            Two levels of cache. The glyphs are rendered once in white per (text, size, style) and kept; the
+            coloured, alpha-set result is kept in a small most-recently-used cache. Static labels always hit the
+            second level. Something like the intro's pulsing title, whose colour changes every frame, misses the
+            second level but only pays for a copy and a tint of the cached white render, not a font load and a
+            fresh render.
+        """
+
+        key = (text, colour, font_size, alpha, bold, italic)
+        surface = self._text_cache.get(key)
+        if surface is not None:
+            return surface
+
+        glyph_key = (text, font_size, bold, italic)
+        glyphs = self._glyph_cache.get(glyph_key)
+        if glyphs is None:
+            if len(self._glyph_cache) >= self._text_cache_limit:
+                self._glyph_cache.clear()
+            font = self.get_font(font_size, bold, italic)
+            glyphs = font.render(text, True, (255, 255, 255)).convert_alpha()
+            self._glyph_cache[glyph_key] = glyphs
+
+        # Tint the white render: multiplying white by the colour gives exactly what rendering in that colour would
+        surface = glyphs.copy()
+        surface.fill(colour, special_flags=pygame.BLEND_RGB_MULT)
+        surface.set_alpha(alpha)
+
+        if len(self._text_cache) >= self._text_cache_limit:
+            # Drop the oldest entry (dicts keep insertion order)
+            del self._text_cache[next(iter(self._text_cache))]
+        self._text_cache[key] = surface
+
+        return surface
 
     def darken_screen(self, screen: pygame.Surface, alpha: int | None = None) -> None:
         """
@@ -1866,17 +2052,8 @@ class Graphics():
             pygame.Rect: Bounding rectangle of the rendered text on the target surface.
         """
 
-        # Set the font up
-        font = pygame.font.Font(None, font_size)
-        font.set_italic(italic)
-        font.set_bold(bold)
-
-        # Render to a surface with an alpha channel and set the opacity
-        text_surface = font.render(text, True, colour)
-        text_surface = text_surface.convert_alpha()
-        text_surface.set_alpha(alpha)
-
-        # Get the position and draw the text
+        # Render (or fetch from the cache) and draw the text centred on the given point
+        text_surface = self.render_text(text, colour, font_size, alpha, bold, italic)
         text_rect = text_surface.get_rect(center=(minx, miny))
         surface.blit(text_surface, text_rect)
 
@@ -2838,8 +3015,8 @@ class Game():
         if self.right_clip:
             self.gfx.screen.blit(self.gfx.background, (self.right_edge, 0), self.right_clip)
 
-        # Blend the glowing trails over the background
-        self.gfx.screen.blit(self.gfx.trail_sfc, (0, 0))
+        # Blend the glowing trails over the background (only where there are any)
+        self.gfx.blit_trails(self.gfx.screen)
 
         # Draw all of the HUD and objects in a sensible order. Bricks are drawn exactly once: each draw of an
         # exploding brick advances its animation, so drawing them twice ran the explosions at double speed.
@@ -3258,11 +3435,33 @@ def intro(gfx: Graphics, game: Game, widget: MonitorSelector, image_path: str) -
         return abs(dot) < 0.01  # Threshold for edge-on detection
 
     def warp_image(image, src_pts, dst_pts):
-        """Warp the image to fit the destination points."""
+        """
+        Warp the image to fit the destination points.
+
+        Only the bounding box of the destination quad (clipped to the window) is computed, rather than a whole
+        window-sized image that is mostly black: the card covers a fraction of the screen, and at 4K warping the
+        full window was by far the most expensive thing in the intro.
+
+        Returns:
+            tuple[np.ndarray, tuple[int, int]] | None: the warped pixels and the window position to draw them at,
+            or None if the quad lies entirely outside the window.
+        """
+
+        xs = [p[0] for p in dst_pts]
+        ys = [p[1] for p in dst_pts]
+        x0 = max(0, math.floor(min(xs)))
+        y0 = max(0, math.floor(min(ys)))
+        x1 = min(gfx.window_width, math.ceil(max(xs)) + 1)
+        y1 = min(gfx.window_height, math.ceil(max(ys)) + 1)
+        if x1 <= x0 or y1 <= y0:
+            return None
 
         matrix = cv2.getPerspectiveTransform(np.float32(src_pts), np.float32(dst_pts))
-        warped = cv2.warpPerspective(image, matrix, (gfx.window_width, gfx.window_height))
-        return warped
+
+        # Shift the transform so the box's top-left corner lands at (0, 0) of the smaller output image
+        shift = np.array([[1, 0, -x0], [0, 1, -y0], [0, 0, 1]], dtype=matrix.dtype)
+        warped = cv2.warpPerspective(image, shift @ matrix, (x1 - x0, y1 - y0))
+        return warped, (x0, y0)
 
     # Rotation rates for the card, in degrees per second (the old per-frame increments at 120 fps)
     pitch_rate = 20.0
@@ -3377,23 +3576,26 @@ def intro(gfx: Graphics, game: Game, widget: MonitorSelector, image_path: str) -
         transformed_vertices = [rotate_vertex(v, pitch, yaw, roll) for v in vertices]
         projected_vertices = [project_to_2d(v) for v in transformed_vertices]
 
-        # Skip blit if the image is edge-on (or very close to edge-on)
-        if is_edge_on(transformed_vertices):
-            # Just fill the screen with black
-            gfx.display.fill(Graphics.colours['black'])
-        else:
+        # Clear the screen (the warped card no longer covers the whole window, so this is needed every frame)
+        gfx.display.fill(Graphics.colours['black'])
+
+        # Skip the warp if the image is edge-on (or very close to edge-on)
+        if not is_edge_on(transformed_vertices):
             # Prepare source and destination points for warping
             src_pts = [[0, 0], [image_width - 1, 0], [image_width - 1, image_height - 1], [0, image_height - 1]]
             dst_pts = [list(projected_vertices[i]) for i in range(4)]
 
-            # Warp the image
-            warped_image = warp_image(image_cv.copy(), src_pts, dst_pts)
+            # Warp the image (just the box around the card)
+            warped = warp_image(image_cv, src_pts, dst_pts)
+            if warped is not None:
+                warped_image, position = warped
 
-            # Convert OpenCV image to Pygame surface
-            warped_surface = pygame.image.frombuffer(warped_image.tobytes(), warped_image.shape[1::-1], "RGB")
+                # Wrap the OpenCV pixels as a Pygame surface. `frombuffer` reads the array in place, so there's no
+                # copy; the surface is only used for this one blit, while the array is still alive.
+                warped_surface = pygame.image.frombuffer(warped_image, warped_image.shape[1::-1], "RGB")
 
-            # Blit the warped surface onto the screen
-            gfx.display.blit(warped_surface, (0, 0))
+                # Blit the warped surface onto the screen
+                gfx.display.blit(warped_surface, position)
 
         # Check for the mouse being over a different menu item than the one that is currently selected
         for idx, text in enumerate(menu):
@@ -3425,8 +3627,8 @@ def intro(gfx: Graphics, game: Game, widget: MonitorSelector, image_path: str) -
         # Draw the monitor selection widget (if it is enabled)
         widget.draw(surface=gfx.display, image=gfx.monitors_img)
 
-        # Draw the glowing ball trails
-        gfx.display.blit(gfx.trail_sfc, (0, 0))
+        # Draw the glowing ball trails (only where there are any)
+        gfx.blit_trails(gfx.display)
 
         # Draw all of the balls
         gfx.draw_objects(intro_balls, gfx.display)
