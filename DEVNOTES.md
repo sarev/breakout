@@ -63,6 +63,9 @@ The game exposes a small set of command‑line flags to control display placemen
 - `main()` sets the SDL hint `SDL_WINDOWS_DPI_AWARENESS=permonitorv2` before `pygame.init()`. Without it a Windows display with scaling enabled reports its scaled-down logical size (a 3456×2160 panel at 200% looks like 1728×1080), the game renders at that size and Windows blurs it back up. With it, SDL reports native pixels and the playfield is built at the display's true resolution. The hint is ignored on other platforms, and `setdefault` means an environment override still wins.  
 - When `-m` is omitted and multiple displays exist, the intro screen shows a small monitor icon. Clicking it cycles through the available displays and re‑initialises the window on the chosen one, without restarting the process.
 
+- `--sensitivity, -s <multiplier>`  
+  Mouse sensitivity on top of the automatic per-monitor gain (see *Platform & input*). Default `1.0`.
+
 - `--debug`  
   Enables the developer cheats in `game_loop()`: **D** destroys every brick, **right-click** shows the pointer, **left-click** destroys the brick under it. Off by default so they can't be hit by accident in normal play.
 
@@ -445,6 +448,7 @@ A brief note on windowing and pointer handling.
 ## Mouse input
 
 - The mouse cursor is **hidden** during play. In the intro, we use the hero ball as the mouse pointer. In the game, the hero bat is positioned at the mouse x coordinate and the y coordinate is ignored.
+- **Mouse gain.** Windows moves the pointer in physical pixels regardless of display scaling, so on a high-resolution monitor the hand has to travel further to cross the playfield (1.8× further on a 3456-wide panel than on a 1080p one). `Graphics.pointer_to_playfield()` scales the pointer position about the centre of the playfield by `mouse_gain = physical playfield width / 1920 × sensitivity`, so crossing the playfield always takes a 1080p screen's worth of hand travel. It is applied in exactly two places — `Game.bat_target_x()` for the bat and the intro's hero ball — while the cached pointer coordinates, the inversion reflection, the pause/unpause warp and the debug hit test all stay in raw pointer space. `--sensitivity` multiplies the gain.
 - During the inversion mode, the mouse x movement is reversed. Care is taken to reposition the OS mouse pointer at the start and end of this mode to stop the bat(s) from suddenly jumping sideways.
 - For mouse button clicks, we primarily look for `MOUSEBUTTONDOWN` for two reasons: it allows us to react quickly to user input and it doesn't auto-repeat if the user holds the button down.
 - Pressing 'Q', 'Escape', or closing the pygame window at any time (intro, game, splash) quits the game and exits the program.

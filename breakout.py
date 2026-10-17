@@ -1487,7 +1487,8 @@ class Graphics():
     min_playfield_aspect = 4 / 3
     max_playfield_aspect = 16 / 9
 
-    # Height of the reference playfield that all logical sizes and speeds are designed against
+    # Size of the reference playfield that all logical sizes, speeds and mouse travel are designed against
+    reference_width = 1920
     reference_height = 1080
 
     @staticmethod
@@ -1534,7 +1535,14 @@ class Graphics():
 
         return width, height
 
-    def __init__(self, monitor: int, path: str, brick_types: int, resize: float = 1.0) -> None:
+    def __init__(
+        self,
+        monitor: int,
+        path: str,
+        brick_types: int,
+        resize: float = 1.0,
+        sensitivity: float = 1.0,
+    ) -> None:
         """
         Initialise graphics, window surfaces, and high-resolution sprites.
 
@@ -1543,6 +1551,7 @@ class Graphics():
             path: Assets directory containing images.
             brick_types: Number of brick variants to load.
             resize: Graphics resizing (downsampling) ratio.
+            sensitivity: Extra multiplier on mouse movement (1.0 = the standard feel, see `mouse_gain`).
         """
 
         print(f"Open on monitor {monitor}")
@@ -1566,6 +1575,16 @@ class Graphics():
         self.aspect_ratio = self.window_width / self.window_height
         self.scale_ratio = self.window_height / Graphics.reference_height
         print(f"Scale ratio {self.scale_ratio}")
+
+        # Mouse gain. Windows moves the pointer in the monitor's physical pixels whatever the display scaling, so
+        # on a high-resolution monitor the hand has to travel further to take the bat across the playfield: nearly
+        # twice as far on a 4K panel as on a 1080p one. We scale pointer movement about the centre of the playfield
+        # so that crossing it always takes the same hand travel as crossing a 1080p screen (times the player's
+        # `sensitivity`). The physical width of the playfield allows for letterbox bars, and the retro `resize`
+        # ratio falls out naturally because pointer coordinates arrive in logical pixels.
+        physical_playfield_width = min(self.desktop_width, self.desktop_height * self.aspect_ratio)
+        self.mouse_gain = (physical_playfield_width / Graphics.reference_width) * max(0.1, sensitivity)
+        print(f"Mouse gain {self.mouse_gain:.2f}")
 
         # Create the display (window) for our game. SCALED | FULLSCREEN asks the driver to stretch our logical
         # surface to fill the monitor, keeping its aspect ratio and adding black bars where the shapes differ.
@@ -1765,6 +1784,27 @@ class Graphics():
             self.mouse_x, self.mouse_y = x, y
 
         return x, y
+
+    def pointer_to_playfield(self, x: float, y: float) -> tuple[float, float]:
+        """
+        Convert a pointer position into the playfield position it controls, applying the mouse gain.
+
+        Args:
+            x: Pointer x in logical pixels (as returned by `get_mouse_pos()`).
+            y: Pointer y in logical pixels.
+
+        Returns:
+            tuple[float, float]: The controlled position, scaled about the centre of the playfield by `mouse_gain`
+                                 and clamped to the playfield. With a gain above 1 the bat reaches the edge before
+                                 the pointer does, which is the point.
+        """
+
+        cx, cy = self.window_width / 2, self.window_height / 2
+        px = cx + (x - cx) * self.mouse_gain
+        py = cy + (y - cy) * self.mouse_gain
+        px = max(0.0, min(self.window_width - 1.0, px))
+        py = max(0.0, min(self.window_height - 1.0, py))
+        return px, py
 
     def set_mouse_pos(self, x: int, y: int, cache: bool = True) -> None:
         """
@@ -2359,7 +2399,13 @@ class Game():
             return None
         return alpha
 
-    def __init__(self, monitor: int | None = 0, resize: float = 1.0, debug: bool = False) -> None:
+    def __init__(
+        self,
+        monitor: int | None = 0,
+        resize: float = 1.0,
+        debug: bool = False,
+        sensitivity: float = 1.0,
+    ) -> None:
         """
         Set up graphics, audio, game state, and initial objects.
 
@@ -2367,6 +2413,7 @@ class Game():
             monitor: Index of the monitor to display on (0 is primary).
             resize: Graphics resizing (downsampling) ratio.
             debug: Enable the developer cheats (see `game_loop()`).
+            sensitivity: Mouse sensitivity multiplier (see `Graphics.mouse_gain`).
 
         Side effects:
             - Creates `Graphics` and loads sprites and sounds.
@@ -2379,7 +2426,8 @@ class Game():
             monitor=monitor if monitor is not None else 0,
             path=Game.sprites_path,
             brick_types=Game.num_brick_types,
-            resize=resize
+            resize=resize,
+            sensitivity=sensitivity
         )
 
         # Developer cheats are only wired up when this is set (via --debug on the command line)
@@ -2944,7 +2992,7 @@ class Game():
             if len(self.extra_bats):
                 self.extra_bats.sort(key=lambda obj: obj.id)
                 bat = self.extra_bats.pop(0)
-                bat.reset(self.gfx.mouse_x)
+                bat.reset(self.bat_target_x())
                 # If lasers are already firing, slot the new bat into the emission rhythm behind the others
                 bat.next_fire = self.time + len(self.bats) * Game.laser_stagger
                 self.bats.append(bat)
@@ -3237,6 +3285,17 @@ class Game():
                 pan = x / self.gfx.window_width
                 Game.play_stereo_sound(self.bonus_sound, stereo=pan)
 
+    def bat_target_x(self) -> float:
+        """
+        Where the hero bat should be, from the cached (and possibly inverted) pointer position with the mouse
+        gain applied.
+
+        Returns:
+            float: Playfield x coordinate.
+        """
+
+        return self.gfx.pointer_to_playfield(self.gfx.mouse_x, self.gfx.mouse_y)[0]
+
     def animate_bats(self, dt: float) -> None:
         """
         Move bats to the current mouse x position and recycle expired bonus bats.
@@ -3246,8 +3305,9 @@ class Game():
         """
 
         lost = []
+        target_x = self.bat_target_x()
         for bat in self.bats:
-            bat.move(self.gfx.mouse_x, dt)
+            bat.move(target_x, dt)
             if bat.expired():
                 lost.append(bat)
 
@@ -3554,12 +3614,15 @@ def intro(gfx: Graphics, game: Game, widget: MonitorSelector, image_path: str) -
             if ball.lives < 1:
                 ball.lives = 1
 
-        # Control the hero ball with the mouse. Its velocity (pixels per second) is how far the mouse moved this
-        # frame divided by the frame time, so flicking it into the other balls gives a frame-rate independent shove.
+        # Control the hero ball with the mouse (with the same gain as the bat gets in play, so it feels the same on
+        # every monitor). Its velocity (pixels per second) is how far it moved this frame divided by the frame
+        # time, so flicking it into the other balls gives a frame-rate independent shove.
         x, y = gfx.get_mouse_pos(cache=False)
-        intro_hero_ball.x, intro_hero_ball.y = x, y
+        hx, hy = gfx.pointer_to_playfield(x, y)
         if dt > 0:
-            intro_hero_ball.vx, intro_hero_ball.vy = (x - gfx.mouse_x) / dt, (y - gfx.mouse_y) / dt
+            intro_hero_ball.vx = (hx - intro_hero_ball.x) / dt
+            intro_hero_ball.vy = (hy - intro_hero_ball.y) / dt
+        intro_hero_ball.x, intro_hero_ball.y = hx, hy
         gfx.mouse_x, gfx.mouse_y = x, y
 
         # Handle balls colliding with each other
@@ -3852,7 +3915,7 @@ def game_loop(game: object, gfx: object):
 
 def menu_loop(args: argparse.Namespace) -> int:
     # Create the initial Game and get a reference to the Graphics object
-    game = Game(monitor=args.monitor, resize=args.resize, debug=args.debug)
+    game = Game(monitor=args.monitor, resize=args.resize, debug=args.debug, sensitivity=args.sensitivity)
     gfx = game.gfx
 
     # Initialise a monitor selection widget. Its position is given in reference (1080p) coordinates; `reposition()`
@@ -3885,7 +3948,7 @@ def menu_loop(args: argparse.Namespace) -> int:
                 del game
 
                 # Create new Game and Graphics objects, having selected a different monitor
-                game = Game(monitor=widget.monitor, resize=args.resize, debug=args.debug)
+                game = Game(monitor=widget.monitor, resize=args.resize, debug=args.debug, sensitivity=args.sensitivity)
                 gfx = game.gfx
 
                 # The new monitor may be a different size, so re-scale the widget's position and hit box for it
@@ -3916,6 +3979,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                         help="Ratio for down-sizing the graphics for a more retro feel. Default: 1.0")
     parser.add_argument("--monitor", "-m", type=int,
                         help="Index of the monitor to display on (0 is primary).")
+    parser.add_argument("--sensitivity", "-s", type=float, default=1.0,
+                        help="Mouse sensitivity multiplier. At 1.0 the bat crosses the playfield with the same hand "
+                             "movement on any monitor; 2.0 needs half as much, 0.5 twice as much. Default: 1.0")
     parser.add_argument("--debug", action="store_true",
                         help="Enable developer cheats: D destroys every brick; right-click shows the pointer and "
                              "left-click destroys the brick under it.")
