@@ -315,9 +315,12 @@ async function boot() {
   function idleRate(now) {
     if (scene === 'gate') return IDLE_FPS;
     if (scene === 'intro') {
-      if (modalOpen()) return IDLE_FPS;
       const settled = intro.totalSpeed() < IDLE_SPEED * gfx.scale;
-      if (settled && now - lastInput > IDLE_AFTER * 1000) return IDLE_FPS;
+      const wantIdle = modalOpen() || (settled && now - lastInput > IDLE_AFTER * 1000);
+      // Tell the card to turn to face the viewer (or to resume spinning), and only throttle once it's there:
+      // the turn itself runs at full rate so it looks smooth
+      intro.setIdle(wantIdle);
+      if (wantIdle && intro.cardSettled()) return IDLE_FPS;
     }
     return 0;
   }

@@ -67,7 +67,23 @@ export class Intro {
     this.difficulty = game.difficulty;
     this.menuBoxes = [null, null, null];
     this.linkBoxes = { help: null, credits: null };   // Hit boxes for the Help / Credits links
+    this.idle = false;                                // Settling the card to face the viewer (see setIdle)
     this.spawnBalls();
+  }
+
+  /**
+   * Switch between the card rotating (attract mode) and easing back to face the viewer (idle). A card rotating
+   * at a throttled frame rate looks broken, so when the page goes idle the card turns square-on and stops, and
+   * the frame rate is only dropped once `cardSettled()` reports it has got there.
+   */
+  setIdle(flag) {
+    this.idle = flag;
+  }
+
+  /** Whether the card is face-on and still (within a hair), so the frame rate can be dropped. */
+  cardSettled() {
+    const near = (a) => Math.abs(a - Math.round(a / (2 * Math.PI)) * 2 * Math.PI) < 0.002;
+    return this.idle && near(this.pitch) && near(this.yaw) && near(this.roll);
   }
 
   /**
@@ -131,9 +147,22 @@ export class Intro {
       for (let j = i + 1; j < this.balls.length; j++) this.balls[i].checkBall(this.balls[j]);
     }
 
-    this.pitch += (CARD_PITCH_RATE * Math.PI / 180) * dt;
-    this.yaw += (CARD_YAW_RATE * Math.PI / 180) * dt;
-    this.roll += (CARD_ROLL_RATE * Math.PI / 180) * dt;
+    if (this.idle) {
+      // Ease each angle to its nearest face-on orientation (a multiple of a full turn, so the image isn't
+      // mirrored) with a 0.2 s time constant, and snap once it's close enough to count as settled
+      const settle = (a) => {
+        const target = Math.round(a / (2 * Math.PI)) * 2 * Math.PI;
+        a += (target - a) * Math.min(1, dt / 0.2);
+        return Math.abs(target - a) < 0.001 ? target : a;
+      };
+      this.pitch = settle(this.pitch);
+      this.yaw = settle(this.yaw);
+      this.roll = settle(this.roll);
+    } else {
+      this.pitch += (CARD_PITCH_RATE * Math.PI / 180) * dt;
+      this.yaw += (CARD_YAW_RATE * Math.PI / 180) * dt;
+      this.roll += (CARD_ROLL_RATE * Math.PI / 180) * dt;
+    }
 
     // Menu: steering the hero ball over a label selects it
     this.menuBoxes.forEach((box, i) => {
