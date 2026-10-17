@@ -24,6 +24,15 @@ const MUSIC_VOLUME = params.has('volume') ? parseFloat(params.get('volume')) : n
 
 const ASSET_BASE = './';    // The sprites, sounds and music folders sit beside this page, so web/ is self-contained
 
+// Idle throttling. A page sitting on the title card or the intro shouldn't burn CPU and GPU redrawing at the
+// display rate: the gate always renders at IDLE_FPS, and the intro drops to it once there has been no input for
+// IDLE_AFTER seconds and the balls have all but stopped (or while a Help / Credits page is open). Any input, or
+// the balls being set moving again, brings the full rate straight back. The splash and the game always run at
+// full rate, and the browser stops the loop altogether while the tab is hidden.
+const IDLE_FPS = 12;
+const IDLE_AFTER = 5;
+const IDLE_SPEED = 60;      // Total ball speed (px/s at the reference scale) below which the intro counts as settled
+
 const canvas = document.getElementById('game');
 
 /** Show a line of text on an otherwise black canvas (loading and error messages). */
@@ -222,6 +231,13 @@ async function boot() {
   }
 
   // --- Input ------------------------------------------------------------------------------------------------
+  let lastInput = performance.now();
+  const noteInput = () => { lastInput = performance.now(); };
+  for (const type of ['mousemove', 'mousedown', 'touchstart', 'touchmove', 'wheel']) {
+    canvas.addEventListener(type, noteInput, { passive: true });
+  }
+  window.addEventListener('keydown', noteInput);
+
   input.onLockLost = () => {
     // The browser releases the lock on Esc (or when the tab loses focus): treat it as a pause
     if (scene === 'game' && !game.paused) setPaused(true);
@@ -294,10 +310,24 @@ async function boot() {
   });
 
   // --- Main loop --------------------------------------------------------------------------------------------
+
+  /** The frame rate to throttle to right now, or 0 for the display's full rate. */
+  function idleRate(now) {
+    if (scene === 'gate') return IDLE_FPS;
+    if (scene === 'intro') {
+      if (modalOpen()) return IDLE_FPS;
+      const settled = intro.totalSpeed() < IDLE_SPEED * gfx.scale;
+      if (settled && now - lastInput > IDLE_AFTER * 1000) return IDLE_FPS;
+    }
+    return 0;
+  }
+
+  let frames = 0;   // Rendered frames, for the smoke test to measure the rate
   let last = performance.now();
   function frame(now) {
     const dt = Math.min((now - last) / 1000, MAX_FRAME_DT);
     last = now;
+    frames++;
 
     const ctx = gfx.begin();
     if (scene === 'gate') {
@@ -344,11 +374,20 @@ async function boot() {
     }
     updateCursor();
     gfx.end();
-    requestAnimationFrame(frame);
+
+    // Schedule the next frame: straight away at full rate, or after a wait when idling. requestAnimationFrame
+    // still does the actual scheduling, so the browser can hold the loop while the tab is hidden.
+    const rate = idleRate(now);
+    if (rate) {
+      const spent = performance.now() - now;
+      setTimeout(() => requestAnimationFrame(frame), Math.max(0, 1000 / rate - spent));
+    } else {
+      requestAnimationFrame(frame);
+    }
   }
 
   // Expose the live objects for poking at from the console (and for the automated smoke test)
-  window.breakout = { game, gfx, input, intro, audio, get scene() { return scene; } };
+  window.breakout = { game, gfx, input, intro, audio, get scene() { return scene; }, get frames() { return frames; } };
 
   requestAnimationFrame(frame);
 }

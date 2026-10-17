@@ -99,6 +99,15 @@ export class Intro {
     this.spawnBalls();
   }
 
+  /** Total speed of the drifting balls (px/s), excluding the pointer-driven hero: how lively the scene still is. */
+  totalSpeed() {
+    let total = 0;
+    for (const ball of this.balls) {
+      if (ball !== this.hero) total += Math.hypot(ball.vx, ball.vy);
+    }
+    return total;
+  }
+
   update(dt) {
     const gfx = this.gfx;
     this.elapsed += dt;
