@@ -2201,12 +2201,26 @@ class Music():
         "boss": "boss.ogg",
     }
 
-    # Level tracks, in the order the levels cycle through them (so the last level gets the boss track)
-    level_tracks = ("stage1", "stage2", "boss")
+    # What each level plays, as (track name, tempo). Levels beyond the end of the list cycle through it. A tempo
+    # other than 1.0 plays a resampled copy of the track: faster and correspondingly higher in pitch, as it would
+    # have been on real hardware. The second half revisits the first half's tunes sped up, so the pace keeps
+    # rising rather than dropping back at level 4. (Stage 2 is already brisk, so it gets a gentler lift.)
+    level_plan = (
+        ("stage1", 1.0),
+        ("stage2", 1.0),
+        ("boss", 1.0),
+        ("stage1", 1.2),
+        ("stage2", 1.1),
+        ("boss", 1.2),
+    )
+
+    # Mixer channels: one is reserved for tempo-changed music (so sound effects can't grab it), and the total is
+    # raised from pygame's default of 8 so the effects still have plenty
+    num_channels = 16
 
     def __init__(self, path: str, enabled: bool = True, volume: float | None = None) -> None:
         """
-        Find the music files and set the volume.
+        Find the music files, prepare any tempo-changed copies, and set the volume.
 
         Args:
             path: Folder containing the music files.
@@ -2216,7 +2230,11 @@ class Music():
 
         self.enabled = enabled
         self.volume = Music.volume if volume is None else max(0.0, min(1.0, volume))
-        self.current: str | None = None   # Name of the track that is (or was last) playing
+
+        # The track that is (or was last) playing, as (name, tempo), and which backend is carrying it: the
+        # streaming music channel for normal-tempo tracks, or a reserved mixer channel for resampled ones
+        self.current: tuple[str, float] | None = None
+        self.channel: pygame.mixer.Channel | None = None
 
         # Only tracks whose files exist are playable
         self.tracks = {}
@@ -2227,42 +2245,103 @@ class Music():
         if not self.tracks:
             print("No music files found - running without music")
 
+        # Resampled copies, keyed by (name, tempo), made once up front so there's no hitch mid-game
+        self.resampled: dict[tuple[str, float], pygame.mixer.Sound] = {}
+
         try:
             pygame.mixer.music.set_volume(self.volume)
-        except pygame.error:
+            pygame.mixer.set_num_channels(Music.num_channels)
+            pygame.mixer.set_reserved(1)
+            self.channel = pygame.mixer.Channel(0)
+            self.channel.set_volume(self.volume)
+            for name, tempo in Music.level_plan:
+                if tempo != 1.0 and name in self.tracks and (name, tempo) not in self.resampled:
+                    self.resampled[(name, tempo)] = self._resample(self.tracks[name], tempo)
+        except pygame.error as e:
             # No mixer (no audio device): nothing we can do, and nothing else will work either
+            print(f"Music unavailable: {e}")
             self.tracks = {}
 
-    @classmethod
-    def level_track(cls, level: int) -> str:
+    @staticmethod
+    def _resample(path: str, tempo: float) -> pygame.mixer.Sound:
         """
-        The track name for a level: levels cycle through `level_tracks`.
+        Make a copy of a track that plays `tempo` times faster (and higher).
+
+        Args:
+            path: The OGG file.
+            tempo: Speed multiplier, e.g. 1.2 for 20% faster.
+
+        Returns:
+            pygame.mixer.Sound: The resampled track, fully decoded in memory.
+
+        Notes:
+            Reads the decoded samples at `tempo` times the normal rate, interpolating between neighbours, so the
+            copy has 1 / tempo as many samples. Takes a fraction of a second for a minute of audio.
+        """
+
+        samples = pygame.sndarray.array(pygame.mixer.Sound(path))
+        if samples.ndim == 1:
+            samples = samples[:, np.newaxis]   # Treat mono like one-channel stereo
+        n = len(samples)
+        positions = np.arange(0, n - 1, tempo)
+        source = np.arange(n)
+        faster = np.empty((len(positions), samples.shape[1]), dtype=samples.dtype)
+        for ch in range(samples.shape[1]):
+            faster[:, ch] = np.interp(positions, source, samples[:, ch].astype(np.float64)).astype(samples.dtype)
+        if faster.shape[1] == 1:
+            faster = faster[:, 0]
+        return pygame.sndarray.make_sound(np.ascontiguousarray(faster))
+
+    @classmethod
+    def level_track(cls, level: int) -> tuple[str, float]:
+        """
+        What a level plays.
 
         Args:
             level: Level number starting at 1.
 
         Returns:
-            str: Track name.
+            tuple[str, float]: (track name, tempo) from `level_plan`, cycling past its end.
         """
 
-        return cls.level_tracks[(level - 1) % len(cls.level_tracks)]
+        return cls.level_plan[(level - 1) % len(cls.level_plan)]
 
-    def play(self, name: str) -> None:
+    def _playing(self) -> bool:
+        """Whether whichever backend holds the current track is still producing sound."""
+
+        if self.current is None:
+            return False
+        if self.current[1] == 1.0:
+            return pygame.mixer.music.get_busy()
+        return self.channel is not None and self.channel.get_busy()
+
+    def play(self, name: str, tempo: float = 1.0) -> None:
         """
         Start a track looping. Does nothing if music is off, the track is missing, or it's already playing.
 
         Args:
             name: Track name (a key of `files`).
+            tempo: Speed multiplier. 1.0 streams the file; anything else plays the resampled copy prepared at
+                   start-up (a tempo that wasn't in `level_plan` falls back to 1.0).
         """
 
         if not self.enabled or name not in self.tracks:
             return
-        if name == self.current and pygame.mixer.music.get_busy():
+        if tempo != 1.0 and (name, tempo) not in self.resampled:
+            tempo = 1.0
+        if self.current == (name, tempo) and self._playing():
             return
+
+        # Whatever was playing before, on either backend, stops dead: the new track takes over
+        self.stop(fade=False)
+
         try:
-            pygame.mixer.music.load(self.tracks[name])
-            pygame.mixer.music.play(loops=-1)
-            self.current = name
+            if tempo == 1.0:
+                pygame.mixer.music.load(self.tracks[name])
+                pygame.mixer.music.play(loops=-1)
+            else:
+                self.channel.play(self.resampled[(name, tempo)], loops=-1)
+            self.current = (name, tempo)
         except pygame.error as e:
             print(f"Error playing music '{name}': {e}")
 
@@ -2276,18 +2355,26 @@ class Music():
 
         if fade:
             pygame.mixer.music.fadeout(Music.fade_ms)
+            if self.channel is not None:
+                self.channel.fadeout(Music.fade_ms)
         else:
             pygame.mixer.music.stop()
+            if self.channel is not None:
+                self.channel.stop()
 
     def pause(self) -> None:
         """Pause the music (alongside the game)."""
 
         pygame.mixer.music.pause()
+        if self.channel is not None:
+            self.channel.pause()
 
     def resume(self) -> None:
         """Resume paused music."""
 
         pygame.mixer.music.unpause()
+        if self.channel is not None:
+            self.channel.unpause()
 
     def toggle(self) -> bool:
         """
@@ -2300,8 +2387,8 @@ class Music():
         self.enabled = not self.enabled
         if self.enabled:
             if self.current is not None:
-                name, self.current = self.current, None   # Force `play()` to restart it
-                self.play(name)
+                (name, tempo), self.current = self.current, None   # Force `play()` to restart it
+                self.play(name, tempo)
         else:
             self.stop(fade=False)
         return self.enabled
@@ -4002,7 +4089,7 @@ def game_loop(game: object, gfx: object):
     while game.running and game.level <= Game.get_max_level() and game.lives > 0:
         # Prepare this level, and start its tune
         game.initialise_level()
-        game.music.play(Music.level_track(game.level))
+        game.music.play(*Music.level_track(game.level))
 
         while game.running:
             # Restore background over previously drawn objects

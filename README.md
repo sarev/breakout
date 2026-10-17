@@ -103,7 +103,7 @@ If this parameter isn't passed and there are multiple monitors detected, you wil
 
 ### Music
 
-The intro and each level have their own chiptune track, played at a volume that leaves room for the sound effects. Start with it off using `--no-music`, or set the level with `--music-volume 0.25` (0 to 1). The tracks live in the `music` folder; see `music/CREDITS.txt`.
+The intro and each level have their own chiptune track, played at a volume that leaves room for the sound effects. Levels 4 to 6 bring the first three tunes back faster (and higher), old-school style. Start with it off using `--no-music`, or set the level with `--music-volume 0.25` (0 to 1). The tracks live in the `music` folder; see `music/CREDITS.txt`.
 - **Intro screen**: Move the mouse over the menu to select a difficulty, then click or press any key
 
 ### Brick types
