@@ -2,8 +2,14 @@
 //
 // Controls: mouse moves the bat, left click serves or kicks, Space pauses, M toggles music, F toggles fullscreen,
 // L captures the mouse (pointer lock; Esc releases it and pauses), Q returns to the intro, and on the intro H and
-// C (or the on-screen links) open the Help and Credits pages. On a touch screen a
-// finger moves the ball (intro) or drags the bat (play), a tap serves or kicks, and a two-finger tap pauses.
+// C (or the on-screen links) open the Help and Credits pages. On a touch screen a finger moves the ball (intro)
+// or drags the bat (play), a tap serves or kicks, and a two-finger tap pauses and opens the Options page (music,
+// fullscreen, help, quit), which stands in for the keys.
+//
+// A mobile device (a phone or tablet: touch, no mouse, one screen) is detected at start-up, and there the prompts
+// say "tap", the mouse is never captured, the bats sit higher so a fingertip doesn't hide them, and the Help page
+// describes the gestures rather than the keys. ?mobile=1 or ?mobile=0 overrides the detection, for testing.
+//
 // ?debug=1 enables the cheats (D clears the level, left-click destroys the brick under the pointer). ?music=0
 // starts silent, ?sensitivity=1.5 scales mouse movement, ?volume=0.3 sets the music volume.
 
@@ -14,13 +20,55 @@ import { Game } from './game.js';
 import { Graphics } from './graphics.js';
 import { Input } from './input.js';
 import { Intro } from './intro.js';
-import { closeModal, modalOpen, openModal } from './ui.js';
+import { closeModal, modalOpen, openModal, openOptions, renderOptions, setMobile } from './ui.js';
 
 const params = new URLSearchParams(window.location.search);
 const DEBUG = params.get('debug') === '1';
 const SENSITIVITY = parseFloat(params.get('sensitivity') || '1') || 1;
 const MUSIC_ON = params.get('music') !== '0';
 const MUSIC_VOLUME = params.has('volume') ? parseFloat(params.get('volume')) : null;
+
+/**
+ * Is this a mobile device: a phone or tablet whose only pointer is a finger?
+ *
+ * The media query is the standard way to ask: a device whose primary pointer is coarse and can't hover. A touch
+ * laptop has a mouse or trackpad too, so it reports a fine pointer and keeps the desktop behaviour (its touch
+ * screen still works). The user-agent fallback covers older browsers without the query. ?mobile=1 / ?mobile=0
+ * forces the answer, which is handy for trying the mobile layout on a desktop.
+ */
+function detectMobile() {
+  const forced = params.get('mobile');
+  if (forced === '1') return true;
+  if (forced === '0') return false;
+  if (window.matchMedia) return window.matchMedia('(hover: none) and (pointer: coarse)').matches;
+  return navigator.maxTouchPoints > 0 && /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+}
+const MOBILE = detectMobile();
+
+/** Fullscreen helpers with the WebKit-prefixed fallbacks that iOS and older browsers still need. */
+const fullscreenAvailable = () => !!(document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen);
+const isFullscreen = () => !!(document.fullscreenElement || document.webkitFullscreenElement);
+function toggleFullscreen() {
+  const doc = document;
+  const root = doc.documentElement;
+  try {
+    if (isFullscreen()) {
+      const exit = doc.exitFullscreen || doc.webkitExitFullscreen;
+      if (exit) { const p = exit.call(doc); if (p && p.catch) p.catch(() => {}); }
+    } else {
+      const enter = root.requestFullscreen || root.webkitRequestFullscreen;
+      if (!enter) return;
+      const p = enter.call(root);
+      if (p && p.then) {
+        // On a phone, fullscreen is the moment to ask for landscape: the playfield is tiny in portrait. The
+        // request is refused on desktops and some browsers, and that's fine.
+        p.then(() => {
+          if (MOBILE && screen.orientation && screen.orientation.lock) screen.orientation.lock('landscape').catch(() => {});
+        }).catch(() => {});
+      }
+    }
+  } catch (e) { /* fullscreen not permitted here; nothing to do */ }
+}
 
 const ASSET_BASE = './';    // The sprites, sounds and music folders sit beside this page, so web/ is self-contained
 
@@ -70,10 +118,11 @@ async function boot() {
   audio.music = new Music(audio.ctx, tracks, MUSIC_ON, MUSIC_VOLUME);
 
   const gfx = new Graphics(canvas, images, SENSITIVITY);
-  const input = new Input(canvas, gfx);
-  const game = new Game(gfx, audio.sfx, input, { debug: DEBUG });
+  const input = new Input(canvas, gfx, MOBILE);
+  const game = new Game(gfx, audio.sfx, input, { debug: DEBUG, mobile: MOBILE });
   const intro = new Intro(gfx, game, audio.sfx, input, images.intro);
   const music = audio.music;
+  setMobile(MOBILE);
 
   // --- Scenes -----------------------------------------------------------------------------------------------
   // 'gate' -> 'intro' -> 'splash' (Level 1...) -> 'game' -> 'splash' (Level N... / Game Over! / YOU WIN!) -> ...
@@ -178,7 +227,7 @@ async function boot() {
 
   /** L: capture or release the mouse (pointer lock). Opt-in, and announced on screen either way. */
   function toggleLock() {
-    if (scene !== 'game' || game.paused) return;
+    if (MOBILE || scene !== 'game' || game.paused) return;
     if (input.locked || input.wantLock) {
       input.releaseLock();
       showNotice('Mouse released');
@@ -196,6 +245,26 @@ async function boot() {
     intro.relayout();
     music.play('intro');
     scene = 'intro';
+  }
+
+  /**
+   * The Options page (two-finger tap): the keyboard's jobs for a touch screen. In play it pauses first and
+   * closing it (Resume, a tap outside the buttons, or Escape) resumes; on the intro it just offers the toggles.
+   */
+  function showOptions() {
+    if (modalOpen()) return;
+    const inGame = scene === 'game';
+    if (inGame) setPaused(true);
+    const state = () => ({ inGame, music: music.enabled, fullscreen: isFullscreen(), fullscreenAvailable: fullscreenAvailable() });
+    const actions = {
+      resume: () => closeModal(),
+      music: () => music.toggle(),
+      fullscreen: () => toggleFullscreen(),
+      // Help opens over the top; closing it comes back here, still paused
+      help: () => openModal('help', () => showOptions()),
+      quit: () => { closeModal(); quitToIntro(); },
+    };
+    openOptions(state, actions, () => { if (inGame) setPaused(false); });
   }
 
   /** The primary action (left click or tap): start, skip the splash, serve, or kick. */
@@ -248,8 +317,10 @@ async function boot() {
   input.onTap = () => primaryAction();
   input.onTwoFingerTap = () => {
     audio.unlock();
-    if (scene === 'game') setPaused(!game.paused);
+    if (scene === 'game' || scene === 'intro') showOptions();
   };
+  // The Options page shows the fullscreen state, which can also change by other means (Esc, the F key)
+  for (const type of ['fullscreenchange', 'webkitfullscreenchange']) document.addEventListener(type, renderOptions);
 
   canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 
@@ -266,7 +337,7 @@ async function boot() {
       return;
     }
     if (key === 'f') {
-      if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen();
+      toggleFullscreen();
       return;
     }
     if (key === 'm') {
@@ -340,7 +411,8 @@ async function boot() {
       gfx.text(ctx, 'Breakout', { x: gfx.W / 2, y: gfx.H * 0.4, size: 400, colour: title, alpha: 224 / 255, bold: true, italic: true });
       // Pulse the prompt gently so it reads as waiting rather than stuck
       const pulse = 0.55 + 0.35 * Math.sin((2 * Math.PI * gateElapsed) / 1.5);
-      gfx.text(ctx, 'Click, tap or press any key to begin', { x: gfx.W / 2, y: gfx.H * 0.62, size: 80, colour: COLOURS.presskey, alpha: pulse });
+      const prompt = MOBILE ? 'Tap to begin' : 'Click, tap or press any key to begin';
+      gfx.text(ctx, prompt, { x: gfx.W / 2, y: gfx.H * 0.62, size: 80, colour: COLOURS.presskey, alpha: pulse });
       gfx.text(ctx, 'Copyright © 2025-26, 7th software Ltd.', { x: gfx.W / 2, y: gfx.H * 0.92, size: 50, colour: COLOURS.copyright, alpha: 0.7 });
     } else if (scene === 'intro') {
       intro.update(dt);
@@ -362,7 +434,8 @@ async function boot() {
       game.advanceEffects(dt);
       if (game.paused) {
         gfx.text(ctx, 'Paused', { x: gfx.W / 2, y: gfx.H / 2, size: 200, colour: COLOURS.white, alpha: 0.7, bold: true });
-        gfx.text(ctx, 'Space, click or tap to continue', { x: gfx.W / 2, y: gfx.H * 0.6, size: 60, colour: COLOURS.presskey, alpha: 0.7 });
+        const prompt = MOBILE ? 'Tap to continue' : 'Space, click or tap to continue';
+        gfx.text(ctx, prompt, { x: gfx.W / 2, y: gfx.H * 0.6, size: 60, colour: COLOURS.presskey, alpha: 0.7 });
       } else if (game.lives <= 0 || complete) {
         endOfLevel();
       }
@@ -390,7 +463,7 @@ async function boot() {
   }
 
   // Expose the live objects for poking at from the console (and for the automated smoke test)
-  window.breakout = { game, gfx, input, intro, audio, get scene() { return scene; }, get frames() { return frames; } };
+  window.breakout = { game, gfx, input, intro, audio, mobile: MOBILE, get scene() { return scene; }, get frames() { return frames; } };
 
   requestAnimationFrame(frame);
 }

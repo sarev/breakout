@@ -149,7 +149,7 @@ Copy the `web` folder to a static web server (SFTP, S3, GitHub Pages, whatever y
 | **Mouse** | Moves the ball on the intro and the bat in play |
 | **Touch** | A finger moves the ball on the intro; in play a drag moves the bat by the finger's movement, so it doesn't have to be over the bat |
 | **Click / tap** | Starts a game from the intro; launches the ball when it's sitting on the bat; otherwise speeds all the balls up a little |
-| **Two-finger tap** | Pause or resume |
+| **Two-finger tap** | Pauses and opens the Options page: music, fullscreen, help, and quit to the menu. On the intro it offers the music and fullscreen toggles |
 | **Space** | Pause or resume |
 | **M** | Music on or off |
 | **F** | Fullscreen on or off |
@@ -157,7 +157,11 @@ Copy the `web` folder to a static web server (SFTP, S3, GitHub Pages, whatever y
 | **Q** | Back to the intro |
 | **H / C** | Help and Credits pages, also reachable from the links on the intro |
 
-Moving the bat from one side of the playfield to the other takes the same hand movement on any screen, as in the desktop version.
+Moving the bat from one side of the playfield to the other takes the same hand movement on any screen, as in the desktop version, except that the mouse is never slowed down: on a screen or window narrower than 1920 pixels the cursor's full width maps to the full playfield, so the bat can always reach the sides. A touch drag moves the bat a quarter faster than the finger, so the sides can be reached without the finger having to run off the edge of the screen.
+
+### On a phone or tablet
+
+The page notices when it's on a touch-only device (no mouse to hover with) and adjusts itself: the prompts say "tap", the mouse is never captured, the bats sit a little higher so a fingertip doesn't hide them, and the Help page describes the gestures instead of the keys. A two-finger tap is the way to get at everything the keyboard would otherwise do. It's best played in landscape; turning fullscreen on from the Options page also asks the browser to lock the orientation to landscape, where it allows that. Adding `?mobile=1` or `?mobile=0` to the address forces the mobile or desktop behaviour, which is handy for trying the touch layout on a desktop with a touch screen.
 
 ### Options
 
@@ -167,7 +171,8 @@ Options go on the URL, for example `http://localhost:8000/?music=0&sensitivity=1
 |--------|--------|
 | `music=0` | Start with the music off |
 | `volume=0.25` | Music volume, 0 to 1 (default 0.4) |
-| `sensitivity=1.5` | Mouse sensitivity multiplier (default 1) |
+| `sensitivity=1.5` | Mouse and touch sensitivity multiplier (default 1) |
+| `mobile=1` / `mobile=0` | Force the phone-and-tablet behaviour on or off, instead of detecting it |
 | `debug=1` | Developer cheats: **D** destroys every brick, and a click destroys the brick under the pointer |
 
 ### Things worth knowing
@@ -175,7 +180,8 @@ Options go on the URL, for example `http://localhost:8000/?music=0&sensitivity=1
 - The page opens on a title card and waits for a click, tap or key. That first interaction is what lets the browser start playing sound.
 - A playfield wider than 16:9 or narrower than 4:3 is letterboxed, as on the desktop, so the brick layout stays playable. Resizing the window (or rotating a tablet) rescales the game in place.
 - The page is designed to be cheap when it's not being played: the title card and a settled intro screen render at a low frame rate, and the browser stops the game entirely while the tab is hidden.
-- The mouse is **not** captured by default. If you turn capture on with **L**, Esc gives it back, and so does pausing.
+- The mouse is **not** captured by default. If you turn capture on with **L**, Esc gives it back, and so does pausing. Capture is never offered on a phone or tablet.
+- To try it on a phone, serve the folder on your network rather than just this machine (`python -m http.server 8000 --bind 0.0.0.0 --directory web`) and open `http://<this machine's address>:8000/` on the phone.
 
 ## Troubleshooting
 

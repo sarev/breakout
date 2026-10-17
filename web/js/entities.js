@@ -86,7 +86,9 @@ export class Bat {
     this.height = this.image.height;
     this.w2 = Math.max(1, Math.floor(this.width / 2));
     this.h2 = Math.max(1, Math.floor(this.height / 2));
-    this.y = this.gfx.H - Math.floor(this.height * 1.3);   // Top edge
+    // Top edge: a third of a bat height off the bottom, plus the game's lift (on a touch screen the bats sit
+    // higher so that they can be seen above the fingertip that's driving them)
+    this.y = this.gfx.H - Math.floor(this.height * (1.3 + this.game.batLift));
   }
 
   /** Re-scale after a viewport change. */
@@ -408,7 +410,8 @@ export class Ball {
             this.x = gfx.W - 1;
             this.vx = -vx;
           }
-          this.y = gfx.H * 0.8;
+          // Just above the bats, so it never re-enters inside one
+          this.y = Math.min(gfx.H * 0.8, this.game.bats[0].y - this.height);
           this.vy = vy;
         }
       }

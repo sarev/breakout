@@ -3,7 +3,8 @@
 import {
   BASE_BALL_SPEED, BLACKOUT_HOLD, BLACKOUT_RATE, BORING_TIMEOUT, COLOURS, ENDGAME_SPEED_BOOST, FULL_VOLUME_SPEED,
   INVERSION_SECONDS, KICK_SPEED_GAIN, LASER_DURATION, LASER_PERIOD, LASER_SPEED_FACTOR, LASER_STAGGER, LEVEL_DEFS,
-  LEVEL_SPEED_RAMP, MAX_BALLS, MAX_SPEED_FRACTION, MIN_SPEED_FRACTION, PHYSICS_HZ, RANDOM_BRICK_TYPES,
+  LEVEL_SPEED_RAMP, MAX_BALLS, MAX_SPEED_FRACTION, MIN_SPEED_FRACTION, MOBILE_BAT_LIFT, PHYSICS_HZ,
+  RANDOM_BRICK_TYPES,
   SERVE_FLICK_GAIN, SERVE_JITTER, SERVE_MAX_ANGLE, SERVE_TIMEOUT, STARTING_LIVES, TRAIL_FADE_GAME,
 } from './config.js';
 import { Ball, Bat, Brick, Laser } from './entities.js';
@@ -28,13 +29,14 @@ export class Game {
    * @param {object} gfx Graphics.
    * @param {object} sfx Sound effects.
    * @param {object} input Input (pointer and keys).
-   * @param {object} opts {debug}
+   * @param {object} opts {debug, mobile}: mobile raises the bats clear of the fingertip (see Bat.setImage).
    */
-  constructor(gfx, sfx, input, { debug = false } = {}) {
+  constructor(gfx, sfx, input, { debug = false, mobile = false } = {}) {
     this.gfx = gfx;
     this.sfx = sfx;
     this.input = input;
     this.debug = debug;
+    this.batLift = mobile ? MOBILE_BAT_LIFT : 0;   // In bat heights; read by Bat when it lays itself out
 
     this.bats = [];
     this.extraBats = [];

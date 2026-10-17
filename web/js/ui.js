@@ -1,8 +1,13 @@
-// The Help and Credits modals: plain HTML laid over the canvas, with the game blurred behind them.
+// The Help, Credits and Options modals: plain HTML laid over the canvas, with the game blurred behind them.
 //
 // These are ordinary DOM so the text scrolls and wraps properly at any size; the canvas keeps animating
 // underneath and the overlay's backdrop-filter blurs it. While a modal is open the overlay swallows pointer
-// events, and main.js ignores keys other than Escape. A click anywhere (or Escape) closes it.
+// events, and main.js ignores keys other than Escape. A click anywhere (or Escape) closes it, except on a link
+// or an options button, which do their own jobs.
+//
+// The Options page exists for touch screens, where there are no keys to toggle the music or go fullscreen and no
+// Q to quit: a two-finger tap opens it (pausing the game first). It works just as well with a mouse on a touch
+// laptop. Its buttons call back into main.js, which owns the music, fullscreen and scene state.
 
 const BRICKS = [
   ['sm-brick0.png', 'Blue', 'Standard; no effect'],
@@ -16,21 +21,33 @@ const BRICKS = [
   ['sm-brick8.png', 'Warning triangle', 'Lasers for a while'],
 ];
 
-const HELP = `
+// The controls table differs by device: a phone or tablet has no keyboard, so it gets the touch gestures only
+const KEYBOARD_CONTROLS = `
+<tr><td>Mouse</td><td>Moves the bat. Where the ball lands on the bat sets its angle: the centre sends it straight up, the ends send it off sideways.</td></tr>
+<tr><td>Click</td><td>Launches the ball when it's sitting on the bat (flick the bat sideways as you click to aim it). Otherwise, speeds all the balls up a little.</td></tr>
+<tr><td>Touch</td><td>A finger moves the ball on this screen and drags the bat in play. Tap to launch or speed up; a two-finger tap pauses and opens the options.</td></tr>
+<tr><td>Space</td><td>Pause and resume</td></tr>
+<tr><td>M</td><td>Music on or off</td></tr>
+<tr><td>F</td><td>Fullscreen</td></tr>
+<tr><td>L</td><td>Capture the mouse so it can't leave the page (Esc or L releases it)</td></tr>
+<tr><td>Q</td><td>Back to this screen</td></tr>
+`;
+
+const TOUCH_CONTROLS = `
+<tr><td>Drag</td><td>Moves the bat. Your finger doesn't have to be on the bat: it moves with your finger wherever you drag. Where the ball lands on the bat sets its angle: the centre sends it straight up, the ends send it off sideways.</td></tr>
+<tr><td>Tap</td><td>Launches the ball when it's sitting on the bat (flick the bat sideways as you tap to aim it). Otherwise, speeds all the balls up a little.</td></tr>
+<tr><td>Two fingers</td><td>Tap with two fingers to pause and open the options: music, fullscreen, and back to this screen.</td></tr>
+`;
+
+function help(mobile) {
+  return `
 <h2>How to play</h2>
 <p>Clear every destroyable brick without losing all your lives. You lose a life each time the blue hero ball
 falls off the bottom. Red bonus balls are free: lose as many as you like.</p>
 
 <h3>Controls</h3>
 <table class="keys">
-<tr><td>Mouse</td><td>Moves the bat. Where the ball lands on the bat sets its angle: the centre sends it straight up, the ends send it off sideways.</td></tr>
-<tr><td>Click</td><td>Launches the ball when it's sitting on the bat (flick the bat sideways as you click to aim it). Otherwise, speeds all the balls up a little.</td></tr>
-<tr><td>Touch</td><td>A finger moves the ball on this screen and drags the bat in play. Tap to launch or speed up, two-finger tap to pause.</td></tr>
-<tr><td>Space</td><td>Pause and resume</td></tr>
-<tr><td>M</td><td>Music on or off</td></tr>
-<tr><td>F</td><td>Fullscreen</td></tr>
-<tr><td>L</td><td>Capture the mouse so it can't leave the page (Esc or L releases it)</td></tr>
-<tr><td>Q</td><td>Back to this screen</td></tr>
+${mobile ? TOUCH_CONTROLS : KEYBOARD_CONTROLS}
 </table>
 
 <h3>Bricks</h3>
@@ -41,6 +58,7 @@ ${BRICKS.map(([img, name, text]) => `<tr><td><img src="sprites/${img}" alt="${na
 and quicker still on later levels; losing a ball resets the pace. If nothing has been destroyed for a while, a
 bonus ball is thrown in.</p>
 `;
+}
 
 const CREDITS = `
 <h2>Credits</h2>
@@ -58,21 +76,41 @@ released under CC0 via <a href="https://opengameart.org/content/4-chiptunes-adve
 <p class="dedication">Dedicated to Helena and Karen.</p>
 `;
 
-const PAGES = { help: HELP, credits: CREDITS };
-
+let mobile = false;
 let overlay = null;
 let body = null;
 let onClose = null;
+let options = null;   // {getState, actions} while the Options page is showing
+
+/** Tell the pages which device they're on (affects the Help controls table). */
+export function setMobile(flag) {
+  mobile = flag;
+}
 
 function ensure() {
   if (overlay) return;
   overlay = document.getElementById('modal');
   body = document.getElementById('modal-body');
   overlay.addEventListener('click', (e) => {
-    // A click anywhere closes the modal, except on a link, which is allowed to do its job
+    // A link is allowed to do its job; an options button runs its action; a click anywhere else closes the page
     if (e.target.closest('a')) return;
+    const button = e.target.closest('button[data-action]');
+    if (button && options) {
+      const action = options.actions[button.dataset.action];
+      if (action) action();
+      if (options) renderOptions();   // The action may have closed the page
+      return;
+    }
     closeModal();
   });
+}
+
+function show(html, closed) {
+  ensure();
+  body.innerHTML = html;
+  onClose = closed;
+  overlay.hidden = false;
+  overlay.querySelector('.panel').scrollTop = 0;
 }
 
 /**
@@ -82,16 +120,44 @@ function ensure() {
  * @param {Function} [closed] Called when it's dismissed.
  */
 export function openModal(kind, closed = null) {
-  ensure();
-  body.innerHTML = PAGES[kind] || '';
-  onClose = closed;
-  overlay.hidden = false;
-  overlay.querySelector('.panel').scrollTop = 0;
+  options = null;
+  show(kind === 'help' ? help(mobile) : kind === 'credits' ? CREDITS : '', closed);
+}
+
+/**
+ * Open the Options page.
+ *
+ * @param {Function} getState Returns {inGame, music, fullscreen, fullscreenAvailable}; read afresh on each render
+ *                            so the buttons always show the current state.
+ * @param {Object<string, Function>} actions Handlers keyed by button: resume, music, fullscreen, help, quit.
+ * @param {Function} [closed] Called when it's dismissed (by any means).
+ */
+export function openOptions(getState, actions, closed = null) {
+  options = { getState, actions };
+  show('', closed);
+  renderOptions();
+}
+
+/** Redraw the Options page's buttons from the current state (no-op unless it's showing). */
+export function renderOptions() {
+  if (!options || !overlay || overlay.hidden) return;
+  const s = options.getState();
+  const button = (action, label) => `<button type="button" data-action="${action}">${label}</button>`;
+  const rows = [];
+  rows.push(button('resume', s.inGame ? 'Resume' : 'Close'));
+  rows.push(button('music', `Music: ${s.music ? 'on' : 'off'}`));
+  if (s.fullscreenAvailable) rows.push(button('fullscreen', `Fullscreen: ${s.fullscreen ? 'on' : 'off'}`));
+  if (s.inGame) {
+    rows.push(button('help', 'Help'));
+    rows.push(button('quit', 'Quit to the menu'));
+  }
+  body.innerHTML = `<h2>${s.inGame ? 'Paused' : 'Options'}</h2><div class="options">${rows.join('')}</div>`;
 }
 
 export function closeModal() {
   if (!overlay || overlay.hidden) return;
   overlay.hidden = true;
+  options = null;
   const cb = onClose;
   onClose = null;
   if (cb) cb();

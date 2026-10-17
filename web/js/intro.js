@@ -234,7 +234,8 @@ export class Intro {
     gfx.text(ctx, 'Breakout', { x, y: gfx.H * 0.2, size: 400, colour: title, alpha: 224 / 255, bold: true, italic: true });
     gfx.text(ctx, 'Copyright © 2025-26, 7th software Ltd.', { x, y: gfx.H * 0.35, size: 80, colour: COLOURS.copyright, alpha: 200 / 255 });
     gfx.text(ctx, 'All rights reserved.', { x, y: gfx.H * 0.41, size: 80, colour: COLOURS.rights, alpha: 200 / 255 });
-    gfx.text(ctx, 'Click or press any key to continue', { x, y: gfx.H * 0.46, size: 60, colour: COLOURS.presskey, alpha: 200 / 255 });
+    const prompt = this.input.mobile ? 'Tap to continue' : 'Click or press any key to continue';
+    gfx.text(ctx, prompt, { x, y: gfx.H * 0.46, size: 60, colour: COLOURS.presskey, alpha: 200 / 255 });
 
     ['Easy', 'Medium', 'Hard'].forEach((label, i) => {
       const selected = i === this.difficulty;

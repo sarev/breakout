@@ -173,6 +173,10 @@ export const BAT_LIFETIME = 10;         // Seconds a bonus bat stays in play
 export const BAT_FADE_SECONDS = 2;      // Warning fade before it goes
 export const BAT_VELOCITY_SMOOTHING = 0.06; // Time constant for the smoothed sideways speed
 
+// Touch
+export const TOUCH_DRAG_GAIN = 1.25;    // Bat movement per finger movement when dragging in play (times sensitivity)
+export const MOBILE_BAT_LIFT = 2;       // Bat heights the bats sit higher on a mobile device, clear of the fingertip
+
 // Intro
 export const INTRO_DAMPING = 0.887;     // Fraction of speed an intro ball keeps after one second
 export const INTRO_BALLS = 15;

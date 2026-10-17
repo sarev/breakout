@@ -6,7 +6,7 @@
 
 import {
   BALL_HEIGHT_PCT, BAT_HEIGHT_PCT, LASER_HEIGHT_PCT, MAX_PLAYFIELD_ASPECT, MIN_PLAYFIELD_ASPECT,
-  REFERENCE_HEIGHT, REFERENCE_WIDTH,
+  REFERENCE_HEIGHT, REFERENCE_WIDTH, TOUCH_DRAG_GAIN,
 } from './config.js';
 
 /** CSS colour string from an [r, g, b] triple and an alpha 0..1. */
@@ -86,6 +86,9 @@ export class Graphics {
     this.ctx = canvas.getContext('2d');
     this.images = images;
     this.sensitivity = sensitivity;
+    // Touch drags move the bat in step with the finger (and a little more); unlike the mouse gain this has
+    // nothing to do with the screen size, because the finger is on the playfield itself. See Input.gain().
+    this.touchGain = TOUCH_DRAG_GAIN * Math.max(0.1, sensitivity);
     this.brickImages = [];
     this.brickSize = 0;
     this.background = null;
@@ -226,17 +229,18 @@ export class Graphics {
   }
 
   /**
-   * Apply the mouse gain: scale a pointer position about the playfield centre, clamped to the playfield.
+   * Apply a gain: scale a pointer position about the playfield centre, clamped to the playfield.
    *
    * @param {number} x Pointer x in playfield pixels.
    * @param {number} y Pointer y in playfield pixels.
+   * @param {number} gain The gain for the kind of input in use (Input.gain()); the mouse gain by default.
    * @returns {{x: number, y: number}}
    */
-  pointerToPlayfield(x, y) {
+  pointerToPlayfield(x, y, gain = this.mouseGain) {
     const cx = this.W / 2;
     const cy = this.H / 2;
-    const px = Math.max(0, Math.min(this.W - 1, cx + (x - cx) * this.mouseGain));
-    const py = Math.max(0, Math.min(this.H - 1, cy + (y - cy) * this.mouseGain));
+    const px = Math.max(0, Math.min(this.W - 1, cx + (x - cx) * gain));
+    const py = Math.max(0, Math.min(this.H - 1, cy + (y - cy) * gain));
     return { x: px, y: py };
   }
 
