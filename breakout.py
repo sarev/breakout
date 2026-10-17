@@ -475,6 +475,10 @@ class Bat():
     # During the last `fade_seconds` of its life a bonus bat is drawn progressively more transparent as a warning
     fade_seconds: float = 2.0
 
+    # Time constant (seconds) for the smoothed sideways speed. The raw per-frame speed of a mouse-driven bat is
+    # very spiky; the smoothed one is what the serve reads to judge a "flick".
+    velocity_smoothing: float = 0.06
+
     def __init__(
         self,
         id: int,
@@ -520,6 +524,7 @@ class Bat():
         self.dx = dx                                         # Horizontal delta (offset) for this bat's position (pixels)
         self.x = (gfx.window_width // 2) + dx                # Horizontal centre of bat (pixels)
         self.vx = vx                                         # Horizontal speed (pixels per second)
+        self.vx_smooth = vx                                  # ...smoothed over the last `velocity_smoothing` seconds
         self.y = gfx.window_height - int(self.height * 1.3)  # Vertical top edge of bat (pixels)
         self.inv_image = invert_image(self.image)
         self.inverted = False
@@ -636,6 +641,14 @@ class Bat():
         x += self.dx
         self.vx = (x - self.x) / dt if dt > 0 else 0.0
         self.x = x
+
+        # Exponential moving average of the speed. `dt / smoothing` is the fraction of the way to move towards
+        # the new value this frame (capped at 1), which gives the same smoothing at any frame rate.
+        if dt > 0:
+            blend = min(1.0, dt / Bat.velocity_smoothing)
+            self.vx_smooth += (self.vx - self.vx_smooth) * blend
+        else:
+            self.vx_smooth = 0.0
 
     def reset(self, x: float) -> None:
         """
@@ -2175,8 +2188,11 @@ class Game():
     laser_period = 0.5
     laser_stagger = 4.0 / 60.0
 
-    # Rate at which the blackout (black hole brick) effect darkens and then clears, in alpha units per second
-    blackout_rate = 30.0
+    # The blackout (black hole brick) effect: the screen darkens at `blackout_rate` alpha units per second (so a
+    # full fade to black takes 255 / rate seconds), holds at black for `blackout_hold` seconds, then clears at the
+    # same rate. At 60/s that's 4.25 s down, 0.75 s black, 4.25 s back: about 9 s in all.
+    blackout_rate = 60.0
+    blackout_hold = 0.75
 
     # Fraction of its speed an intro ball retains after one second of drifting (simulated friction)
     intro_damping = 0.887
@@ -2212,10 +2228,14 @@ class Game():
     max_balls = 6
 
     # Serving: at the start of a level, and after the hero ball is lost, it sits on the bat until the player
-    # clicks or `serve_timeout` seconds pass. It launches at the target speed within `serve_angle` degrees of
-    # straight up.
+    # clicks or `serve_timeout` seconds pass. It launches at the target speed, and the player aims it by moving
+    # the bat as it goes: the bat's (smoothed) sideways speed times `serve_flick_gain` becomes the ball's sideways
+    # speed, which sets the launch angle - a still bat serves straight up (give or take `serve_jitter` degrees), a
+    # flick sends it off at up to `serve_max_angle` from vertical.
     serve_timeout = 3.0
-    serve_angle = 20.0
+    serve_flick_gain = 1.0
+    serve_max_angle = 60.0
+    serve_jitter = 3.0
 
     # The following tables define which brick types go where in each level
     #
@@ -2373,27 +2393,28 @@ class Game():
     @classmethod
     def get_next_alpha(cls, alpha: float | None, dt: float) -> float | None:
         """
-        Step a fade alpha toward darkness or light, with a wrap at -300 -> 255.
+        Step a fade alpha toward darkness or light, with a wrap from the darkest point back to 255.
 
         Args:
-            alpha: Current alpha. Negative values continue decreasing toward -300 (getting darker; the drawing code
-                   uses the absolute value, capped at 255). Non-negative values step down toward 0 (getting lighter).
+            alpha: Current alpha. Negative values continue decreasing (getting darker; the drawing code uses the
+                   absolute value, capped at 255). Non-negative values step down toward 0 (getting lighter).
                    None halts fading.
             dt: Time to advance the fade by (seconds). The fade moves `blackout_rate` alpha units per second.
 
         Returns:
-            float | None: Next alpha, 255 once the -300 point is reached, or None when the fade completes.
+            float | None: Next alpha, 255 once the hold at full black is over, or None when the fade completes.
         """
 
-        # While -ve, we're getting darker, while +ve, we're getting lighter
+        # While -ve, we're getting darker, while +ve, we're getting lighter.
         #
-        # Run all the way down to -300 (which holds the screen fully black for a while, since the drawn alpha is
-        # capped at 255), then fade straight back from 255 to 0.
+        # Run down past -255 (fully black, since the drawn alpha is capped there) for as long as `blackout_hold`
+        # takes at this rate, then fade straight back from 255 to 0.
         if alpha is None:
             return None
 
+        darkest = -(255.0 + Game.blackout_rate * Game.blackout_hold)
         alpha -= Game.blackout_rate * dt
-        if alpha <= -300:
+        if alpha <= darkest:
             return 255.0
         if 0 <= alpha < 0.5:
             return None
@@ -2665,7 +2686,12 @@ class Game():
 
     def serve(self) -> None:
         """
-        Launch the waiting hero ball from the bat at the level's target speed, close to straight up.
+        Launch the waiting hero ball from the bat at the level's target speed, aimed by the bat's movement.
+
+        The bat's smoothed sideways speed (times `serve_flick_gain`) is taken as the ball's sideways speed and the
+        upward speed as the target, and the resulting direction - clamped to `serve_max_angle` from vertical - is
+        applied at exactly the target speed. So a still bat serves straight up and a flick sends the ball off to
+        the side, without the flick making it any faster.
 
         Does nothing if the ball isn't waiting to be served.
         """
@@ -2674,8 +2700,13 @@ class Game():
             return
 
         self.serving = False
-        angle = math.radians(uniform(-Game.serve_angle, Game.serve_angle))
         speed = self.target_ball_speed(self.level)
+
+        flick = self.bats[0].vx_smooth * Game.serve_flick_gain
+        angle = math.atan2(flick, speed) + math.radians(uniform(-Game.serve_jitter, Game.serve_jitter))
+        limit = math.radians(Game.serve_max_angle)
+        angle = max(-limit, min(limit, angle))
+
         self.hero_ball.vx = speed * math.sin(angle)
         self.hero_ball.vy = -speed * math.cos(angle)
 
