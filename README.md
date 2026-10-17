@@ -152,6 +152,7 @@ Run with `--debug` to enable a few developer cheats during play: **D** destroys 
 - A nod to Arkanoid, Fireball 2 (Archimedes), and other classics
 - Final level background: Rosette Nebula (Dylan O'Donnell, https://deography.com/will-you-accept-this-rose-ngc2237/)
 - Thanks to ChatGPT for art assistance
+- Web conversion by Anthropic's Claude (https://www.anthropic.com/claude)
 
 ---
 

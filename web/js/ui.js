@@ -52,6 +52,7 @@ Fireball 2 on the Archimedes, and the other classics.</p>
 released under CC0 via <a href="https://opengameart.org/content/4-chiptunes-adventure" target="_blank" rel="noopener">OpenGameArt</a></li>
 <li>Final level background: the Rosette Nebula, by <a href="https://deography.com/will-you-accept-this-rose-ngc2237/" target="_blank" rel="noopener">Dylan O'Donnell</a></li>
 <li>Thanks to ChatGPT for art assistance</li>
+<li>Web conversion by <a href="https://www.anthropic.com/claude" target="_blank" rel="noopener">Anthropic's Claude</a></li>
 <li>The desktop version is built on the <a href="https://www.pygame.org/" target="_blank" rel="noopener">Pygame</a> community's excellent work</li>
 </ul>
 <p class="dedication">Dedicated to Helena and Karen.</p>
