@@ -176,10 +176,11 @@ export const BAT_VELOCITY_SMOOTHING = 0.06; // Time constant for the smoothed si
 // Anti-cheat (see wipe.js): wiping the bat from side to side fast enough sweeps the whole playfield and nothing
 // can get past. A leg is one sweep in one direction; enough long, quick legs in a short window tire the bat,
 // which then moves no faster than WIPE_TIRED_SPEED playfield widths per second for a while. One desperate
-// swipe to reach a ball is a single leg and never enough.
+// swipe to reach a ball is a single leg and never enough, and a leg only counts while the hero ball is on
+// its way down: darting about while it's heading up (chasing bonus balls, say) is just playing.
 export const WIPE_LEG_TRAVEL = 0.3;     // Playfield widths a sweep must cover to count...
 export const WIPE_LEG_SECONDS = 0.6;    // ...and be quicker than
-export const WIPE_LEGS = 4;             // Counting sweeps within the window that tire the bat
+export const WIPE_LEGS = 5;             // Counting sweeps within the window that tire the bat
 export const WIPE_WINDOW = 2;           // Seconds
 export const WIPE_PENALTY = 2.5;        // Seconds the bat stays tired
 export const WIPE_TIRED_SPEED = 0.25;   // Playfield widths per second the bat can manage while tired

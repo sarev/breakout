@@ -4,10 +4,11 @@
 //
 // The pattern, not the speed, is what's detected, so one desperate swipe right across the playfield to reach
 // a ball that was unexpectedly knocked the other way is never punished: it's a single "leg". A leg is a sweep in
-// one direction, and it only counts if it was long (WIPE_LEG_TRAVEL of the playfield width) and quick
-// (WIPE_LEG_SECONDS). WIPE_LEGS counting legs inside WIPE_WINDOW seconds is wiping, which is two full
-// back-and-forths with the defaults. Short, fast wiggles to catch a ball bouncing about near the bat don't count
-// either, since those legs are too short.
+// one direction, and it only counts if it was long (WIPE_LEG_TRAVEL of the playfield width), quick
+// (WIPE_LEG_SECONDS), and made while the hero ball was heading down, since that's the only time a sweep can be
+// guarding the bottom of the screen; darting about with several balls in play while the hero ball is on its
+// way up is just playing. WIPE_LEGS counting legs inside WIPE_WINDOW seconds is wiping. Short, fast wiggles to
+// catch a ball bouncing about near the bat don't count either, since those legs are too short.
 //
 // All times are on the pausable game clock.
 
@@ -44,8 +45,9 @@ export class WipeDetector {
    *
    * @param {number} x Target centre x in playfield pixels.
    * @param {number} t Game time.
+   * @param {boolean} guarding True if the hero ball is heading down right now (a sweep can only count then).
    */
-  observe(x, t) {
+  observe(x, t, guarding = true) {
     const W = this.gfx.W;
     const hysteresis = WIPE_HYSTERESIS * W;
     if (this.dir === 0) {
@@ -66,7 +68,7 @@ export class WipeDetector {
     // Turned round: the leg that just ended ran from legStart to extreme
     const travel = Math.abs(this.extreme.x - this.legStart.x);
     const seconds = this.extreme.t - this.legStart.t;
-    if (travel >= WIPE_LEG_TRAVEL * W && seconds <= WIPE_LEG_SECONDS) {
+    if (guarding && travel >= WIPE_LEG_TRAVEL * W && seconds <= WIPE_LEG_SECONDS) {
       this.legs.push(this.extreme.t);
       this.legs = this.legs.filter((t0) => t - t0 <= WIPE_WINDOW);
       if (this.legs.length >= WIPE_LEGS) {
