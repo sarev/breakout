@@ -3,3 +3,4 @@ dist
 breakout.spec
 attic
 .community
+__pycache__
