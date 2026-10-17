@@ -1,6 +1,6 @@
 # Breakout
 
-A modern, Pygame-based take on the classic brick-breaker. Clear all destroyable bricks while keeping the blue “hero” ball in play. Power-ups, lasers, inversion, and multi-ball keep things lively.
+A modern take on the classic brick-breaker. Clear all destroyable bricks while keeping the blue “hero” ball in play. Power-ups, lasers, inversion, and multi-ball keep things lively. It runs as a desktop game (Python and Pygame) and as a [browser version](#web-version) that plays the same game on a canvas, with touch support.
 
 ![Illustration](./web/sprites/intro.png)
 
@@ -11,6 +11,7 @@ A modern, Pygame-based take on the classic brick-breaker. Clear all destroyable 
 - Bonus balls, extra bats, control inversion, laser mode, and blackout mode
 - Stereo-panned sound effects and chiptune background music (toggle with **M**)
 - Multi-monitor aware with dynamic resizing
+- A browser version in the `web` folder, with mouse and touch controls
 - Smooth intro scene with perspective-warped card and animated balls
 
 ## Requirements
@@ -78,16 +79,6 @@ will down-scale all of the graphics by a factor of four (horizontally and vertic
 
 Pointer movement is scaled so that moving the bat from one side of the playfield to the other takes the same hand movement on any monitor, whatever its resolution. If you'd like it quicker or slower, pass `--sensitivity` (or `-s`): `-s 1.5` needs a third less movement, `-s 0.75` a third more.
 
-## Web version
-
-There is also a browser version in the `web` folder, a straight port of the game to JavaScript and the HTML canvas. It fills the browser tab (press **F** for fullscreen) and supports touch as well as the mouse. The `web` folder is self-contained: it holds the page, the scripts, and the sprites, sounds and music (which the Python game loads from there too), so publishing it is a matter of copying that one folder to any static web server. It needs to be served over HTTP rather than opened as a file, because browsers won't let a page fetch audio from disk:
-
-```bash
-python -m http.server 8000 --directory web
-```
-
-then open http://localhost:8000/ in a browser. Controls are as above, with these differences: click or tap the title card and the intro to start (the intro also has Help and Credits links, or press **H** and **C**), **Q** returns to the intro, and on a touch screen a finger moves the ball (intro) or drags the bat (play), a tap serves or kicks, and a two-finger tap pauses. The bat follows the mouse pointer normally; if you'd rather have the mouse captured so it can't wander off the page, press **L** during play (a message confirms it, and **Esc** or **L** releases it again). Options go on the URL: `?music=0` starts silent, `?volume=0.25` sets the music volume, `?sensitivity=1.5` scales mouse movement, and `?debug=1` enables the cheats.
-
 ## Monitor selection
 
 If you have multiple monitors, you can pass the `--monitor` (or `-m`) parameter to specify the desired monitor number (with 0 being the primary display).
@@ -131,6 +122,60 @@ The intro and each level have their own chiptune track, played at a volume that 
 | ![Warning triangle](./web/sprites/sm-brick8.png) | **Warning triangle** | Enables laser mode for a duration |
 
 Different brick types require different numbers of hits to destroy. If no brick is destroyed for a while, an extra bonus ball is introduced.
+
+## Web version
+
+The `web` folder holds a browser version of the game: a port to plain JavaScript on the HTML canvas, with no build step. It plays the same levels with the same physics, speed model and power-ups, fills the browser tab, and works with touch as well as a mouse. The folder is self-contained — the page, the scripts, and the sprites, sounds and music (which the desktop game loads from there too) — so it can be copied as it is to any static web server.
+
+### Running it locally
+
+Browsers won't let a page fetch audio from a `file://` URL, so it has to be served over HTTP. Any static server will do; Python has one built in:
+
+```bash
+python -m http.server 8000 --directory web
+```
+
+then open http://localhost:8000/ in a browser.
+
+### Publishing
+
+Copy the `web` folder to a static web server (SFTP, S3, GitHub Pages, whatever you have). Nothing needs building, and there are no other dependencies. The folder is about 16 MB, almost all of it the music and the large sprite images.
+
+### Controls
+
+| Input | Action |
+|-------|--------|
+| **Click, tap or any key** | Dismiss the title card (browsers only allow sound after you've interacted with the page) |
+| **Mouse** | Moves the ball on the intro and the bat in play |
+| **Touch** | A finger moves the ball on the intro; in play a drag moves the bat by the finger's movement, so it doesn't have to be over the bat |
+| **Click / tap** | Starts a game from the intro; launches the ball when it's sitting on the bat; otherwise speeds all the balls up a little |
+| **Two-finger tap** | Pause or resume |
+| **Space** | Pause or resume |
+| **M** | Music on or off |
+| **F** | Fullscreen on or off |
+| **L** | Capture the mouse so it can't leave the page while you play (a message confirms it; **Esc** or **L** releases it, and Esc also pauses) |
+| **Q** | Back to the intro |
+| **H / C** | Help and Credits pages, also reachable from the links on the intro |
+
+Moving the bat from one side of the playfield to the other takes the same hand movement on any screen, as in the desktop version.
+
+### Options
+
+Options go on the URL, for example `http://localhost:8000/?music=0&sensitivity=1.5`:
+
+| Option | Effect |
+|--------|--------|
+| `music=0` | Start with the music off |
+| `volume=0.25` | Music volume, 0 to 1 (default 0.4) |
+| `sensitivity=1.5` | Mouse sensitivity multiplier (default 1) |
+| `debug=1` | Developer cheats: **D** destroys every brick, and a click destroys the brick under the pointer |
+
+### Things worth knowing
+
+- The page opens on a title card and waits for a click, tap or key. That first interaction is what lets the browser start playing sound.
+- A playfield wider than 16:9 or narrower than 4:3 is letterboxed, as on the desktop, so the brick layout stays playable. Resizing the window (or rotating a tablet) rescales the game in place.
+- The page is designed to be cheap when it's not being played: the title card and a settled intro screen render at a low frame rate, and the browser stops the game entirely while the tab is hidden.
+- The mouse is **not** captured by default. If you turn capture on with **L**, Esc gives it back, and so does pausing.
 
 ## Troubleshooting
 
