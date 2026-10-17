@@ -153,6 +153,8 @@ export class Bat {
         alpha = (55 + 200 * (remain / BAT_FADE_SECONDS)) / 255;
       }
     }
+    // A tired bat (the anti-cheat, see wipe.js) is drawn faded, so it's obvious why it isn't keeping up
+    if (this.game.wipe.tired(this.game.time)) alpha = Math.min(alpha, 0.35);
     if (alpha < 1) ctx.globalAlpha = alpha;
     ctx.drawImage(this.image, this.x - this.w2, this.y);
     if (alpha < 1) ctx.globalAlpha = 1;

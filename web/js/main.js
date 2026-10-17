@@ -323,6 +323,7 @@ async function boot() {
     if (locked) showNotice('Mouse captured. Esc or L releases it.', 5);
   };
   input.onTap = () => primaryAction();
+  game.wipe.onTired = () => showNotice('Too frantic! The bat is worn out for a moment', 2.5);
   input.onTwoFingerTap = () => {
     audio.unlock();
     if (scene === 'game' || scene === 'intro') showOptions();

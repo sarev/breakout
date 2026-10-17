@@ -173,6 +173,18 @@ export const BAT_LIFETIME = 10;         // Seconds a bonus bat stays in play
 export const BAT_FADE_SECONDS = 2;      // Warning fade before it goes
 export const BAT_VELOCITY_SMOOTHING = 0.06; // Time constant for the smoothed sideways speed
 
+// Anti-cheat (see wipe.js): wiping the bat from side to side fast enough sweeps the whole playfield and nothing
+// can get past. A leg is one sweep in one direction; enough long, quick legs in a short window tire the bat,
+// which then moves no faster than WIPE_TIRED_SPEED playfield widths per second for a while. One desperate
+// swipe to reach a ball is a single leg and never enough.
+export const WIPE_LEG_TRAVEL = 0.3;     // Playfield widths a sweep must cover to count...
+export const WIPE_LEG_SECONDS = 0.6;    // ...and be quicker than
+export const WIPE_LEGS = 4;             // Counting sweeps within the window that tire the bat
+export const WIPE_WINDOW = 2;           // Seconds
+export const WIPE_PENALTY = 2.5;        // Seconds the bat stays tired
+export const WIPE_TIRED_SPEED = 0.25;   // Playfield widths per second the bat can manage while tired
+export const WIPE_HYSTERESIS = 0.01;    // Playfield widths of reverse travel before a sweep counts as turned round
+
 // Touch
 export const TOUCH_DRAG_GAIN = 1;       // Bat movement per finger movement when dragging in play (times sensitivity):
                                         // 1 keeps the bat exactly in step with the finger; more and it runs ahead

@@ -6,9 +6,11 @@ import {
   LEVEL_SPEED_RAMP, MAX_BALLS, MAX_SPEED_FRACTION, MIN_SPEED_FRACTION, MOBILE_BAT_LIFT, PHYSICS_HZ,
   RANDOM_BRICK_TYPES,
   SERVE_FLICK_GAIN, SERVE_JITTER, SERVE_MAX_ANGLE, SERVE_TIMEOUT, STARTING_LIVES, TRAIL_FADE_GAME,
+  WIPE_TIRED_SPEED,
 } from './config.js';
 import { Ball, Bat, Brick, Laser } from './entities.js';
 import { tintImage } from './graphics.js';
+import { WipeDetector } from './wipe.js';
 
 const rand = (lo, hi) => lo + Math.random() * (hi - lo);
 const randInt = (lo, hi) => lo + Math.floor(Math.random() * (hi - lo + 1));
@@ -37,6 +39,7 @@ export class Game {
     this.input = input;
     this.debug = debug;
     this.batLift = mobile ? MOBILE_BAT_LIFT : 0;   // In bat heights; read by Bat when it lays itself out
+    this.wipe = new WipeDetector(gfx);             // Anti-cheat: tires the bat if it's wiped back and forth
 
     this.bats = [];
     this.extraBats = [];
@@ -127,6 +130,7 @@ export class Game {
     this.createBricks();
     this.input.centre();
     this.bats[0].x = this.gfx.W / 2;
+    this.wipe.reset(this.gfx.W / 2, this.time);
     this.boringDeadline = this.time + BORING_TIMEOUT;
     this.darkAlpha = null;
     this.inversionRemaining = 0;
@@ -443,7 +447,15 @@ export class Game {
   }
 
   animateBats(dt) {
-    const target = this.batTargetX();
+    let target = this.batTargetX();
+    // The anti-cheat watches where the bat is being sent, and while it's tired the bats can only crawl towards
+    // it (the hero bat's position stands for all of them: the others are at fixed offsets from it)
+    this.wipe.observe(target, this.time);
+    if (this.wipe.tired(this.time)) {
+      const maxStep = WIPE_TIRED_SPEED * this.gfx.W * dt;
+      const hero = this.bats[0];
+      target = hero.x + Math.max(-maxStep, Math.min(maxStep, target - hero.x));
+    }
     const lost = [];
     for (const bat of this.bats) {
       bat.move(target, dt);

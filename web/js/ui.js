@@ -57,6 +57,8 @@ ${BRICKS.map(([img, name, text]) => `<tr><td><img src="sprites/${img}" alt="${na
 <p>Different bricks take different numbers of hits. The ball gets quicker the further through a level you are,
 and quicker still on later levels; losing a ball resets the pace. If nothing has been destroyed for a while, a
 bonus ball is thrown in.</p>
+<p>Don't just wipe the bat from side to side to catch everything: a bat that's swept back and forth too
+often gets worn out, and for a few seconds it can't keep up.</p>
 `;
 }
 
