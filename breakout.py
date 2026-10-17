@@ -905,6 +905,12 @@ class Brick():
 
 
 class Ball():
+    # Aiming off the flat top of the bat: a ball landing at the very end of the bat leaves at this many degrees
+    # from straight up (towards that end); one landing dead centre goes straight up. A touch of random jitter is
+    # added so that a rally can't settle into an exactly repeating loop.
+    max_bat_angle: float = 60.0
+    bat_angle_jitter: float = 2.0
+
     def __init__(
         self,
         image: pygame.Surface,
@@ -917,6 +923,7 @@ class Ball():
         vy: float = 0,
         lives: int | None = 2,
         intro: bool = False,
+        serve_on_drop: bool = False,
     ) -> None:
         """
         Create a ball.
@@ -931,6 +938,8 @@ class Ball():
             vy: Initial vertical velocity in pixels per second.
             lives: Number of allowed drops before removal; None means the ball is immortal.
             intro: If True, apply damping to bounces and velocities during intro animation.
+            serve_on_drop: If True (the hero ball), falling off the bottom hands the ball back to the game to be
+                           served from the bat. If False (bonus balls), it re-enters from a side by itself.
         """
 
         def generate_mask_image(image):
@@ -976,6 +985,10 @@ class Ball():
         self.vy = vy            # Vertical speed (pixels per second)
         self.lives = lives      # Number of times this ball can fall (None means immortal)
         self.intro = intro
+        self.serve_on_drop = serve_on_drop
+
+        # Set by `move()` when the ball falls off the bottom; the game reads and clears it (see `Game.animate_balls`)
+        self.dropped = False
 
     def bbox(self) -> pygame.Rect:
         """
@@ -1037,15 +1050,20 @@ class Ball():
         # Blit the pre-binarised alpha surface onto the screen
         surface.blit(temp, (bbox.x, bbox.y))
 
-    def kick(self, ratio=1.25) -> None:
+    def kick(self, amount: float) -> None:
         """
-        Give this ball a kick of extra speed.
+        Give this ball a kick of extra speed without changing its direction.
 
         Args:
-            ratio: The speed kick ratio (e.g. 1.25 == 25% faster).
+            amount: Speed to add, in pixels per second. The next `move()` clamps the result to the level's ceiling,
+                    so repeated kicks can't run away.
         """
 
-        self.vx, self.vy = self.vx * ratio, self.vy * ratio
+        speed = math.hypot(self.vx, self.vy)
+        if speed > 0:
+            factor = (speed + amount) / speed
+            self.vx *= factor
+            self.vy *= factor
 
     def move(self, dt: float, level: int = 1) -> None:
         """
@@ -1100,7 +1118,7 @@ class Ball():
         # When we're not in the intro, we don't allow balls to go too slowly (or dangerously fast)
         if not self.intro:
             min_speed = self.game.min_ball_speed(level)
-            clamp_speed(min_speed, self.game.max_ball_speed())
+            clamp_speed(min_speed, self.game.max_ball_speed(level))
 
         # Integrate the velocity over this step
         self.x += self.vx * dt
@@ -1147,29 +1165,36 @@ class Ball():
                 self.vy = -self.vy * damp
                 play_wall_hit_sound()
             else:
-                # Ball fell off the bottom of the window - re-animate it coming in from one side, heading up and
-                # inwards at a random angle, at the level's minimum speed. (It used to re-enter at a crawl and rely
-                # on the minimum-speed rule to pick it up, which is part of why a lost ball felt so sluggish.)
-                angle = math.radians(uniform(20, 70))  # Measured from straight up
-                vx = math.sin(angle) * min_speed
-                vy = -math.cos(angle) * min_speed
-                if randint(0, 1) == 0:
-                    # Left edge, heading right
-                    self.x = 0
-                    self.vx = vx
-                else:
-                    # Right edge, heading left
-                    self.x = self.gfx.window_width - 1
-                    self.vx = -vx
-                self.y = self.gfx.window_height * 0.8
-                self.vy = vy
-
+                # Ball fell off the bottom of the window
                 if self.lives is not None and self.lives > 0:
                     self.lives -= 1
 
-                # Play the sound for the ball falling off the bottom of the screen
+                # Play the sound for the ball falling off the bottom of the screen, panned to where it went
                 pan = self.x / self.gfx.window_width
                 Game.play_stereo_sound(self.game.drop_sound, stereo=pan)
+
+                # Tell the game (it hands the hero ball back to the bat to be served, see `Game.animate_balls`)
+                self.dropped = True
+
+                if self.serve_on_drop:
+                    # The hero ball: stop dead where it is; the game will pick it up and put it on the bat
+                    self.vx, self.vy = 0.0, 0.0
+                else:
+                    # A bonus ball: re-animate it coming in from one side, heading up and inwards at a random
+                    # angle, at the level's minimum speed
+                    angle = math.radians(uniform(20, 70))  # Measured from straight up
+                    vx = math.sin(angle) * min_speed
+                    vy = -math.cos(angle) * min_speed
+                    if randint(0, 1) == 0:
+                        # Left edge, heading right
+                        self.x = 0
+                        self.vx = vx
+                    else:
+                        # Right edge, heading left
+                        self.x = self.gfx.window_width - 1
+                        self.vx = -vx
+                    self.y = self.gfx.window_height * 0.8
+                    self.vy = vy
 
     def check_bat_collision(self, bat: Bat) -> bool:
         """
@@ -1182,8 +1207,10 @@ class Ball():
             - Early-exits if AABB test fails.
             - Handles left and right rounded ends with circle collision and positional correction, reflecting
               velocity along the contact normal.
-            - Otherwise treats the top as flat, sets `y` to sit on the bat and ensures `vy` is upwards.
-            - Adds slight randomisation, scales vertical speed by difficulty, and plays a hit sound.
+            - Otherwise treats the top as flat: sets `y` to sit on the bat and sends the ball off at an angle
+              chosen by where it landed (centre = straight up, ends = `max_bat_angle` sideways), so the player
+              can aim.
+            - Adds a difficulty-dependent bit of speed (capped at the level's ceiling) and plays a hit sound.
 
         Returns:
             bool: True if a collision occurred and was handled, else False.
@@ -1238,22 +1265,31 @@ class Ball():
                 # No collision (yet)
                 return False
 
-        # Flat top of the bat
+        # Flat top of the bat: the player aims by where on the bat the ball lands
         else:
             self.y = bat.y - self.h2  # Adjust position to be touching the top of the bat
-            self.vy = -abs(self.vy)   # Set vertical velocity as upwards
+
+            # -1.0 at the left end of the bat, 0.0 at the centre, +1.0 at the right end
+            offset = max(-1.0, min(1.0, (self.x - bat.x) / bat.w2))
+
+            # Outgoing angle from straight up, positive = heading right, with a little jitter
+            jitter = (random() * 2 - 1) * Ball.bat_angle_jitter
+            angle = math.radians(offset * Ball.max_bat_angle + jitter)
+
+            # Same speed as before, new direction
+            speed = math.hypot(self.vx, self.vy)
+            self.vx = speed * math.sin(angle)
+            self.vy = -speed * math.cos(angle)
 
         # There was a collision - play the sound effect for ball and bat colliding
         vol = self.game.velocity_to_volume(self.vx, self.vy)
         pan = self.x / self.gfx.window_width
         Game.play_stereo_sound(self.game.bat_hit_sound, stereo=pan, volume=vol)
 
-        # Add a bit of random perturbation to the velocity vector (bias towards accelerating upwards). The nudges are
-        # in pixels per second at the reference resolution, scaled to this window: up to +/-30 px/s sideways and up
-        # to 60 px/s extra upward speed, divided by (4 - difficulty) so harder games speed up faster.
-        self.vx += (random() - 0.5) * 60.0 * self.gfx.scale_ratio
-        scale = 4 - self.game.difficulty
-        self.vy -= (random() * 60.0 * self.gfx.scale_ratio) / scale
+        # Every bat hit adds a little speed - a fixed fraction of the level's target speed, bigger on harder
+        # difficulties - so a long rally gets steadily livelier. `move()` caps the result at the level's ceiling.
+        gain = Game.bat_hit_speed_gain[self.game.difficulty] * self.game.target_ball_speed(self.game.level)
+        self.kick(gain)
 
         return True
 
@@ -1928,15 +1964,31 @@ class Game():
     # Fraction of its speed an intro ball retains after one second of drifting (simulated friction)
     intro_damping = 0.887
 
-    # Ball speed limits, in pixels per second at the 1080p reference resolution (multiplied by the window scale
-    # ratio at run time, see `min_ball_speed()` / `max_ball_speed()`). The minimum stops balls drifting about
-    # uselessly; the maximum is only a safety net that keeps the physics stable and is deliberately generous.
+    # ----------------------------------------------------------------------------------------------------------
+    # Ball speed model
     #
-    # NOTE: the minimum is a straight conversion of the old per-frame value, (3 * level + 1.5) px/frame at 60 fps.
-    # The proper speed model (a target speed per difficulty with a gentle ramp per level) is still to come.
-    min_speed_base = 90.0
-    min_speed_per_level = 180.0
-    max_speed_base = 2400.0
+    # Speeds are pixels per second at the 1080p reference resolution; they are multiplied by the window scale
+    # ratio at run time (see `target_ball_speed()` and friends).
+    #
+    # Each difficulty has a base *target* speed: the speed the hero ball is served at. The target grows gently
+    # and geometrically with the level (8% per level, so level 6 is about 1.47x level 1). Around the target sit a
+    # floor - balls are never allowed to dawdle below it, which is what used to make the end of a level drag -
+    # and a ceiling, the fastest the game ever lets a ball go. Bat hits and the player's click "kick" add speed
+    # in fixed fractions of the target, so the pace climbs steadily through a rally but can never run away.
+    # Losing the hero ball resets it to the target on the next serve.
+    # ----------------------------------------------------------------------------------------------------------
+    base_ball_speed = (480.0, 560.0, 640.0)   # Target speed on level 1 for easy, medium, hard
+    level_speed_ramp = 1.08                    # Target multiplier per level above the first
+    min_speed_fraction = 0.75                  # Floor, as a fraction of the target
+    max_speed_fraction = 1.6                   # Ceiling, as a fraction of the target
+    bat_hit_speed_gain = (0.01, 0.02, 0.03)    # Speed added per bat hit (easy, medium, hard), fraction of target
+    kick_speed_gain = 0.15                     # Speed added per left click, fraction of target
+
+    # Serving: at the start of a level, and after the hero ball is lost, it sits on the bat until the player
+    # clicks or `serve_timeout` seconds pass. It launches at the target speed within `serve_angle` degrees of
+    # straight up.
+    serve_timeout = 3.0
+    serve_angle = 20.0
 
     # The following tables define which brick types go where in each level
     #
@@ -2193,6 +2245,8 @@ class Game():
         self.inversion_remaining = 0.0   # Seconds of control inversion left (0 = not inverted)
         self.laser_remaining = 0.0       # Seconds of laser mode left (0 = lasers off)
         self.boring_deadline = 0.0       # Game time at which we add a bonus ball if nothing has been destroyed
+        self.serving = False             # True while the hero ball is sitting on the bat waiting to be served
+        self.serve_deadline = 0.0        # Game time at which a waiting hero ball serves itself
         self.clock = pygame.time.Clock()
         self.lowest_brick = 0
 
@@ -2201,14 +2255,16 @@ class Game():
         self.right_edge = 0
         self.right_clip = None
 
-        # Create the hero ball
+        # Create the hero ball. Unlike bonus balls it doesn't re-enter from the side when lost: it comes back to
+        # the bat to be served.
         self.hero_ball = Ball(
             self.gfx.ball_img,
             self.gfx.blue_glow_img,
             self.gfx,
             self,
             0,
-            0
+            0,
+            serve_on_drop=True
         )
 
         # Other useful globals
@@ -2280,6 +2336,20 @@ class Game():
         """
         return int(self.clock.get_fps())
 
+    def target_ball_speed(self, level: int) -> float:
+        """
+        The speed the hero ball is served at on a given level, for the current difficulty.
+
+        Args:
+            level: Level number starting at 1.
+
+        Returns:
+            float: Speed in pixels per second, scaled for this window.
+        """
+
+        base = Game.base_ball_speed[self.difficulty]
+        return base * (Game.level_speed_ramp ** (level - 1)) * self.gfx.scale_ratio
+
     def min_ball_speed(self, level: int) -> float:
         """
         The slowest a ball is allowed to travel on a given level.
@@ -2291,17 +2361,60 @@ class Game():
             float: Speed in pixels per second, scaled for this window.
         """
 
-        return (Game.min_speed_per_level * level + Game.min_speed_base) * self.gfx.scale_ratio
+        return Game.min_speed_fraction * self.target_ball_speed(level)
 
-    def max_ball_speed(self) -> float:
+    def max_ball_speed(self, level: int) -> float:
         """
-        The fastest a ball is ever allowed to travel (a safety limit for the physics, not a gameplay tuning).
+        The fastest a ball is allowed to travel on a given level.
+
+        Args:
+            level: Level number starting at 1.
 
         Returns:
             float: Speed in pixels per second, scaled for this window.
         """
 
-        return Game.max_speed_base * self.gfx.scale_ratio
+        return Game.max_speed_fraction * self.target_ball_speed(level)
+
+    def start_serve(self) -> None:
+        """
+        Put the hero ball on the bat, ready to be served.
+
+        The ball rides along with the bat (see `hold_hero_ball()`) until the player clicks or `serve_timeout`
+        seconds of game time pass, at which point `serve()` launches it. The rest of the game - bonus balls,
+        lasers, power-up timers - carries on as normal in the meantime.
+        """
+
+        self.serving = True
+        self.serve_deadline = self.time + Game.serve_timeout
+        self.hero_ball.vx, self.hero_ball.vy = 0.0, 0.0
+        self.hold_hero_ball()
+
+    def hold_hero_ball(self) -> None:
+        """Keep the waiting hero ball sitting centrally on top of the hero bat."""
+
+        bat = self.bats[0]
+        self.hero_ball.x = bat.x
+        self.hero_ball.y = bat.y - self.hero_ball.h2 - 1
+
+    def serve(self) -> None:
+        """
+        Launch the waiting hero ball from the bat at the level's target speed, close to straight up.
+
+        Does nothing if the ball isn't waiting to be served.
+        """
+
+        if not self.serving:
+            return
+
+        self.serving = False
+        angle = math.radians(uniform(-Game.serve_angle, Game.serve_angle))
+        speed = self.target_ball_speed(self.level)
+        self.hero_ball.vx = speed * math.sin(angle)
+        self.hero_ball.vy = -speed * math.cos(angle)
+
+        pan = self.hero_ball.x / self.gfx.window_width
+        Game.play_stereo_sound(self.bat_hit_sound, stereo=pan, volume=0.5)
 
     def reset(self, level: int = 1) -> None:
         """
@@ -2359,18 +2472,12 @@ class Game():
         self.gfx.brick_images = self.gfx.scale_brick_images(self.level)
         self.create_bricks()
 
-        # Reset the hero ball and mouse position, cache mouse position
+        # Reset the mouse position (and cache it), centre the hero bat on it, and put the hero ball on the bat
+        # ready to serve
         middle = self.gfx.window_width // 2
         self.gfx.set_mouse_pos(middle, self.gfx.window_height - 1)  # Bottom row of the playfield (y = height would be outside it)
-        self.hero_ball.x = middle
-        self.hero_ball.y = self.bats[0].y - self.hero_ball.height
-
-        # Serve the hero ball: a slight random sideways drift and an upward speed that grows with the level and
-        # the difficulty. Values are pixels per second at the reference resolution, scaled to this window.
-        # (A straight x60 conversion of the old per-frame serve; the proper speed model is still to come.)
-        vx = randint(-2, 2) * 60.0
-        vy = -(randint(2, 4) * (self.level + 1) + (2 - self.difficulty)) * 60.0
-        self.hero_ball.vx, self.hero_ball.vy = vx * self.gfx.scale_ratio, vy * self.gfx.scale_ratio
+        self.bats[0].x = middle
+        self.start_serve()
 
         # Start at frame zero and give the player the full "boring" timeout before a bonus ball appears
         self.frame = 0
@@ -2561,16 +2668,12 @@ class Game():
             # Appear from right
             x = self.gfx.window_width - 1
 
-        # Bonus balls appear from the sides at a random angle - never quite straight up or
-        # straight across. They move at between 50% and 100% of the hero ball's speed.
+        # Bonus balls appear from the sides at a random angle - never quite straight up or straight across. They
+        # move at between 60% and 100% of the level's target speed (the floor will lift the slow ones a little).
         angle = uniform(5, 85)
-        speed = math.hypot(self.hero_ball.vx, self.hero_ball.vy)
-        # print(f"hero_ball velocity [{self.hero_ball.vx},{self.hero_ball.vy}] hero_ball speed {speed}")
-        random = uniform(0.5, 1.0)
-        speed = speed * random
+        speed = self.target_ball_speed(self.level) * uniform(0.6, 1.0)
         vx = math.sin(math.radians(angle)) * speed
         vy = -math.cos(math.radians(angle)) * speed
-        # print(f"bonus_ball speed {speed} (random {random}) angle {angle} velocity [{vx}, {vy}]")
 
         bonus_ball = Ball(
             image=self.gfx.bonus_ball_img,
@@ -2769,6 +2872,12 @@ class Game():
         self.check_lasers_mode(dt)
         self.animate_bats(dt)
 
+        # A hero ball waiting to be served rides along on the bat, and serves itself if the player dawdles
+        if self.serving:
+            self.hold_hero_ball()
+            if self.time >= self.serve_deadline:
+                self.serve()
+
         n, h = substeps(dt)
         for _ in range(n):
             self.move_lasers(h)
@@ -2922,7 +3031,8 @@ class Game():
             dt: Time to simulate (seconds); normally one physics sub-step.
 
         Behaviour:
-            - Calls `move()` on each ball with current level.
+            - Calls `move()` on each ball with current level (a hero ball waiting to be served is left alone).
+            - If the hero ball just fell off the bottom and has lives left, puts it back on the bat to be served.
             - Checks bat collisions for each ball.
             - Deletes balls whose lives drop below 1 (except the hero ball object itself).
             - For balls above `self.lowest_brick`, checks brick collisions and triggers brick effects.
@@ -2933,8 +3043,22 @@ class Game():
         lost = []
 
         for ball in self.balls:
-            # Move the ball and see if it hit a bat
+            # A hero ball sitting on the bat waiting to be served doesn't move or collide (see `hold_hero_ball()`)
+            if self.serving and ball is self.hero_ball:
+                continue
+
+            # Move the ball
             ball.move(dt, self.level)
+
+            # Did it just fall off the bottom? If it's the hero ball (and the game isn't over) it goes back on
+            # the bat for another serve; bonus balls have already re-entered from a side by themselves.
+            if ball.dropped:
+                ball.dropped = False
+                if ball.serve_on_drop and ball.lives > 0:
+                    self.start_serve()
+                    continue
+
+            # See if it hit a bat
             for bat in self.bats:
                 ball.check_bat_collision(bat)
 
@@ -2957,21 +3081,23 @@ class Game():
             if ball != self.hero_ball:
                 del ball
 
-        # Handle balls colliding with each other
+        # Handle balls colliding with each other (a hero ball waiting on the bat is out of play)
         for i in range(len(self.balls)):
             for j in range(i + 1, len(self.balls)):
-                self.balls[i].check_ball_collision(self.balls[j])
+                a, b = self.balls[i], self.balls[j]
+                if self.serving and (a is self.hero_ball or b is self.hero_ball):
+                    continue
+                a.check_ball_collision(b)
 
-    def kick_all_balls(self, ratio=1.25) -> None:
+    def kick_all_balls(self) -> None:
         """
-        Give all of the balls a kick of extra speed.
-
-        Args:
-            ratio: The speed kick ratio (e.g. 1.25 == 25% faster).
+        Give all of the balls a kick of extra speed: `kick_speed_gain` of the level's target speed each. Repeated
+        kicks top out at the level's ceiling rather than compounding.
         """
 
+        amount = Game.kick_speed_gain * self.target_ball_speed(self.level)
         for ball in self.balls:
-            ball.kick(ratio)
+            ball.kick(amount)
 
 
 def intro(gfx: Graphics, game: Game, widget: MonitorSelector, image_path: str) -> bool:
@@ -3379,8 +3505,14 @@ def game_loop(game: object, gfx: object):
                 # More debugging cheats...
                 elif event.type == pygame.MOUSEBUTTONDOWN:
                     if event.button == 1:
-                        # Left click: give all of the balls a bit of a speed kick
-                        game.kick_all_balls()
+                        if game.paused:
+                            pass
+                        elif game.serving:
+                            # Left click: launch the waiting hero ball from the bat
+                            game.serve()
+                        else:
+                            # Left click: give all of the balls a bit of a speed kick
+                            game.kick_all_balls()
 
                         # Left click: destroy the brick under the cursor
                         x, y = gfx.get_mouse_pos(cache=False)

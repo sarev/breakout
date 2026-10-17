@@ -30,7 +30,17 @@ Everything that moves is expressed in **pixels per second** (scaled for the wind
 - **Frame time:** `Game.display()` presents the frame, waits for the next frame slot, and returns the measured frame time (clamped to `MAX_FRAME_DT` so a stall can't teleport objects). The next `Game.update(dt)` simulates exactly that much time.
 - **Physics sub-steps:** `update()` splits each frame into equal sub-steps no longer than `1 / PHYSICS_HZ` seconds (240 Hz, so four per frame at 60 fps). Balls and lasers move and resolve collisions on every sub-step, which stops fast objects skipping straight over bricks or the bat.
 - **Game clock:** `Game.time` is seconds of *simulated* time. It only advances inside `update()`, so it stands still while paused or during a splash. Every gameplay timer — bonus bat expiry, inversion, laser mode, the "boring" timer, the blackout fade — is measured against it rather than wall-clock time or frame counts.
-- **Speed limits:** `Game.min_ball_speed(level)` and `Game.max_ball_speed()` give the clamp range in px/s for the current window. The maximum is a safety net for the physics rather than a gameplay tuning.
+- **Speed limits:** `Game.min_ball_speed(level)` and `Game.max_ball_speed(level)` give the clamp range in px/s for the current window; see *Speed model* below.
+
+# Speed model
+
+All the numbers live together at the top of `Game`, in px/s at the 1080p reference and scaled to the window at run time.
+
+- **Target speed:** `Game.target_ball_speed(level)` is `base_ball_speed[difficulty] × level_speed_ramp^(level − 1)` — 480/560/640 px/s for easy/medium/hard on level 1, growing 8% per level, so level 6 is about 1.47× level 1. This is the speed the hero ball is served at, and what bonus balls are spawned relative to.
+- **Floor and ceiling:** `min_speed_fraction` (0.75) and `max_speed_fraction` (1.6) of the target. `Ball.move()` clamps to this range every sub-step. The floor is what stops the end of a level dragging; the ceiling is what stops a long rally running away.
+- **Gaining speed:** every bat hit adds `bat_hit_speed_gain[difficulty]` of the target (1/2/3%); a left click adds `kick_speed_gain` (15%) to every ball. Both are additive, so they top out at the ceiling rather than compounding.
+- **Serving:** at the start of a level and whenever the hero ball is lost, `Game.start_serve()` parks it on the bat. It rides with the bat until the player clicks or `serve_timeout` seconds of game time pass, then `Game.serve()` launches it at the target speed within `serve_angle` of straight up. Losing a ball therefore resets the pace. Bonus balls still re-enter from a side when they drop.
+- **Aiming:** on the flat top of the bat the outgoing angle is set by where the ball landed, from straight up at the centre to `Ball.max_bat_angle` (60°) at either end, plus a couple of degrees of jitter so a rally can't lock into a loop. The rounded ends still reflect about the contact normal.
 
 # Runtime configuration & CLI
 
@@ -268,9 +278,9 @@ The bat handler starts with a quick axis-aligned bounding box (AABB) overlap tes
 
 In an end-cap region, we run a circle-circle test against the end’s centre; if overlapping, we push the ball outward along the contact normal so that it's just touching the bat and set `(vx, vy)` to the same speed but aligned to that normal. I.e. if you imagine an invisible line projecting straight out of the curve of the bat at the point it's touching the ball (this line is called the 'normal'), the ball's direction is reflected about that line - the speed will be the same, but just _away_ from the bat rather than _toward_ it.
 
-On the flat top of the bat, we snap the ball to sit exactly on the bat (ensuring there's no overlap) and force `vy` upwards by negating it.
+On the flat top of the bat, we snap the ball to sit exactly on the bat (ensuring there's no overlap) and send it off at an angle chosen by where it landed: straight up from the centre, out to `Ball.max_bat_angle` from the ends, with a touch of jitter. The speed is kept, only the direction changes, so the player can aim without the bat acting as an accelerator.
 
-After any hit we add a small random nudge to `vx` and a difficulty-scaled increase to upward speed for liveliness, then play the bat-hit sound with stereo pan and volume derived from `x` coordinate and speed.
+After any hit we add a difficulty-scaled slice of the level's target speed (see *Speed model*), then play the bat-hit sound with stereo pan and volume derived from `x` coordinate and speed.
 
 ### Brick collisions
 
@@ -379,7 +389,7 @@ This ordering is deliberate: movement first, then bat resolution, then bricks, t
 
 ## Adding energy on demand
 
-The player can left-click to call a small utility to **kick all balls** by a fixed ratio, giving an immediate speed boost. It can be used sparingly to lift the pace if things get slow.
+The player can left-click to call a small utility to **kick all balls** by a fixed fraction of the level's target speed, giving an immediate speed boost up to the level's ceiling. It can be used sparingly to lift the pace if things get slow. While the hero ball is waiting on the bat, a left click serves it instead.
 
 ## Notes
 

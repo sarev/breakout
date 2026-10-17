@@ -91,8 +91,8 @@ If this parameter isn't passed and there are multiple monitors detected, you wil
 
 ### Controls
 
-- **Mouse**: Move the bat horizontally
-- **Left click**: Speed all the balls up a little
+- **Mouse**: Move the bat horizontally. Where the ball lands on the bat sets the angle it leaves at: the centre sends it straight up, the ends send it off sideways
+- **Left click**: Launch the ball when it is sitting on the bat (it launches by itself after a few seconds); otherwise, speed all the balls up a little
 - **Space**: Pause or resume
 - **Q / Esc**: Quit
 - **Intro screen**: Move the mouse over the menu to select a difficulty, then click or press any key
