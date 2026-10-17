@@ -147,7 +147,7 @@ Copy the `web` folder to a static web server (SFTP, S3, GitHub Pages, whatever y
 |-------|--------|
 | **Click, tap or any key** | Dismiss the title card (browsers only allow sound after you've interacted with the page) |
 | **Mouse** | Moves the ball on the intro and the bat in play |
-| **Touch** | A finger moves the ball on the intro; in play a drag moves the bat by the finger's movement, so it doesn't have to be over the bat |
+| **Touch** | The ball on the intro, and the bat in play, sit under your finger: put it down anywhere across the screen and the bat goes there |
 | **Click / tap** | Starts a game from the intro; launches the ball when it's sitting on the bat; otherwise speeds all the balls up a little |
 | **Two-finger tap** | Pauses and opens the Options page: music, fullscreen, help, and quit to the menu. On the intro it offers the music and fullscreen toggles |
 | **Space** | Pause or resume |
@@ -157,7 +157,7 @@ Copy the `web` folder to a static web server (SFTP, S3, GitHub Pages, whatever y
 | **Q** | Back to the intro |
 | **H / C** | Help and Credits pages, also reachable from the links on the intro |
 
-Moving the bat from one side of the playfield to the other takes the same hand movement on any screen, as in the desktop version, except that the mouse is never slowed down: on a screen or window narrower than 1920 pixels the cursor's full width maps to the full playfield, so the bat can always reach the sides. A touch drag moves the bat exactly in step with the finger.
+Moving the bat from one side of the playfield to the other takes the same hand movement on any screen, as in the desktop version, except that the mouse is never slowed down: on a screen or window narrower than 1920 pixels the cursor's full width maps to the full playfield, so the bat can always reach the sides. A finger needs no such scaling: the bat is simply wherever the finger is.
 
 ### On a phone or tablet
 
@@ -171,7 +171,7 @@ Options go on the URL, for example `http://localhost:8000/?music=0&sensitivity=1
 |--------|--------|
 | `music=0` | Start with the music off |
 | `volume=0.25` | Music volume, 0 to 1 (default 0.4) |
-| `sensitivity=1.5` | Mouse and touch sensitivity multiplier (default 1) |
+| `sensitivity=1.5` | Mouse sensitivity multiplier (default 1) |
 | `mobile=1` / `mobile=0` | Force the phone-and-tablet behaviour on or off, instead of detecting it |
 | `debug=1` | Developer cheats: **D** destroys every brick, and a click destroys the brick under the pointer |
 

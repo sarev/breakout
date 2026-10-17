@@ -2,8 +2,8 @@
 //
 // Controls: mouse moves the bat, left click serves or kicks, Space pauses, M toggles music, F toggles fullscreen,
 // L captures the mouse (pointer lock; Esc releases it and pauses), Q returns to the intro, and on the intro H and
-// C (or the on-screen links) open the Help and Credits pages. On a touch screen a finger moves the ball (intro)
-// or drags the bat (play), a tap serves or kicks, and a two-finger tap pauses and opens the Options page (music,
+// C (or the on-screen links) open the Help and Credits pages. On a touch screen the ball (intro) or the bat
+// (play) sits under the finger, a tap serves or kicks, and a two-finger tap pauses and opens the Options page (music,
 // fullscreen, help, quit), which stands in for the keys.
 //
 // A mobile device (a phone or tablet: touch, no mouse, one screen) is detected at start-up, and there the prompts
@@ -175,7 +175,6 @@ async function boot() {
     music.play(...Music.levelTrack(game.level));
     game.running = true;
     scene = 'game';
-    input.touchRelative = true;
     if (input.wantLock) input.requestLock();   // Only if the player opted in with L earlier
   }
 
@@ -187,7 +186,6 @@ async function boot() {
     } else {
       // Back to the intro
       input.releaseLock();
-      input.touchRelative = false;
       intro.relayout();
       music.play('intro');
       scene = 'intro';
@@ -240,7 +238,6 @@ async function boot() {
   function quitToIntro() {
     music.stop(false);
     input.releaseLock();
-    input.touchRelative = false;
     audio.resume();
     game.paused = false;
     intro.relayout();

@@ -6,7 +6,7 @@
 
 import {
   BALL_HEIGHT_PCT, BAT_HEIGHT_PCT, LASER_HEIGHT_PCT, MAX_PLAYFIELD_ASPECT, MIN_PLAYFIELD_ASPECT, MOBILE_BAT_WIDEN,
-  MOBILE_WIDE_ASPECT, REFERENCE_HEIGHT, REFERENCE_WIDTH, TOUCH_DRAG_GAIN,
+  MOBILE_WIDE_ASPECT, REFERENCE_HEIGHT, REFERENCE_WIDTH,
 } from './config.js';
 
 /** CSS colour string from an [r, g, b] triple and an alpha 0..1. */
@@ -114,9 +114,6 @@ export class Graphics {
     this.ctx = canvas.getContext('2d');
     this.images = images;
     this.sensitivity = sensitivity;
-    // Touch drags move the bat in step with the finger (and a little more); unlike the mouse gain this has
-    // nothing to do with the screen size, because the finger is on the playfield itself. See Input.gain().
-    this.touchGain = TOUCH_DRAG_GAIN * Math.max(0.1, sensitivity);
     this.brickImages = [];
     this.brickSize = 0;
     this.background = null;

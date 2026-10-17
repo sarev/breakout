@@ -25,7 +25,7 @@ const BRICKS = [
 const KEYBOARD_CONTROLS = `
 <tr><td>Mouse</td><td>Moves the bat. Where the ball lands on the bat sets its angle: the centre sends it straight up, the ends send it off sideways.</td></tr>
 <tr><td>Click</td><td>Launches the ball when it's sitting on the bat (flick the bat sideways as you click to aim it). Otherwise, speeds all the balls up a little.</td></tr>
-<tr><td>Touch</td><td>A finger moves the ball on this screen and drags the bat in play. Tap to launch or speed up; a two-finger tap pauses and opens the options.</td></tr>
+<tr><td>Touch</td><td>The ball on this screen, and the bat in play, sit under your finger. Tap to launch or speed up; a two-finger tap pauses and opens the options.</td></tr>
 <tr><td>Space</td><td>Pause and resume</td></tr>
 <tr><td>M</td><td>Music on or off</td></tr>
 <tr><td>F</td><td>Fullscreen</td></tr>
@@ -34,7 +34,7 @@ const KEYBOARD_CONTROLS = `
 `;
 
 const TOUCH_CONTROLS = `
-<tr><td>Drag</td><td>Moves the bat. Your finger doesn't have to be on the bat: it moves with your finger wherever you drag. Where the ball lands on the bat sets its angle: the centre sends it straight up, the ends send it off sideways.</td></tr>
+<tr><td>Touch</td><td>The bat sits under your finger: put your finger down anywhere across the screen and the bat goes there. Where the ball lands on the bat sets its angle: the centre sends it straight up, the ends send it off sideways.</td></tr>
 <tr><td>Tap</td><td>Launches the ball when it's sitting on the bat (flick the bat sideways as you tap to aim it). Otherwise, speeds all the balls up a little.</td></tr>
 <tr><td>Two fingers</td><td>Tap with two fingers to pause and open the options: music, fullscreen, and back to this screen.</td></tr>
 `;

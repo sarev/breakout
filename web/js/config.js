@@ -187,8 +187,6 @@ export const WIPE_TIRED_SPEED = 0.25;   // Playfield widths per second the bat c
 export const WIPE_HYSTERESIS = 0.01;    // Playfield widths of reverse travel before a sweep counts as turned round
 
 // Touch
-export const TOUCH_DRAG_GAIN = 1;       // Bat movement per finger movement when dragging in play (times sensitivity):
-                                        // 1 keeps the bat exactly in step with the finger; more and it runs ahead
 export const MOBILE_BAT_LIFT = 2;       // Bat heights the bats sit higher on a mobile device, clear of the fingertip
 export const MOBILE_BAT_WIDEN = 2;      // Bats this many times wider on a mobile device in landscape, so that they
                                         // show either side of the finger driving them (the end caps keep their shape)
