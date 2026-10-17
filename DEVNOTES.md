@@ -103,14 +103,16 @@ class Game:
     base_path = sys._MEIPASS if hasattr(sys, '_MEIPASS') else os.path.abspath(".")
 
     # Resource roots
-    sprites_path = os.path.join(base_path, "sprites")
-    sounds_path  = os.path.join(base_path, "sounds")
+    assets_path  = os.path.join(base_path, "web")   # shared with the browser version
+    sprites_path = os.path.join(assets_path, "sprites")
+    sounds_path  = os.path.join(assets_path, "sounds")
+    music_path   = os.path.join(assets_path, "music")
 ```
 
 - **`Game.base_path`**: Root directory for assets.  
   - When running a PyInstaller build, `sys._MEIPASS` is provided by the bootloader and points at the temporary extraction directory.  
   - When running from source, it defaults to the absolute path of the current working directory.
-- **`Game.sprites_path` / `Game.sounds_path`**: Canonical subdirectories for image and audio assets. All loaders should join against these rather than hard‑coding relative paths.
+- **`Game.sprites_path` / `Game.sounds_path` / `Game.music_path`**: Canonical subdirectories for image and audio assets. All loaders should join against these rather than hard‑coding relative paths. They live under `web/` so that folder is a complete, self-contained copy of the browser version that can be published to a static web server as it is; the Python game simply loads the same files from there.
 
 ### Usage guidelines
 
@@ -122,7 +124,7 @@ class Game:
   save_db = os.path.join(Game.base_path, "savedata.db")
   ```
 - Avoid `__file__`-relative logic inside modules that may be collected differently by PyInstaller. `Game.base_path` abstracts this away.
-- Keep the folder names `sprites/` and `sounds/` flat and deterministic, since PyInstaller’s data file spec packs them under the same names.
+- Keep the folder names `web/sprites/`, `web/sounds/` and `web/music/` flat and deterministic, since PyInstaller’s data file spec packs them under the same names.
 
 ### PyInstaller notes
 
@@ -132,27 +134,27 @@ class Game:
       --onefile \
       --icon=icon.ico \
       --noconsole \
-      --add-data "sprites;sprites" \
-      --add-data "sounds;sounds" \
-      --add-data "music;music" \
+      --add-data "web/sprites;web/sprites" \
+      --add-data "web/sounds;web/sounds" \
+      --add-data "web/music;web/music" \
       breakout.py
   ```
 - At runtime the `_MEIPASS` override ensures lookups work without special-casing the frozen build.
 
 # Music
 
-Background music is streamed from OGG files in `music/` through `pygame.mixer.music`, which is a separate channel from the sound effects, so the stereo panning and volumes of the effects are untouched and the music has its own volume (`Music.volume`, 0.4 by default, overridable with `--music-volume`).
+Background music is streamed from OGG files in `web/music/` through `pygame.mixer.music`, which is a separate channel from the sound effects, so the stereo panning and volumes of the effects are untouched and the music has its own volume (`Music.volume`, 0.4 by default, overridable with `--music-volume`).
 
 - The `Music` class maps short track names to files (`intro`, `stage1`, `stage2`, `boss`). A missing file makes that name silent and a missing folder means no music at all, so the game runs identically without the assets.
 - The intro plays `intro`; each level plays `Music.level_track(level)`, a (name, tempo) pair from `Music.level_plan`: `stage1`, `stage2`, `boss` for levels 1–3, then the same three again at 1.2×, 1.1× and 1.2× for levels 4–6 so the pace keeps rising rather than dropping back. Levels past the end of the plan cycle through it.
 - A tempo other than 1.0 can't go through the streaming channel, so `_resample()` decodes the track, reads its samples at `tempo` times the normal rate with linear interpolation (faster *and* higher, as on real hardware) and keeps the result as a `Sound`. These are built once at start-up, and played looping on mixer channel 0, which is reserved so effects can't take it; the channel count is raised to 16 so the effects still have plenty. `play()`, `stop()`, `pause()` and `toggle()` drive whichever backend holds the current track.
 - `play()` is a no-op if the requested track is already playing, which is what lets the music run on uninterrupted across the monitor-switch re-initialisation.
 - Pausing the game pauses the music; game over and the win fade it out under the splash; **M** toggles it in the intro and during play; `--no-music` starts with it off.
-- The tracks are CC0 (Juhani Junkala's "Chiptune Adventures", via OpenGameArt); `music/CREDITS.txt` carries the attribution.
+- The tracks are CC0 (Juhani Junkala's "Chiptune Adventures", via OpenGameArt); `web/music/CREDITS.txt` carries the attribution.
 
 # Web version
 
-`web/` is a port of the game to plain JavaScript (ES modules, no build step) on the HTML canvas, served from the repository root so it can use the same `sprites/`, `sounds/` and `music/` folders. The Python game is the reference implementation; the web code mirrors its structure, and every tuning constant lives in `web/js/config.js` with the same names and values.
+`web/` is a port of the game to plain JavaScript (ES modules, no build step) on the HTML canvas. The folder is self-contained — page, scripts, and the `sprites/`, `sounds/` and `music/` folders that the Python game also loads from — so it can be copied as it is to a static web server. The Python game is the reference implementation; the web code mirrors its structure, and every tuning constant lives in `web/js/config.js` with the same names and values.
 
 - **`graphics.js`**: the canvas fills the viewport at device-pixel resolution; inside it the playfield is the viewport's shape clamped to 4:3…16:9 (`playfieldSize()`), centred, with black bars where needed. `scale` is playfield height / 1080, exactly as in Python. Sprites are scaled once per viewport size into offscreen canvases; bricks per level. Text goes through one `text()` helper. The glow trails are a list of timed marks redrawn each frame with falling alpha rather than an accumulating layer, because a `destination-out` fade in an 8-bit canvas never reaches zero and leaves ghosts.
 - **`entities.js`**, **`game.js`**: direct ports of the Python classes, including the time base (fixed 240 Hz sub-steps, pausable `game.time`), the speed model, aiming, serving, the cool-off, the blackout, lasers, inversion and cascades. The intro card (`intro.js`) is drawn with true perspective by projecting a 10×10 grid of the image and painting each cell as two affine-mapped, clipped triangles, since Canvas 2D has no perspective transform.

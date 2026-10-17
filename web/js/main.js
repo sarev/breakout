@@ -20,7 +20,7 @@ const SENSITIVITY = parseFloat(params.get('sensitivity') || '1') || 1;
 const MUSIC_ON = params.get('music') !== '0';
 const MUSIC_VOLUME = params.has('volume') ? parseFloat(params.get('volume')) : null;
 
-const ASSET_BASE = '../';   // The page lives in web/; the assets are the repository's own folders
+const ASSET_BASE = './';    // The sprites, sounds and music folders sit beside this page, so web/ is self-contained
 
 const canvas = document.getElementById('game');
 

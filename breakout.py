@@ -2399,9 +2399,12 @@ class Game():
     base_path = sys._MEIPASS if hasattr(sys, '_MEIPASS') else os.path.abspath(".")
 
     # Relative file system paths to various game resources
-    sprites_path = os.path.join(base_path, "sprites")
-    sounds_path = os.path.join(base_path, "sounds")
-    music_path = os.path.join(base_path, "music")
+    # The assets live under web/ so that folder alone is a complete, static-servable copy of the browser version;
+    # this program loads the very same files from there
+    assets_path = os.path.join(base_path, "web")
+    sprites_path = os.path.join(assets_path, "sprites")
+    sounds_path = os.path.join(assets_path, "sounds")
+    music_path = os.path.join(assets_path, "music")
 
     # There are this many varieties of bricks
     num_brick_types = 9
@@ -4240,7 +4243,7 @@ def menu_loop(args: argparse.Namespace) -> int:
         # The intro screen loop - iterate while the user is selecting a monitor
         while True:
             # Run the intro (user may quit here)
-            option = intro(gfx, game, widget, os.path.join(Game.base_path, "sprites", "intro.png"))
+            option = intro(gfx, game, widget, os.path.join(Game.sprites_path, "intro.png"))
             # print(f"option is '{option}'")
 
             if option is None:

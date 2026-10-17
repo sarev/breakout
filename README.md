@@ -2,7 +2,7 @@
 
 A modern, Pygame-based take on the classic brick-breaker. Clear all destroyable bricks while keeping the blue “hero” ball in play. Power-ups, lasers, inversion, and multi-ball keep things lively.
 
-![Illustration](./sprites/intro.png)
+![Illustration](./web/sprites/intro.png)
 
 ## Features
 
@@ -80,14 +80,13 @@ Pointer movement is scaled so that moving the bat from one side of the playfield
 
 ## Web version
 
-There is also a browser version in the `web` folder, a straight port of the game to JavaScript and the HTML canvas. It uses the same sprites, sounds and music, fills the browser tab (press **F** for fullscreen), and supports touch as well as the mouse. It needs to be served over HTTP rather than opened as a file, because browsers won't let a page fetch audio from disk:
+There is also a browser version in the `web` folder, a straight port of the game to JavaScript and the HTML canvas. It fills the browser tab (press **F** for fullscreen) and supports touch as well as the mouse. The `web` folder is self-contained: it holds the page, the scripts, and the sprites, sounds and music (which the Python game loads from there too), so publishing it is a matter of copying that one folder to any static web server. It needs to be served over HTTP rather than opened as a file, because browsers won't let a page fetch audio from disk:
 
 ```bash
-# From the repository root
-python -m http.server 8000
+python -m http.server 8000 --directory web
 ```
 
-then open http://localhost:8000/web/ in a browser. Controls are as above, with these differences: click or tap the title card and the intro to start, **Q** returns to the intro, and on a touch screen a finger moves the ball (intro) or drags the bat (play), a tap serves or kicks, and a two-finger tap pauses. The bat follows the mouse pointer normally; if you'd rather have the mouse captured so it can't wander off the page, press **L** during play (a message confirms it, and **Esc** or **L** releases it again). Options go on the URL: `?music=0` starts silent, `?volume=0.25` sets the music volume, `?sensitivity=1.5` scales mouse movement, and `?debug=1` enables the cheats.
+then open http://localhost:8000/ in a browser. Controls are as above, with these differences: click or tap the title card and the intro to start, **Q** returns to the intro, and on a touch screen a finger moves the ball (intro) or drags the bat (play), a tap serves or kicks, and a two-finger tap pauses. The bat follows the mouse pointer normally; if you'd rather have the mouse captured so it can't wander off the page, press **L** during play (a message confirms it, and **Esc** or **L** releases it again). Options go on the URL: `?music=0` starts silent, `?volume=0.25` sets the music volume, `?sensitivity=1.5` scales mouse movement, and `?debug=1` enables the cheats.
 
 ## Monitor selection
 
@@ -114,22 +113,22 @@ If this parameter isn't passed and there are multiple monitors detected, you wil
 
 ### Music
 
-The intro and each level have their own chiptune track, played at a volume that leaves room for the sound effects. Levels 4 to 6 bring the first three tunes back faster (and higher), old-school style. Start with it off using `--no-music`, or set the level with `--music-volume 0.25` (0 to 1). The tracks live in the `music` folder; see `music/CREDITS.txt`.
+The intro and each level have their own chiptune track, played at a volume that leaves room for the sound effects. Levels 4 to 6 bring the first three tunes back faster (and higher), old-school style. Start with it off using `--no-music`, or set the level with `--music-volume 0.25` (0 to 1). The tracks live in `web/music`; see `web/music/CREDITS.txt`.
 - **Intro screen**: Move the mouse over the menu to select a difficulty, then click or press any key
 
 ### Brick types
 
 | Brick | Type | Description |
 |-------|-------|-------------|
-| ![Blue](./sprites/sm-brick0.png) | **Blue** | Standard; no effect |
-| ![Red](./sprites/sm-brick1.png) | **Red** | Spawns a temporary red bonus ball |
-| ![Green](./sprites/sm-brick2.png) | **Green** | Adds a temporary extra bat |
-| ![White star](./sprites/sm-brick3.png) | **White star** | Grants an extra life |
-| ![Black hole](./sprites/sm-brick4.png) | **Black hole** | Temporarily darkens the screen |
-| ![Yellow arrows](./sprites/sm-brick5.png) | **Yellow arrows** | Temporarily reverse controls |
-| ![Cracked fire](./sprites/sm-brick6.png) | **Cracked fire** | Destroys neighbouring bricks (cascade) |
-| ![Metal](./sprites/sm-brick7.png) | **Metal** | Indestructible |
-| ![Warning triangle](./sprites/sm-brick8.png) | **Warning triangle** | Enables laser mode for a duration |
+| ![Blue](./web/sprites/sm-brick0.png) | **Blue** | Standard; no effect |
+| ![Red](./web/sprites/sm-brick1.png) | **Red** | Spawns a temporary red bonus ball |
+| ![Green](./web/sprites/sm-brick2.png) | **Green** | Adds a temporary extra bat |
+| ![White star](./web/sprites/sm-brick3.png) | **White star** | Grants an extra life |
+| ![Black hole](./web/sprites/sm-brick4.png) | **Black hole** | Temporarily darkens the screen |
+| ![Yellow arrows](./web/sprites/sm-brick5.png) | **Yellow arrows** | Temporarily reverse controls |
+| ![Cracked fire](./web/sprites/sm-brick6.png) | **Cracked fire** | Destroys neighbouring bricks (cascade) |
+| ![Metal](./web/sprites/sm-brick7.png) | **Metal** | Indestructible |
+| ![Warning triangle](./web/sprites/sm-brick8.png) | **Warning triangle** | Enables laser mode for a duration |
 
 Different brick types require different numbers of hits to destroy. If no brick is destroyed for a while, an extra bonus ball is introduced.
 
