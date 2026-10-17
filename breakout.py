@@ -2412,13 +2412,18 @@ class Game():
         if alpha is None:
             return None
 
-        darkest = -(255.0 + Game.blackout_rate * Game.blackout_hold)
+        # Decide which phase we're in from the sign *before* stepping. (Deciding afterwards was a bug: with real,
+        # slightly irregular frame times the clearing phase could step from a small positive value straight past
+        # zero to a negative one, which read as "darkening" and started the whole effect again.)
+        if alpha < 0:
+            # Darkening, then holding at black
+            darkest = -(255.0 + Game.blackout_rate * Game.blackout_hold)
+            alpha -= Game.blackout_rate * dt
+            return 255.0 if alpha <= darkest else alpha
+
+        # Clearing: anything that has dropped below half an alpha unit is finished
         alpha -= Game.blackout_rate * dt
-        if alpha <= darkest:
-            return 255.0
-        if 0 <= alpha < 0.5:
-            return None
-        return alpha
+        return None if alpha < 0.5 else alpha
 
     def __init__(
         self,
@@ -2945,6 +2950,12 @@ class Game():
         # Iterate through all the cascade blocks, killing them
         for idx in cascade:
             brick = self.bricks[idx]
+
+            # A fire brick earlier in this list may already have taken this one out through its own (recursive)
+            # cascade. Killing it again would fire its effect twice - two bonus balls, two blackouts, and so on.
+            if brick.lives <= 0:
+                continue
+
             brick.hit(brick.x + brick.w2, kill=True)
             # Recurse (which might include destroying other cascading bricks)
             self.kill_a_brick(brick)
@@ -3014,6 +3025,12 @@ class Game():
             - Type 8: Extend laser firing duration.
         """
 
+        if self.debug:
+            # Who killed what, when - handy for explaining effects that seem to come from nowhere (a laser or a
+            # bonus ball taking out a brick you weren't looking at, say)
+            print(f"[{self.time:7.2f}s] brick {brick.id:3d} (type {brick.type}) destroyed; "
+                  f"{self.count_live_bricks()} left, {len(self.balls)} ball(s), {len(self.lasers)} laser(s)")
+
         # Red bricks add some temporary balls
         if brick.type == 1:
             self._add_bonus_ball()
@@ -3034,7 +3051,15 @@ class Game():
 
         # Black hole bricks cause a screen darkening effect
         elif brick.type == 4:
-            self.dark_alpha = -1.0
+            if self.dark_alpha is None or self.dark_alpha == 0:
+                # Start darkening from clear
+                self.dark_alpha = -1.0
+            elif self.dark_alpha > 0:
+                # Already clearing after an earlier black hole: turn around and head back to black from the
+                # current darkness, so the second one extends the effect rather than snapping the screen clear
+                # and starting over
+                self.dark_alpha = -self.dark_alpha
+            # Otherwise we're already darkening (or holding at black) and there's nothing to add
 
         # Yellow bricks temporarily reverse the player controls
         elif brick.type == 5:
