@@ -68,9 +68,33 @@ export class Input {
     this.clamp();
   }
 
+  /**
+   * Keep the raw position within range.
+   *
+   * In the relative modes (locked mouse, touch drag) the range is the band where the bat is actually inside the
+   * playfield once the mouse gain has been applied: with a gain above 1 the bat reaches the edge before the raw
+   * position does, and if the raw position were allowed to carry on past that point there'd be a dead zone to
+   * travel back through before the bat moved again (easy to hit after overshooting under reversed controls).
+   * In absolute mode the real cursor is what it is, so the raw position is simply kept on the playfield.
+   */
   clamp() {
-    this.raw.x = Math.max(0, Math.min(this.gfx.W - 1, this.raw.x));
-    this.raw.y = Math.max(0, Math.min(this.gfx.H - 1, this.raw.y));
+    const W = this.gfx.W;
+    const H = this.gfx.H;
+    let minX = 0;
+    let maxX = W - 1;
+    let minY = 0;
+    let maxY = H - 1;
+    const gain = this.gfx.mouseGain;
+    if ((this.locked || this.touch !== null) && gain > 1) {
+      const cx = W / 2;
+      const cy = H / 2;
+      minX = cx - cx / gain;
+      maxX = cx + (W - 1 - cx) / gain;
+      minY = cy - cy / gain;
+      maxY = cy + (H - 1 - cy) / gain;
+    }
+    this.raw.x = Math.max(minX, Math.min(maxX, this.raw.x));
+    this.raw.y = Math.max(minY, Math.min(maxY, this.raw.y));
   }
 
   onTouchStart(e) {
