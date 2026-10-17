@@ -1435,6 +1435,61 @@ class Graphics():
         'selitem': (96, 224, 96)
     }
 
+    # The range of shapes the playfield is allowed to be, as width / height. A monitor whose shape falls inside this
+    # range is used edge to edge; one outside it gets black bars (see `logical_size()`). The upper limit matters
+    # most: the brick grid is sized from the playfield width, so on anything wider than 16:9 the lower rows would
+    # run into the bat. Narrower shapes down to 4:3 just get a shorter brick field, which plays fine. Set both to
+    # 16 / 9 for a strictly letterboxed 16:9 playfield on every monitor.
+    min_playfield_aspect = 4 / 3
+    max_playfield_aspect = 16 / 9
+
+    # Height of the reference playfield that all logical sizes and speeds are designed against
+    reference_height = 1080
+
+    @staticmethod
+    def logical_size(desktop_width: int, desktop_height: int, resize: float = 1.0) -> tuple[int, int]:
+        """
+        Work out the size of the logical playfield surface for a monitor.
+
+        The playfield's shape is the monitor's shape clamped to [`min_playfield_aspect`, `max_playfield_aspect`],
+        and its size is the largest box of that shape that fits inside the monitor's desktop (after dividing by the
+        retro `resize` ratio). So a 16:9 or 16:10 monitor fills the screen, a 21:9 or 32:9 one gets bars down the
+        sides, and a portrait or 5:4 one gets bars top and bottom. Everything in the game is laid out in this
+        logical space, which is why the brick field can never run into the bat however the monitor is shaped.
+
+        Args:
+            desktop_width: Monitor width in pixels.
+            desktop_height: Monitor height in pixels.
+            resize: Down-scaling ratio (>= 1.0) for the retro look; the logical surface is this many times smaller
+                    than the monitor and gets scaled back up by the display driver.
+
+        Returns:
+            tuple[int, int]: (width, height) of the logical playfield in pixels.
+        """
+
+        resize = max(resize, 1.0)
+        width = desktop_width / resize
+        height = desktop_height / resize
+        aspect = width / height
+
+        # Shapes within 1% of a limit count as being inside it: a 1366x768 laptop is a hair wider than 16:9 and
+        # shouldn't get a one-pixel bar for its trouble
+        tolerance = 0.01
+
+        if aspect > Graphics.max_playfield_aspect * (1 + tolerance):
+            # Monitor is too wide: use its full height, with bars at the sides
+            height = int(height)
+            width = int(round(height * Graphics.max_playfield_aspect))
+        elif aspect < Graphics.min_playfield_aspect * (1 - tolerance):
+            # Monitor is too narrow: use its full width, with bars top and bottom
+            width = int(width)
+            height = int(round(width / Graphics.min_playfield_aspect))
+        else:
+            # Monitor shape is acceptable as it is: use the whole thing
+            width, height = int(width), int(height)
+
+        return width, height
+
     def __init__(self, monitor: int, path: str, brick_types: int, resize: float = 1.0) -> None:
         """
         Initialise graphics, window surfaces, and high-resolution sprites.
@@ -1446,25 +1501,31 @@ class Graphics():
             resize: Graphics resizing (downsampling) ratio.
         """
 
-        def get_monitor_info(monitor: int):
-            desktops = pygame.display.get_desktop_sizes()
-            width, height = desktops[monitor]
-
-            return width, height
-
         print(f"Open on monitor {monitor}")
-        self.window_width, self.window_height = get_monitor_info(monitor)
-        print(f"Resolution {self.window_width}x{self.window_height}")
-        resize = max(resize, 1.0)
-        self.window_width, self.window_height = int(self.window_width / resize), int(self.window_height / resize)
-        print(f"Resized resolution {self.window_width}x{self.window_height}")
+        self.desktop_width, self.desktop_height = pygame.display.get_desktop_sizes()[monitor]
+        print(f"Monitor resolution {self.desktop_width}x{self.desktop_height}")
 
-        # Make a note of the aspect ratio and the scale of this monitor relative to our reference implementation
+        # The logical playfield: the monitor's shape clamped to the allowed range, fitted inside the monitor.
+        # `window_width` / `window_height` are the dimensions of this logical surface - they are what every
+        # coordinate in the game is measured against, and (thanks to pygame.SCALED, below) they are also the space
+        # mouse coordinates arrive in.
+        self.window_width, self.window_height = Graphics.logical_size(self.desktop_width, self.desktop_height, resize)
+        print(f"Playfield resolution {self.window_width}x{self.window_height}")
+        desktop_aspect = self.desktop_width / self.desktop_height
+        if desktop_aspect > Graphics.max_playfield_aspect + 0.01:
+            print("Monitor is wider than 16:9 - the playfield will be letterboxed with bars at the sides")
+        elif desktop_aspect < Graphics.min_playfield_aspect - 0.01:
+            print("Monitor is narrower than 4:3 - the playfield will be letterboxed with bars top and bottom")
+
+        # Make a note of the aspect ratio (used by the brick scaling arithmetic) and the scale of this playfield
+        # relative to the reference 1080p implementation
         self.aspect_ratio = self.window_width / self.window_height
-        self.scale_ratio = self.window_height / 1080
+        self.scale_ratio = self.window_height / Graphics.reference_height
         print(f"Scale ratio {self.scale_ratio}")
 
-        # Create the display (window) for our game
+        # Create the display (window) for our game. SCALED | FULLSCREEN asks the driver to stretch our logical
+        # surface to fill the monitor, keeping its aspect ratio and adding black bars where the shapes differ.
+        # Mouse coordinates are translated into logical space for us, including the offset of any bars.
         self.display = pygame.display.set_mode(
             (self.window_width, self.window_height),
             pygame.NOFRAME | pygame.SCALED | pygame.FULLSCREEN,
@@ -1629,10 +1690,17 @@ class Graphics():
             cache: If True, store a cached copy of the current mouse coordinates.
 
         Returns:
-            tuple[int, int]: (x, y) in window pixels.
+            tuple[int, int]: (x, y) in logical playfield pixels, clamped to the playfield.
+
+        Notes:
+            On a monitor that isn't 16:9 the pointer can wander into the letterbox bars, where pygame reports
+            coordinates outside the playfield (negative, or beyond the width/height). We clamp so the bat and the
+            intro's hero ball can never be driven off the edge of the playfield.
         """
 
         x, y = pygame.mouse.get_pos()
+        x = max(0, min(self.window_width - 1, x))
+        y = max(0, min(self.window_height - 1, y))
         if cache:
             self.mouse_x, self.mouse_y = x, y
 
@@ -2263,7 +2331,7 @@ class Game():
         # Ensure the hero bat and mouse cursor are horizontally centred, cache mouse position
         middle = self.gfx.window_width // 2
         self.bats[0].x = middle
-        self.gfx.set_mouse_pos(middle, self.gfx.window_height)
+        self.gfx.set_mouse_pos(middle, self.gfx.window_height - 1)  # Bottom row of the playfield (y = height would be outside it)
 
     def level_up(self) -> None:
         """
@@ -2293,7 +2361,7 @@ class Game():
 
         # Reset the hero ball and mouse position, cache mouse position
         middle = self.gfx.window_width // 2
-        self.gfx.set_mouse_pos(middle, self.gfx.window_height)
+        self.gfx.set_mouse_pos(middle, self.gfx.window_height - 1)  # Bottom row of the playfield (y = height would be outside it)
         self.hero_ball.x = middle
         self.hero_ball.y = self.bats[0].y - self.hero_ball.height
 
@@ -3397,8 +3465,9 @@ def menu_loop(args: argparse.Namespace) -> int:
     game = Game(monitor=args.monitor, resize=args.resize)
     gfx = game.gfx
 
-    # Initialise a monitor selection widget
-    widget = MonitorSelector(choice=args.monitor, x=12 * gfx.scale_ratio, y=12 * gfx.scale_ratio)
+    # Initialise a monitor selection widget. Its position is given in reference (1080p) coordinates; `reposition()`
+    # scales it for the current playfield.
+    widget = MonitorSelector(choice=args.monitor, x=12, y=12)
     widget.reposition(gfx=gfx, image=gfx.monitors_img)
 
     # Don't check `game.running` here - because the `game` object itself can end up deleted and recreated, which could leave
@@ -3428,6 +3497,9 @@ def menu_loop(args: argparse.Namespace) -> int:
                 # Create new Game and Graphics objects, having selected a different monitor
                 game = Game(monitor=widget.monitor, resize=args.resize)
                 gfx = game.gfx
+
+                # The new monitor may be a different size, so re-scale the widget's position and hit box for it
+                widget.reposition(gfx=gfx, image=gfx.monitors_img)
 
                 # Restore the selected difficulty
                 game.difficulty = difficulty
@@ -3461,6 +3533,15 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     # Run the outer game loop
     try:
+        # Make sure a monitor chosen on the command line actually exists, rather than crashing with an IndexError
+        # deep inside the display set-up
+        if args.monitor is not None:
+            count = pygame.display.get_num_displays()
+            if not 0 <= args.monitor < count:
+                print(f"Monitor {args.monitor} does not exist: this system has {count} display(s), "
+                      f"numbered 0 to {count - 1}", file=sys.stderr)
+                return 2
+
         rc = menu_loop(args)
     except KeyboardInterrupt:
         print("\nInterrupted")

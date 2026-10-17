@@ -42,12 +42,13 @@ The game exposes a small set of command‑line flags to control display placemen
   Zero‑based display index to use. `0` selects the primary display. Supplying this disables the interactive Monitor Selector on the intro screen. Example: `-m 1` starts on the second display.
 
 - `--resize, -r <ratio>`  
-  Down‑scale ratio applied to the window resolution and the derived sprite/text scaling. Must be `>= 1.0`. Example: `-r 2` renders at 50% of the native desktop resolution (width and height each divided by 2) while preserving aspect.
+  Down‑scale ratio applied to the playfield resolution and the derived sprite/text scaling. Must be `>= 1.0`. Example: `-r 2` renders at 50% of the native desktop resolution (width and height each divided by 2) while preserving aspect.
 
 ### Notes
 
-- Logical layout is designed for a 1080p baseline and then scaled using the active window height.  
-- The window is created borderless and full‑screen on the target display.  
+- Logical layout is designed for a 1080p baseline and then scaled using the height of the 16:9 logical playfield (see *Graphics*).  
+- The window is created borderless and full‑screen on the target display, with black bars if the display is wider than 16:9 or narrower than 4:3.  
+- An out-of-range `-m` index is rejected with a message listing how many displays were found (exit code 2).  
 - When `-m` is omitted and multiple displays exist, the intro screen shows a small monitor icon. Clicking it cycles through the available displays and re‑initialises the window on the chosen one, without restarting the process.
 
 ## Examples
@@ -154,8 +155,9 @@ Rendering is resolution‑independent and anchored to a 1080p logical baseline. 
 ## Scaling scheme and window mode
 
 - **Logical baseline:** 1920×1080.  
+- **Logical playfield:** the game renders into a surface whose shape is the monitor's shape clamped to the range `Graphics.min_playfield_aspect` (4:3) to `Graphics.max_playfield_aspect` (16:9), sized to the largest box of that shape that fits inside the monitor (after the `-r` down-scale). See `Graphics.logical_size()`. `window_width` / `window_height` are the dimensions of this surface, not of the monitor.  
 - **Scale ratio:** `scale_ratio = window_height / 1080`. All logical pixel measurements are multiplied by this ratio and rounded to integers for blit/rect math.  
-- **Aspect handling:** the window fills the selected display with a borderless full‑screen surface. Logical coordinates are scaled uniformly, preserving aspect.  
+- **Aspect handling:** `pygame.SCALED | pygame.FULLSCREEN` stretches the logical surface to fill the monitor while preserving its aspect ratio. Monitors between 4:3 and 16:9 (which includes 16:10) are used edge to edge; wider ones (21:9, 32:9) get black bars at the sides, and anything narrower than 4:3 gets bars top and bottom. The upper limit is what matters: the brick grid is sized from the playfield width, so on a wider playfield the lower rows would run into the bat. Mouse coordinates arrive already translated into logical space; `get_mouse_pos()` clamps them so the pointer can't drive the bat into the bars.  
 - **Display flags:** the window is created using `pygame.NOFRAME | pygame.SCALED | pygame.FULLSCREEN` so the back buffer is scaled by the driver and there are no OS‑level window decorations.
 
 ## Core surfaces
