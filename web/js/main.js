@@ -341,7 +341,7 @@ async function boot() {
       // Pulse the prompt gently so it reads as waiting rather than stuck
       const pulse = 0.55 + 0.35 * Math.sin((2 * Math.PI * gateElapsed) / 1.5);
       gfx.text(ctx, 'Click, tap or press any key to begin', { x: gfx.W / 2, y: gfx.H * 0.62, size: 80, colour: COLOURS.presskey, alpha: pulse });
-      gfx.text(ctx, 'Sound in a browser can only start after you do', { x: gfx.W / 2, y: gfx.H * 0.7, size: 50, colour: COLOURS.copyright, alpha: 0.6 });
+      gfx.text(ctx, 'Copyright © 2025-26, 7th software Ltd.', { x: gfx.W / 2, y: gfx.H * 0.92, size: 50, colour: COLOURS.copyright, alpha: 0.7 });
     } else if (scene === 'intro') {
       intro.update(dt);
       intro.draw(ctx);
