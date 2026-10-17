@@ -289,7 +289,7 @@ In an end-cap region, we run a circle-circle test against the end’s centre; if
 
 On the flat top of the bat, we snap the ball to sit exactly on the bat (ensuring there's no overlap) and send it off at an angle chosen by where it landed: straight up from the centre, out to `Ball.max_bat_angle` from the ends, with a touch of jitter. The speed is kept, only the direction changes, so the player can aim without the bat acting as an accelerator.
 
-After any hit we add a difficulty-scaled slice of the level's target speed (see *Speed model*), then play the bat-hit sound with stereo pan and volume derived from `x` coordinate and speed.
+After any hit we add a difficulty-scaled slice of the level's target speed (see *Speed model*), then play the bat-hit sound with stereo pan and volume derived from `x` coordinate and speed. The speed is only added if there has been no bat contact for `Ball.bat_hit_cooldown` (0.25 s): sweeping the bat into the ball at an end cap can make the collision repeat every physics step until the ball clears, and without the cool-off each repeat added speed.
 
 ### Brick collisions
 

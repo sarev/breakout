@@ -932,6 +932,12 @@ class Ball():
     max_bat_angle: float = 60.0
     bat_angle_jitter: float = 2.0
 
+    # After a bat hit, no further bat hits add speed for this long (seconds of game time). When the bat is swept
+    # into the ball at one of its rounded ends, the ball is pushed out along the contact normal but the bat follows
+    # it on the next frame, so the collision can repeat every physics step until the ball clears. Each repeat used
+    # to add the bat-hit speed gain, so the ball came out of such a scuffle a lot faster than it went in.
+    bat_hit_cooldown: float = 0.25
+
     def __init__(
         self,
         image: pygame.Surface,
@@ -1010,6 +1016,9 @@ class Ball():
 
         # Set by `move()` when the ball falls off the bottom; the game reads and clears it (see `Game.animate_balls`)
         self.dropped = False
+
+        # Game time of the most recent bat contact (see `bat_hit_cooldown`)
+        self.last_bat_hit = -1e9
 
     def bbox(self) -> pygame.Rect:
         """
@@ -1307,10 +1316,15 @@ class Ball():
         pan = self.x / self.gfx.window_width
         Game.play_stereo_sound(self.game.bat_hit_sound, stereo=pan, volume=vol)
 
-        # Every bat hit adds a little speed - a fixed fraction of the level's target speed, bigger on harder
+        # A bat hit adds a little speed - a fixed fraction of the level's target speed, bigger on harder
         # difficulties - so a long rally gets steadily livelier. `move()` caps the result at the level's ceiling.
-        gain = Game.bat_hit_speed_gain[self.game.difficulty] * self.game.target_ball_speed(self.game.level)
-        self.kick(gain)
+        # A flurry of contacts in quick succession (see `bat_hit_cooldown`) only counts once: the cool-off is
+        # measured from the most recent contact, so the speed can't creep up while the ball is being scuffed along.
+        now = self.game.time
+        if now - self.last_bat_hit >= Ball.bat_hit_cooldown:
+            gain = Game.bat_hit_speed_gain[self.game.difficulty] * self.game.target_ball_speed(self.game.level)
+            self.kick(gain)
+        self.last_bat_hit = now
 
         return True
 
