@@ -65,9 +65,21 @@ async function boot() {
   const music = audio.music;
 
   // --- Scenes -----------------------------------------------------------------------------------------------
-  // 'intro' -> 'splash' (Level 1...) -> 'game' -> 'splash' (Level N... / Game Over! / YOU WIN!) -> ...
-  let scene = 'intro';
+  // 'gate' -> 'intro' -> 'splash' (Level 1...) -> 'game' -> 'splash' (Level N... / Game Over! / YOU WIN!) -> ...
+  //
+  // The gate is a title card that waits for the first click, tap or key. Browsers keep the audio context
+  // suspended until the page has had a user gesture, and without the gate that first gesture would also be the
+  // one that starts a game, so the intro would always be silent. The gate's gesture unlocks the audio and starts
+  // the intro music, then the intro runs as normal.
+  let scene = 'gate';
   let splash = null;   // {text, colour, next, elapsed}
+  let gateElapsed = 0;
+
+  function leaveGate() {
+    audio.unlock();
+    music.play('intro');
+    scene = 'intro';
+  }
 
   function showSplash(text, colour, next) {
     splash = { text, colour, next, elapsed: 0 };
@@ -152,7 +164,9 @@ async function boot() {
   /** The primary action (left click or tap): start, skip the splash, serve, or kick. */
   function primaryAction(fromMouse) {
     audio.unlock();
-    if (scene === 'intro') {
+    if (scene === 'gate') {
+      leaveGate();
+    } else if (scene === 'intro') {
       if (fromMouse) input.requestLock();
       startGame();
     } else if (scene === 'splash') {
@@ -208,7 +222,9 @@ async function boot() {
       music.toggle();
       return;
     }
-    if (scene === 'intro') {
+    if (scene === 'gate') {
+      if (!e.repeat) leaveGate();
+    } else if (scene === 'intro') {
       if (key !== 'escape' && key !== 'q' && !e.repeat) {
         input.requestLock();
         startGame();
@@ -246,7 +262,16 @@ async function boot() {
     last = now;
 
     const ctx = gfx.begin();
-    if (scene === 'intro') {
+    if (scene === 'gate') {
+      gateElapsed += dt;
+      const wave = Math.round(64 * Math.sin((2 * Math.PI * gateElapsed) / 3));
+      const title = COLOURS.title.map((c) => Math.max(0, Math.min(255, c + wave)));
+      gfx.text(ctx, 'Breakout', { x: gfx.W / 2, y: gfx.H * 0.4, size: 400, colour: title, alpha: 224 / 255, bold: true, italic: true });
+      // Pulse the prompt gently so it reads as waiting rather than stuck
+      const pulse = 0.55 + 0.35 * Math.sin((2 * Math.PI * gateElapsed) / 1.5);
+      gfx.text(ctx, 'Click, tap or press any key to begin', { x: gfx.W / 2, y: gfx.H * 0.62, size: 80, colour: COLOURS.presskey, alpha: pulse });
+      gfx.text(ctx, 'Sound in a browser can only start after you do', { x: gfx.W / 2, y: gfx.H * 0.7, size: 50, colour: COLOURS.copyright, alpha: 0.6 });
+    } else if (scene === 'intro') {
       intro.update(dt);
       intro.draw(ctx);
     } else if (scene === 'splash') {
@@ -278,7 +303,6 @@ async function boot() {
   // Expose the live objects for poking at from the console (and for the automated smoke test)
   window.breakout = { game, gfx, input, intro, audio, get scene() { return scene; } };
 
-  music.play('intro');   // Silent until the first gesture resumes the context, then it starts
   requestAnimationFrame(frame);
 }
 
