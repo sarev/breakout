@@ -41,6 +41,7 @@ All the numbers live together at the top of `Game`, in px/s at the 1080p referen
 - **Gaining speed:** every bat hit adds `bat_hit_speed_gain[difficulty]` of the target (1/2/3%); a left click adds `kick_speed_gain` (15%) to every ball. Both are additive, so they top out at the ceiling rather than compounding.
 - **Serving:** at the start of a level and whenever the hero ball is lost, `Game.start_serve()` parks it on the bat. It rides with the bat until the player clicks or `serve_timeout` seconds of game time pass, then `Game.serve()` launches it at the target speed within `serve_angle` of straight up. Losing a ball therefore resets the pace. Bonus balls still re-enter from a side when they drop.
 - **Aiming:** on the flat top of the bat the outgoing angle is set by where the ball landed, from straight up at the centre to `Ball.max_bat_angle` (60°) at either end, plus a couple of degrees of jitter so a rally can't lock into a loop. The rounded ends still reflect about the contact normal.
+- **Endgame boost:** the target is multiplied by `1 + endgame_speed_boost × cleared_fraction` (up to 1.35× with one brick left). A full field leaves a narrow gap above the bat and needs a slower ball; an empty one leaves the ball a long way to travel and a slow one makes hunting the last bricks a chore. Since the floor and ceiling are fractions of the target, a ball already in play is eased along as the field clears, and every serve after a lost life comes out at the boosted speed. `Game.update()` recounts the live bricks once per frame so the boost also reflects cascades and cheats.
 
 # Runtime configuration & CLI
 
@@ -60,6 +61,9 @@ The game exposes a small set of command‑line flags to control display placemen
 - The window is created borderless and full‑screen on the target display, with black bars if the display is wider than 16:9 or narrower than 4:3.  
 - An out-of-range `-m` index is rejected with a message listing how many displays were found (exit code 2).  
 - When `-m` is omitted and multiple displays exist, the intro screen shows a small monitor icon. Clicking it cycles through the available displays and re‑initialises the window on the chosen one, without restarting the process.
+
+- `--debug`  
+  Enables the developer cheats in `game_loop()`: **D** destroys every brick, **right-click** shows the pointer, **left-click** destroys the brick under it. Off by default so they can't be hit by accident in normal play.
 
 ## Examples
 
@@ -378,7 +382,7 @@ A small monitor icon appears when multiple displays are available and no monitor
 
 ## Keeping play from going stale
 
-If no brick has been destroyed for a while, the game assumes the rally has gone quiet and **injects a bonus ball** automatically. The timeout is controlled by a fixed `boring_timeout`, measured on the game clock (so pausing doesn't count). When it triggers, a bonus ball enters from a side with a readable audio cue so it can meaningfully re‑energise play.
+If no brick has been destroyed for a while, the game assumes the rally has gone quiet and **injects a bonus ball** automatically. The timeout is controlled by a fixed `boring_timeout`, measured on the game clock (so pausing doesn't count). When it triggers, a bonus ball enters from a side with a readable audio cue so it can meaningfully re‑energise play. Bonus balls (from this timer or from red bricks) are refused once `Game.max_balls` are in play, so a level full of metal bricks can't flood the screen.
 
 ## Helper animation loops
 

@@ -1984,6 +1984,16 @@ class Game():
     bat_hit_speed_gain = (0.01, 0.02, 0.03)    # Speed added per bat hit (easy, medium, hard), fraction of target
     kick_speed_gain = 0.15                     # Speed added per left click, fraction of target
 
+    # The target rises as the level empties out. A full brick field leaves only a narrow gap above the bat, so the
+    # player needs the ball to be slower there; once most bricks are gone the ball has the whole playfield to cross
+    # and a slow one makes hunting the last few bricks a chore. The boost scales with the fraction of destructible
+    # bricks cleared: with the last brick standing the target is (1 + endgame_speed_boost) times the base. Because
+    # the floor and ceiling are fractions of the target, a ball already in play is eased along as the field clears.
+    endgame_speed_boost = 0.35
+
+    # Never have more than this many balls in play at once (bonus balls are refused beyond it)
+    max_balls = 6
+
     # Serving: at the start of a level, and after the hero ball is lost, it sits on the bat until the player
     # clicks or `serve_timeout` seconds pass. It launches at the target speed within `serve_angle` degrees of
     # straight up.
@@ -2172,13 +2182,14 @@ class Game():
             return None
         return alpha
 
-    def __init__(self, monitor: int | None = 0, resize: float = 1.0) -> None:
+    def __init__(self, monitor: int | None = 0, resize: float = 1.0, debug: bool = False) -> None:
         """
         Set up graphics, audio, game state, and initial objects.
 
         Args:
             monitor: Index of the monitor to display on (0 is primary).
             resize: Graphics resizing (downsampling) ratio.
+            debug: Enable the developer cheats (see `game_loop()`).
 
         Side effects:
             - Creates `Graphics` and loads sprites and sounds.
@@ -2194,10 +2205,15 @@ class Game():
             resize=resize
         )
 
+        # Developer cheats are only wired up when this is set (via --debug on the command line)
+        self.debug = debug
+
         # Game objects
         self.bats = []
         self.extra_bats = []
         self.balls = []
+        self.bricks_total = 0        # Destructible bricks the current level started with
+        self.bricks_remaining = 0    # ...and how many are still standing (recounted every frame)
         self.bricks = []
         self.lasers = []
         self.hero_ball = None
@@ -2336,9 +2352,33 @@ class Game():
         """
         return int(self.clock.get_fps())
 
+    def cleared_fraction(self) -> float:
+        """
+        How much of the current level's destructible brick field has been cleared.
+
+        Returns:
+            float: 0.0 with every brick still standing, 1.0 when none remain. Uses the per-frame count kept by
+                   `update()`, so it's cheap to call from inside the physics loop.
+        """
+
+        if self.bricks_total <= 0:
+            return 0.0
+        return 1.0 - (self.bricks_remaining / self.bricks_total)
+
+    def count_live_bricks(self) -> int:
+        """
+        Count the destructible bricks still standing on the current level.
+
+        Returns:
+            int: Bricks with lives left that aren't the indestructible metal kind.
+        """
+
+        return sum(1 for brick in self.bricks if 0 < brick.lives < 99)
+
     def target_ball_speed(self, level: int) -> float:
         """
-        The speed the hero ball is served at on a given level, for the current difficulty.
+        The speed the hero ball is served at on a given level, for the current difficulty and how far through
+        the level the player is (see `endgame_speed_boost`).
 
         Args:
             level: Level number starting at 1.
@@ -2348,7 +2388,8 @@ class Game():
         """
 
         base = Game.base_ball_speed[self.difficulty]
-        return base * (Game.level_speed_ramp ** (level - 1)) * self.gfx.scale_ratio
+        boost = 1.0 + Game.endgame_speed_boost * self.cleared_fraction()
+        return base * (Game.level_speed_ramp ** (level - 1)) * boost * self.gfx.scale_ratio
 
     def min_ball_speed(self, level: int) -> float:
         """
@@ -2496,9 +2537,7 @@ class Game():
             self.extra_bats.append(self.bats.pop())
 
         # Delete all balls except the hero ball
-        while len(self.balls) > 1:
-            ball = self.balls.pop()
-            del ball
+        del self.balls[1:]
 
         # Create an empty list of laser beams, and switch laser mode off
         self.lasers = []
@@ -2623,6 +2662,10 @@ class Game():
                 brick.draw(force=True)
                 id += 1
 
+        # Remember how big the destructible field is, so the speed model can tell how far through the level we are
+        self.bricks_total = self.count_live_bricks()
+        self.bricks_remaining = self.bricks_total
+
     def _brick_cascade(self, cascade: list[int]) -> None:
         """
         Destroy a list of bricks and trigger any cascade effects recursively.
@@ -2650,7 +2693,7 @@ class Game():
             # Recurse (which might include destroying other cascading bricks)
             self.kill_a_brick(brick)
 
-    def _add_bonus_ball(self, lives: int | None = 2) -> int:
+    def _add_bonus_ball(self, lives: int | None = 2) -> int | None:
         """
         Introduce a bonus ball from either the bottom-left or bottom-right of the screen.
 
@@ -2658,8 +2701,14 @@ class Game():
             lives: Number of lives to give the bonus ball.
 
         Returns:
-            int: The x coordinate of the ball that was added.
+            int | None: The x coordinate of the ball that was added, or None if the ball limit (`max_balls`) has
+                        been reached and no ball was added.
         """
+
+        # Don't let the screen fill up with balls (levels with lots of metal bricks can keep the "boring" timer
+        # firing for a long time)
+        if len(self.balls) >= Game.max_balls:
+            return None
 
         if randint(0, 1) == 0:
             # Appear from left
@@ -2747,16 +2796,18 @@ class Game():
 
         # Fire bricks kill all bricks around them
         elif brick.type == 6:
+            # Brick ids run left to right along each row, so work in (row, column) terms and only include
+            # neighbours that really are adjacent. (Doing this with plain id +/- 1 arithmetic wrapped around the
+            # row ends: a fire brick in the left column used to take out the right-hand end of the row above.)
             cols = Game.get_num_columns(self.level)
-            id = brick.id
-            # One below and one above
-            cascade = [id - 1, id + 1]
-            # Three to the left
-            cascade.extend(range(id - 1 - cols, id + 2 - cols))
-            # Three to the right
-            cascade.extend(range(id - 1 + cols, id + 2 + cols))
+            row, col = divmod(brick.id, cols)
+            cascade = []
+            for r in (row - 1, row, row + 1):
+                for c in (col - 1, col, col + 1):
+                    if r >= 0 and 0 <= c < cols:
+                        cascade.append(r * cols + c)
 
-            # Run the cascade
+            # Run the cascade (the fire brick's own id is in the list, but it's already dead so it's filtered out)
             self._brick_cascade(cascade)
 
         # Metal bricks are immortal!
@@ -2867,6 +2918,10 @@ class Game():
             return
 
         self.time += dt
+
+        # Keep the brick count fresh for the speed model. Counting once per frame here (rather than on every kill)
+        # also covers bricks removed by cascades and by the debug cheats.
+        self.bricks_remaining = self.count_live_bricks()
 
         self.check_inversion_mode(dt)
         self.check_lasers_mode(dt)
@@ -3001,8 +3056,9 @@ class Game():
         if self.time > self.boring_deadline:
             self.boring_deadline = self.time + Game.boring_timeout
             x = self._add_bonus_ball(lives=3)
-            pan = x / self.gfx.window_width
-            Game.play_stereo_sound(self.bonus_sound, stereo=pan)
+            if x is not None:
+                pan = x / self.gfx.window_width
+                Game.play_stereo_sound(self.bonus_sound, stereo=pan)
 
     def animate_bats(self, dt: float) -> None:
         """
@@ -3127,8 +3183,12 @@ def intro(gfx: Graphics, game: Game, widget: MonitorSelector, image_path: str) -
             "monitor": the monitor selection widget has been clicked.
     """
 
-    # Load the image using OpenCV
+    # Load the image using OpenCV (which returns None rather than raising if the file can't be read)
     image_cv = cv2.imread(image_path)
+    if image_cv is None:
+        print(f"Error loading intro image: {image_path}")
+        pygame.quit()
+        sys.exit()
     image_height, image_width = image_cv.shape[:2]
 
     # Convert from BGR to RGB
@@ -3490,8 +3550,8 @@ def game_loop(game: object, gfx: object):
                             gfx.set_mouse_pos(gfx.mouse_x, gfx.mouse_y, cache=False)
                             pygame.event.set_grab(True)
 
-                    # Debugging cheat...
-                    elif event.key == pygame.K_d:
+                    # Debug cheat (--debug only): D destroys every brick, which skips the level
+                    elif event.key == pygame.K_d and game.debug:
                         for brick in game.bricks:
                             brick.hit(x=0, kill=True)
 
@@ -3502,36 +3562,32 @@ def game_loop(game: object, gfx: object):
                         if game.inverted:
                             gfx.mouse_x = gfx.window_width - gfx.mouse_x
 
-                # More debugging cheats...
-                elif event.type == pygame.MOUSEBUTTONDOWN:
+                elif event.type == pygame.MOUSEBUTTONDOWN and not game.paused:
                     if event.button == 1:
-                        if game.paused:
-                            pass
-                        elif game.serving:
+                        if game.serving:
                             # Left click: launch the waiting hero ball from the bat
                             game.serve()
                         else:
                             # Left click: give all of the balls a bit of a speed kick
                             game.kick_all_balls()
 
-                        # Left click: destroy the brick under the cursor
-                        x, y = gfx.get_mouse_pos(cache=False)
-                        for brick in game.bricks:
-                            if not brick.expired():
-                                bbox = brick.bbox()
-                                if bbox.collidepoint((x, y)):
+                        # Debug cheat (--debug only): a left click also destroys the brick under the pointer.
+                        # Right-click first to make the pointer visible so you can see what you're aiming at.
+                        if game.debug:
+                            x, y = gfx.get_mouse_pos(cache=False)
+                            for brick in game.bricks:
+                                if not brick.expired() and brick.bbox().collidepoint((x, y)):
                                     brick.hit(x, kill=True)
                                     game.kill_a_brick(brick)
-                    elif event.button == 3:
-                        # Right click: no action
-                        pass
-                elif event.type == pygame.MOUSEBUTTONUP:
-                    if event.button == 1:
-                        # Left button released: hide cursor
-                        pygame.mouse.set_visible(False)
-                    elif event.button == 3:
-                        # Right button released: show cursor
+
+                    elif event.button == 3 and game.debug:
+                        # Debug cheat (--debug only): right click shows the pointer for picking out a brick
                         pygame.mouse.set_visible(True)
+
+                elif event.type == pygame.MOUSEBUTTONUP and not game.paused:
+                    if event.button == 1 and game.debug:
+                        # Debug cheat (--debug only): hide the pointer again once the brick has been clicked
+                        pygame.mouse.set_visible(False)
 
             # Simulate the time the previous frame took (nothing happens while paused, and the game clock that all
             # the power-up timers run off stands still too)
@@ -3594,7 +3650,7 @@ def game_loop(game: object, gfx: object):
 
 def menu_loop(args: argparse.Namespace) -> int:
     # Create the initial Game and get a reference to the Graphics object
-    game = Game(monitor=args.monitor, resize=args.resize)
+    game = Game(monitor=args.monitor, resize=args.resize, debug=args.debug)
     gfx = game.gfx
 
     # Initialise a monitor selection widget. Its position is given in reference (1080p) coordinates; `reposition()`
@@ -3627,7 +3683,7 @@ def menu_loop(args: argparse.Namespace) -> int:
                 del game
 
                 # Create new Game and Graphics objects, having selected a different monitor
-                game = Game(monitor=widget.monitor, resize=args.resize)
+                game = Game(monitor=widget.monitor, resize=args.resize, debug=args.debug)
                 gfx = game.gfx
 
                 # The new monitor may be a different size, so re-scale the widget's position and hit box for it
@@ -3658,6 +3714,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                         help="Ratio for down-sizing the graphics for a more retro feel. Default: 1.0")
     parser.add_argument("--monitor", "-m", type=int,
                         help="Index of the monitor to display on (0 is primary).")
+    parser.add_argument("--debug", action="store_true",
+                        help="Enable developer cheats: D destroys every brick; right-click shows the pointer and "
+                             "left-click destroys the brick under it.")
     args = parser.parse_args()
 
     # Initialise pygame
