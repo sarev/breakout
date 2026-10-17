@@ -23,6 +23,15 @@ The intro screen features a rotating rectangular “card” that is perspectivel
 
 **Edge-on optimisation:** when the projected quad is nearly edge-on, the code skips the expensive warp step to avoid aliasing and save time. The skip decision uses a simple threshold on the quad’s projected width/area to detect the near-degenerate case. Frames that are skipped fall back to a cheaper path so the animation remains smooth and visually stable.
 
+# Time base
+
+Everything that moves is expressed in **pixels per second** (scaled for the window via `Graphics.scale_ratio`) and integrated using the real time that elapsed between frames, so the game plays at the same speed whatever frame rate the machine achieves. The frame-rate caps (`GAME_FPS`, `INTRO_FPS`) only limit how often we render.
+
+- **Frame time:** `Game.display()` presents the frame, waits for the next frame slot, and returns the measured frame time (clamped to `MAX_FRAME_DT` so a stall can't teleport objects). The next `Game.update(dt)` simulates exactly that much time.
+- **Physics sub-steps:** `update()` splits each frame into equal sub-steps no longer than `1 / PHYSICS_HZ` seconds (240 Hz, so four per frame at 60 fps). Balls and lasers move and resolve collisions on every sub-step, which stops fast objects skipping straight over bricks or the bat.
+- **Game clock:** `Game.time` is seconds of *simulated* time. It only advances inside `update()`, so it stands still while paused or during a splash. Every gameplay timer — bonus bat expiry, inversion, laser mode, the "boring" timer, the blackout fade — is measured against it rather than wall-clock time or frame counts.
+- **Speed limits:** `Game.min_ball_speed(level)` and `Game.max_ball_speed()` give the clamp range in px/s for the current window. The maximum is a safety net for the physics rather than a gameplay tuning.
+
 # Runtime configuration & CLI
 
 The game exposes a small set of command‑line flags to control display placement and render scale. These options are also reflected in runtime behaviour on the intro screen.
@@ -232,24 +241,24 @@ The ball’s sprite has a pre‑binarised alpha mask (transparent vs opaque). Wh
 
 ## Movement rules that keep play lively
 
-- **Minimum speed floor:** if the ball slows too much, its velocity is scaled up to a threshold derived from the current difficulty and window scale. This prevents dead, drifting shots.  
+- **Speed clamp:** if the ball slows below the level's minimum its velocity is scaled up to it (preventing dead, drifting shots), and if it somehow exceeds the maximum it is scaled back down. Both limits are in pixels per second for the current window scale.  
 - **Shallow‑angle correction:** near‑horizontal travel is nudged to include a minimum vertical component, avoiding endless skimming across the same row.  
 - **Walls:** left, right and top boundaries reflect the ball; the impact sound is stereo panned by X position and volume is scaled by speed to convey energy.  
 - **Bottom of screen:**  
   - **Intro:** the ball simply bounces.  
-  - **Gameplay:** the ball leaves the field and is reintroduced from a random side with a small, randomised velocity. The player's lives decrement each time the 'hero' ball drops off the bottom, and a drop sound communicates the penalty.
+  - **Gameplay:** the ball leaves the field and is reintroduced from a random side, heading up and inwards at a random angle at the level's minimum speed. The player's lives decrement each time the 'hero' ball drops off the bottom, and a drop sound communicates the penalty.
 
 ## Collision principles
 
 ### Movement and wall interactions
 
-The `move(level)` method integrates position, keeps speeds sensible for the current level and difficulty setting, and handles walls and the floor. Outside the intro, a minimum speed is enforced that scales with `level + 1.5`, and we correct very shallow horizontal bounce angles so the ball doesn't get stuck bouncing from left and right.
+The `move(dt, level)` method integrates position over `dt` seconds (one physics sub-step), keeps speeds within the level's limits, and handles walls and the floor. Outside the intro, the speed is clamped to `[Game.min_ball_speed(level), Game.max_ball_speed()]`, and we correct very shallow horizontal bounce angles so the ball doesn't get stuck bouncing from left and right.
 
-The left, right and top walls reflect the ball's velocity, but the bottom of the screen is special: in the intro it bounces back, but during the game it causes the ball to respawn from either side with a small random velocity. For bonus balls, the number of `lives` for that ball is decremented, meaning they can only respawn a couple of times.
+The left, right and top walls reflect the ball's velocity, but the bottom of the screen is special: in the intro it bounces back, but during the game it causes the ball to respawn from either side at the minimum speed. For bonus balls, the number of `lives` for that ball is decremented, meaning they can only respawn a couple of times.
 
 Wall collision and drop sounds are stereo-panned by the `x` coordinate and volume-scaled by the collision speed.
 
-Edge cases worth noting: when `speed < min_speed` we rescale `(vx, vy)` proportionally rather than snapping to constants; in the intro screen, we apply a tiny per-frame damping to let movement energy die away.
+Edge cases worth noting: when clamping we rescale `(vx, vy)` proportionally rather than snapping to constants; in the intro screen, we apply damping (`Game.intro_damping` is the fraction of speed retained per second, raised to the power `dt`) to let movement energy die away.
 
 ### Bat collisions
 
@@ -279,7 +288,7 @@ The bat aims to stay visually clear while keeping its physics predictable. Two v
 
 ## Timed bat fade (last two seconds)
 
-When a bat effect is about to expire, the game fades the bat rather than popping it off abruptly. The fade is implemented by drawing the bat onto a temporary surface and blitting it with an alpha that tracks the time remaining during the final two seconds. The alpha ramps down smoothly to a low non-zero value, which gives the player a readable warning without altering the bat’s geometry or collisions and without it ever becoming full transparent.
+When a bat effect is about to expire, the game fades the bat rather than popping it off abruptly. Expiry is measured against the pausable game clock (`Game.time`), so pausing doesn't eat into a bonus bat's life. The fade is implemented by drawing the bat onto a temporary surface and blitting it with an alpha that tracks the time remaining during the final two seconds. The alpha ramps down smoothly to a low non-zero value, which gives the player a readable warning without altering the bat’s geometry or collisions and without it ever becoming full transparent.
 
 **Why a temp surface?** It avoids re‑authoring multiple sprite variants and keeps the normal draw path intact. Only the per‑frame alpha changes, so performance is stable and artefacts are avoided.
 
@@ -299,13 +308,13 @@ Fast, vertical laser bolts give the player short bursts of precision clearing wi
 
 ## What a laser is
 
-- **Speed (class attribute):** a shared per‑bolt speed set relative to the window height at runtime, so beams feel similarly quick across resolutions.  
+- **Speed (class attribute):** a shared per‑bolt speed in pixels per second, set relative to the window height at runtime, so beams feel similarly quick across resolutions.  
 - **Duration (class attribute):** the number of seconds that the *laser mode* stays active once triggered.
 
 ## How lasers are triggered and emitted
 
-- Breaking a **laser brick** starts (or extends) a timed *laser mode*. Internally a frame counter is increased by `duration × FPS`, so additional laser bricks simply add more time.  
-- While laser mode is active, **each bat emits bolts periodically**. Emission is slightly staggered between bats so the beams feel rhythmic rather than simultaneous. Bolts spawn from the bat’s top and travel straight upwards.  
+- Breaking a **laser brick** starts (or extends) a timed *laser mode*. `Game.laser_remaining` (seconds of game time) is increased by `duration`, so additional laser bricks simply add more time.  
+- While laser mode is active, **each bat emits bolts periodically**: every `Game.laser_period` seconds, with each bat's schedule offset by `Game.laser_stagger` so the beams feel rhythmic rather than simultaneous. Bolts spawn from the bat’s top and travel straight upwards.  
 - A small pool of laser sound effects is used with stereo panning based on the emitting bat’s position.
 
 ## Movement and lifetime
@@ -357,14 +366,14 @@ A small monitor icon appears when multiple displays are available and no monitor
 
 ## Keeping play from going stale
 
-If no brick has been destroyed for a while, the game assumes the rally has gone quiet and **injects a bonus ball** automatically. The timeout is controlled by a fixed `boring_timeout`. When it triggers, a bonus ball enters from a side with a readable audio cue so it can meaningfully re‑energise play.
+If no brick has been destroyed for a while, the game assumes the rally has gone quiet and **injects a bonus ball** automatically. The timeout is controlled by a fixed `boring_timeout`, measured on the game clock (so pausing doesn't count). When it triggers, a bonus ball enters from a side with a readable audio cue so it can meaningfully re‑energise play.
 
 ## Helper animation loops
 
 - **Bats:** a tight loop follows the current mouse position to drive bat movement and **reclaims expired timed bats** back to the spare pool. This keeps active bats accurate with minimal bookkeeping.
 - **Balls:** a companion loop moves every ball, resolves **bat contacts**, then **culls** balls that have exhausted their lives (the hero object is handled carefully so it cannot vanish abruptly). For balls above the lowest brick row it performs **brick checks** and triggers brick destruction effects. Finally it resolves **pairwise ball–ball collisions** so multi‑ball play remains readable and fair.
 
-This ordering is deliberate: movement first, then bat resolution, then bricks, then inter‑ball collisions.
+This ordering is deliberate: movement first, then bat resolution, then bricks, then inter‑ball collisions. `Game.update(dt)` runs the bat loop once per frame and the ball (and laser) loop once per physics sub-step.
 
 ## Adding energy on demand
 

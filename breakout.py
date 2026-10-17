@@ -28,6 +28,63 @@ from random import random, randint, uniform
 from typing import Any, Iterable, Optional, Sequence
 
 
+# ---------------------------------------------------------------------------------------------------------------------
+# Time base
+#
+# All movement in the game is expressed in *pixels per second* (scaled for the current window - see
+# `Graphics.scale_ratio`) and integrated using the real time that elapsed between frames. The game therefore plays at
+# the same speed whatever frame rate the machine actually manages, rather than slowing down when a frame is late.
+#
+# Physics runs in fixed-size sub-steps so that fast-moving objects can't skip straight over thin obstacles
+# ("tunnelling"). Each rendered frame's elapsed time is divided into enough equal sub-steps that no single step is
+# longer than 1 / PHYSICS_HZ seconds; at the maximum ball speed that keeps per-step movement well under a ball radius.
+#
+# Anything that is timed (power-ups, bonus bat expiry, the "boring" timer, the blackout fade) runs off `Game.time`,
+# a clock that only advances while the game is being simulated, so pausing really does pause everything.
+# ---------------------------------------------------------------------------------------------------------------------
+
+# Physics sub-step rate (steps per second). 240 Hz is four sub-steps per frame at 60 fps.
+PHYSICS_HZ = 240
+
+# Longest frame time we are prepared to simulate in one go (seconds). Anything longer - a stall, a splash screen, a
+# debugger pause - is clamped so objects don't teleport across the screen when things get going again.
+MAX_FRAME_DT = 1.0 / 20.0
+
+# Frame rate caps for the game and the intro. These only limit how often we *render*; they no longer have any effect
+# on how fast anything moves.
+GAME_FPS = 60
+INTRO_FPS = 120
+
+
+def frame_time(milliseconds: int) -> float:
+    """
+    Convert the value returned by `pygame.time.Clock.tick()` into a frame time in seconds, clamped to MAX_FRAME_DT.
+
+    Args:
+        milliseconds: Time since the previous tick, as reported by pygame.
+
+    Returns:
+        float: Seconds to simulate for this frame.
+    """
+
+    return min(milliseconds / 1000.0, MAX_FRAME_DT)
+
+
+def substeps(dt: float) -> tuple[int, float]:
+    """
+    Split a frame time into equal fixed-rate physics sub-steps.
+
+    Args:
+        dt: Frame time in seconds.
+
+    Returns:
+        tuple[int, float]: Number of sub-steps to run, and the length of each one in seconds.
+    """
+
+    n = max(1, math.ceil(dt * PHYSICS_HZ))
+    return n, dt / n
+
+
 class MonitorSelector():
     """
     Widget that cycles through available monitors and draws a selectable UI element for choosing the target display.
@@ -305,19 +362,19 @@ class Text():
 
 
 class Laser():
-    # Vertical speed of a laser bolt
-    speed: int = 1
+    # Vertical speed of a laser bolt (pixels per second; set from the window height at start-up)
+    speed: float = 1.0
 
     # Duration of the laser power-up (seconds)
     duration: int = 6
 
     @classmethod
-    def set_speed(cls, speed: int) -> None:
+    def set_speed(cls, speed: float) -> None:
         """
         Set the class-wide laser speed.
 
         Args:
-            speed: Pixels per frame.
+            speed: Pixels per second.
         """
 
         cls.speed = speed
@@ -380,18 +437,18 @@ class Laser():
         bbox = self.bbox()
         surface.blit(self.gfx.background, (bbox.x, bbox.y), bbox)
 
-    def move(self) -> bool:
+    def move(self, dt: float) -> bool:
         """
-        Advance the laser by its vertical velocity.
+        Advance the laser by its vertical velocity over `dt` seconds.
 
-        Side effects:
-            Updates `self.y` by `self.vy`.
+        Args:
+            dt: Time to simulate (seconds). This is normally one physics sub-step, not a whole frame.
 
         Returns:
             bool: True if still on screen, otherwise False to indicate it should be culled.
         """
 
-        self.y += self.vy
+        self.y += self.vy * dt
         return self.y > -self.h2
 
     def check_brick_collision(self, brick: object) -> bool:
@@ -412,14 +469,20 @@ class Laser():
 
 
 class Bat():
+    # How long a bonus bat stays in play once activated (seconds of game time)
+    lifetime: float = 10.0
+
+    # During the last `fade_seconds` of its life a bonus bat is drawn progressively more transparent as a warning
+    fade_seconds: float = 2.0
+
     def __init__(
         self,
         id: int,
         image: pygame.Surface,
         gfx: object,
+        game: object,
         vx: float = 0,
         dx: float = 0,
-        exp: float | None = None,
     ) -> None:
         """
         Create a bat (paddle).
@@ -428,10 +491,9 @@ class Bat():
             id: Identifier for this bat (for UI or logic).
             image: Sprite surface for the bat. Size determines its bbox.
             gfx: Graphics context.
-            vx: Initial horizontal speed in pixels per frame.
+            game: Game context. Supplies the pausable game clock (`game.time`) that bat expiry is measured against.
+            vx: Initial horizontal speed in pixels per second.
             dx: Horizontal offset from the window centre in pixels.
-            exp: Optional expiry duration in seconds. If set, the bat will begin expiring immediately and will
-                 fade in the last two seconds.
         """
 
         def invert_image(image):
@@ -452,18 +514,23 @@ class Bat():
         self.id = id
         self.image = image
         self.gfx = gfx
+        self.game = game
         self.width, self.height = image.get_size()
         self.w2, self.h2 = max(1, self.width // 2), max(1, self.height // 2)
         self.dx = dx                                         # Horizontal delta (offset) for this bat's position (pixels)
         self.x = (gfx.window_width // 2) + dx                # Horizontal centre of bat (pixels)
-        self.vx = vx                                         # Horizontal speed (pixels per frame)
+        self.vx = vx                                         # Horizontal speed (pixels per second)
         self.y = gfx.window_height - int(self.height * 1.3)  # Vertical top edge of bat (pixels)
         self.inv_image = invert_image(self.image)
         self.inverted = False
-        if exp is None:
-            self.expire = None
-        else:
-            self.expire = time.time() + exp
+
+        # Game time at which this bat leaves play. None means it never does (the hero bat). Bonus bats get a
+        # deadline when they are activated via `reset()`.
+        self.expire = None
+
+        # Game time at which this bat next emits a laser beam. Only meaningful while laser mode is active; the
+        # game sets it when laser mode starts (or when the bat joins play during laser mode).
+        self.next_fire = 0.0
 
     def invert(self, force: bool | None = None) -> None:
         """
@@ -507,7 +574,7 @@ class Bat():
             surface: Target surface. Defaults to `self.gfx.screen` if not provided.
 
         Behaviour:
-            - If `expire` is set and remaining time is less than 2 seconds, draws a temporary copy
+            - If `expire` is set and less than `fade_seconds` of game time remain, draws a temporary copy
               with alpha between ~55 and 255.
 
         Returns:
@@ -519,11 +586,13 @@ class Bat():
 
         image = self.image
         if self.expire is not None:
-            remain = max(0, self.expire - time.time())
-            if remain < 2:
-                # Blit the image with some transparency when the bat is expiring within two seconds
+            # Measured in game time, so a paused game doesn't eat into the bat's remaining life
+            remain = max(0.0, self.expire - self.game.time)
+            if remain < Bat.fade_seconds:
+                # Blit the image with some transparency when the bat is about to expire: alpha ramps from 255 down
+                # to 55 over the fade period, so the bat never quite disappears before it goes
                 temp_surface = self.image.convert_alpha()
-                temp_surface.set_alpha(55 + (100 * remain))
+                temp_surface.set_alpha(55 + int(200 * remain / Bat.fade_seconds))
                 image = temp_surface
 
         surface.blit(image, (self.x - self.w2, self.y))
@@ -542,45 +611,47 @@ class Bat():
             surface = self.gfx.screen
         surface.blit(self.gfx.background, (self.x - self.w2, self.y), self.bbox())
 
-    def move(self, x: float) -> None:
+    def move(self, x: float, dt: float) -> None:
         """
         Reposition the bat horizontally relative to an input x (for example, mouse x).
 
         Side effects:
-            - Updates `vx` to the per-frame delta (`new_x - old_x`).
+            - Updates `vx` to the bat's horizontal speed in pixels per second (the distance it just jumped divided
+              by the frame time). Not used for collisions yet, but available for giving the ball some "english".
             - Updates `x` relative to the new centre position.
 
         Args:
             x: Input horizontal position in pixels.
+            dt: Time since the bat was last moved (seconds). Zero is allowed and simply yields `vx == 0`.
         """
 
         x += self.dx
-        self.vx = x - self.x
+        self.vx = (x - self.x) / dt if dt > 0 else 0.0
         self.x = x
 
     def reset(self, x: float) -> None:
         """
-        Reset the bat's expiry to 10 seconds from now and move it to a new x.
+        Activate a bonus bat: give it a fresh lifetime (measured in game time) and move it to a new x.
 
         Args:
             x: New horizontal input position in pixels (pre-offset).
         """
 
-        self.expire = time.time() + 10
-        self.move(x)
+        self.expire = self.game.time + Bat.lifetime
+        self.move(x, 0.0)
 
     def expired(self) -> bool:
         """
-        Check whether the bat's expiry time has elapsed.
+        Check whether the bat's lifetime has elapsed.
 
         Returns:
-            bool: True if expiry is set and the current time is past `expire`, otherwise False.
+            bool: True if expiry is set and the game clock is past `expire`, otherwise False.
         """
 
         if self.expire is None:
             return False
         else:
-            return time.time() > self.expire
+            return self.game.time > self.expire
 
 
 class Brick():
@@ -843,7 +914,7 @@ class Ball():
         x: float,
         y: float,
         vx: float = 0,
-        vy: float = 3,
+        vy: float = 0,
         lives: int | None = 2,
         intro: bool = False,
     ) -> None:
@@ -856,8 +927,8 @@ class Ball():
             game: Game context.
             x: Initial horizontal centre position in pixels.
             y: Initial vertical centre position in pixels.
-            vx: Initial horizontal velocity in pixels per frame.
-            vy: Initial vertical velocity in pixels per frame.
+            vx: Initial horizontal velocity in pixels per second.
+            vy: Initial vertical velocity in pixels per second.
             lives: Number of allowed drops before removal; None means the ball is immortal.
             intro: If True, apply damping to bounces and velocities during intro animation.
         """
@@ -901,8 +972,8 @@ class Ball():
         self.w2, self.h2 = max(1, self.width // 2), max(1, self.height // 2)
         self.x = x              # Horizontal centre of ball (pixels)
         self.y = y              # Vertical centre of ball (pixels)
-        self.vx = vx            # Horizontal speed (pixels per frame)
-        self.vy = vy            # Vertical speed (pixels per frame)
+        self.vx = vx            # Horizontal speed (pixels per second)
+        self.vy = vy            # Vertical speed (pixels per second)
         self.lives = lives      # Number of times this ball can fall (None means immortal)
         self.intro = intro
 
@@ -976,34 +1047,38 @@ class Ball():
 
         self.vx, self.vy = self.vx * ratio, self.vy * ratio
 
-    def move(self, level: int = 1) -> None:
+    def move(self, dt: float, level: int = 1) -> None:
         """
-        Integrate position, enforce minimum speed, handle wall and floor interactions.
+        Integrate position over `dt` seconds, enforce speed limits, handle wall and floor interactions.
 
         Args:
-            level: Difficulty level used to scale the minimum speed threshold.
+            dt: Time to simulate (seconds). This is normally one physics sub-step, not a whole frame.
+            level: Current level, used to look up the minimum ball speed.
 
         Behaviour:
-            - Applies a minimum speed when not in intro.
-            - Updates `(x, y)` by `(vx, vy)` and optionally damps velocities in intro.
+            - Clamps the speed to the level's [minimum, maximum] range when not in intro.
+            - Updates `(x, y)` by `(vx, vy) * dt` and applies gentle damping to velocities in intro.
             - Reflects off left, right, and top walls; plays a wall-hit sound.
             - If below the bottom:
                 * In intro: reflect and continue.
-                * Otherwise: re-enter from a side with randomised velocity, decrement `lives` if not None, and play drop sound.
+                * Otherwise: re-enter from a side at the minimum speed, decrement `lives` if not None, and play drop sound.
         """
 
-        def enforce_minimum_speed(min_speed=2):
-            """Ensure the ball's speed is not below the minimum speed (for the current scaling ratio)."""
+        def clamp_speed(min_speed: float, max_speed: float) -> None:
+            """Keep the ball's speed within [min_speed, max_speed] (pixels per second) without changing its direction."""
 
             speed = math.hypot(self.vx, self.vy)
-            min_speed = min_speed * self.gfx.scale_ratio
             if speed == 0:
-                self.vx = 2
+                # A stationary ball would never come back, so send it straight up at the minimum speed
+                self.vx, self.vy = 0.0, -min_speed
             elif speed < min_speed:
-                # Scale the velocity to have the desired minimum speed
                 factor = min_speed / speed
-                self.vx = int(round(self.vx * factor)) * self.gfx.scale_ratio
-                self.vy = int(round(self.vy * factor)) * self.gfx.scale_ratio
+                self.vx *= factor
+                self.vy *= factor
+            elif speed > max_speed:
+                factor = max_speed / speed
+                self.vx *= factor
+                self.vy *= factor
 
         def adjust_direction(angle_threshold=0.35):
             """Adjust very horizontal motion to be more vertical."""
@@ -1019,16 +1094,23 @@ class Ball():
             pan = self.x / self.gfx.window_width
             Game.play_stereo_sound(self.game.wall_hit_sound, pan, volume=vol)
 
-        # When we're not in the intro, we don't allow balls to go too slowly
-        if not self.intro:
-            enforce_minimum_speed(level + 1.5)
+        # Smallest vertical speed we'll tolerate after a side-wall bounce, so a ball can't skate along a wall for ever
+        min_vertical = 60.0 * self.gfx.scale_ratio
 
-        # Add the horizontal and vertical velocities to the ball position
-        self.x += self.vx
-        self.y += self.vy
+        # When we're not in the intro, we don't allow balls to go too slowly (or dangerously fast)
+        if not self.intro:
+            min_speed = self.game.min_ball_speed(level)
+            clamp_speed(min_speed, self.game.max_ball_speed())
+
+        # Integrate the velocity over this step
+        self.x += self.vx * dt
+        self.y += self.vy * dt
         if self.intro:
-            self.vx = self.vx * 0.999
-            self.vy = self.vy * 0.999
+            # Intro balls gradually lose energy, like a fidget toy. `intro_damping` is the fraction of speed
+            # retained per second, so raising it to the power `dt` gives the right amount for any step length.
+            retain = Game.intro_damping ** dt
+            self.vx *= retain
+            self.vy *= retain
 
         # In the intro, bounces aren't perfectly elastic
         damp = 0.7 if self.intro else 1.0
@@ -1039,7 +1121,7 @@ class Ball():
             self.x = self.w2
             self.vx = -self.vx * damp
             if self.vy == 0:
-                self.vy = 1
+                self.vy = min_vertical
             adjust_direction()
             play_wall_hit_sound()
 
@@ -1048,7 +1130,7 @@ class Ball():
             self.x = self.gfx.window_width - self.w2
             self.vx = -self.vx * damp
             if self.vy == 0:
-                self.vy = 1
+                self.vy = min_vertical
             adjust_direction()
             play_wall_hit_sound()
 
@@ -1065,17 +1147,22 @@ class Ball():
                 self.vy = -self.vy * damp
                 play_wall_hit_sound()
             else:
-                # Ball fell off bottom of window - re-animate it coming in from an edge
+                # Ball fell off the bottom of the window - re-animate it coming in from one side, heading up and
+                # inwards at a random angle, at the level's minimum speed. (It used to re-enter at a crawl and rely
+                # on the minimum-speed rule to pick it up, which is part of why a lost ball felt so sluggish.)
+                angle = math.radians(uniform(20, 70))  # Measured from straight up
+                vx = math.sin(angle) * min_speed
+                vy = -math.cos(angle) * min_speed
                 if randint(0, 1) == 0:
-                    # Left edge
+                    # Left edge, heading right
                     self.x = 0
-                    self.vx = randint(1, 4) * self.gfx.scale_ratio
+                    self.vx = vx
                 else:
-                    # Right edge
+                    # Right edge, heading left
                     self.x = self.gfx.window_width - 1
-                    self.vx = -randint(1, 4) * self.gfx.scale_ratio
+                    self.vx = -vx
                 self.y = self.gfx.window_height * 0.8
-                self.vy = -randint(1, 4) * self.gfx.scale_ratio
+                self.vy = vy
 
                 if self.lives is not None and self.lives > 0:
                     self.lives -= 1
@@ -1161,10 +1248,12 @@ class Ball():
         pan = self.x / self.gfx.window_width
         Game.play_stereo_sound(self.game.bat_hit_sound, stereo=pan, volume=vol)
 
-        # Add a bit of random peturbation to the velocity vector (bias towards accelerating upwards)
-        self.vx += (random() - 0.5) * self.gfx.scale_ratio
+        # Add a bit of random perturbation to the velocity vector (bias towards accelerating upwards). The nudges are
+        # in pixels per second at the reference resolution, scaled to this window: up to +/-30 px/s sideways and up
+        # to 60 px/s extra upward speed, divided by (4 - difficulty) so harder games speed up faster.
+        self.vx += (random() - 0.5) * 60.0 * self.gfx.scale_ratio
         scale = 4 - self.game.difficulty
-        self.vy -= (random() * self.gfx.scale_ratio) / scale
+        self.vy -= (random() * 60.0 * self.gfx.scale_ratio) / scale
 
         return True
 
@@ -1307,7 +1396,9 @@ class Ball():
             other.vx += vn * nx * damp
             other.vy += vn * ny * damp
 
-            vol = min(8, math.sqrt(abs(vn))) / 8
+            # Volume follows the closing speed. `vn` is in pixels per second; dividing by 60 keeps the same
+            # loudness curve the game had when velocities were in pixels per frame.
+            vol = min(8.0, math.sqrt(abs(vn) / 60.0)) / 8.0
             pan = self.x / self.gfx.window_width
             Game.play_stereo_sound(self.game.ball_hit_sound, stereo=pan, volume=vol)
 
@@ -1396,6 +1487,9 @@ class Graphics():
         self.trail_sfc = pygame.Surface(screen_size, pygame.SRCALPHA)
         # self.trail_sfc.set_alpha(None)      # ensure per-pixel alpha, not per-surface alpha
         self.trail_sfc.fill((0, 0, 0, 0))   # make fully transparent
+
+        # Fractional trail fade carried over between frames (see `fade_trails()`)
+        self.trail_fade_acc = 0.0
 
         # Set the name of the window
         pygame.display.set_caption("Breakout")
@@ -1598,6 +1692,26 @@ class Graphics():
         # Apply the darkening effect to our background image
         self.darken_screen(self.background, 130)
 
+    def fade_trails(self, dt: float, rate: float = 600.0) -> None:
+        """
+        Fade the glowing ball trails towards transparent.
+
+        Args:
+            dt: Time since the last fade (seconds).
+            rate: Alpha units (0..255) to subtract per second. 600 is the game's rate; the intro uses a faster one.
+
+        Notes:
+            The fade is a whole-number alpha subtraction across the trail surface, so the fractional part of
+            `rate * dt` is carried over to the next frame. That keeps the fade rate steady at any frame rate
+            instead of rounding it away on fast machines.
+        """
+
+        self.trail_fade_acc += rate * dt
+        fade = int(self.trail_fade_acc)
+        if fade > 0:
+            self.trail_fade_acc -= fade
+            self.trail_sfc.fill((0, 0, 0, min(255, fade)), special_flags=pygame.BLEND_RGBA_SUB)  # RGB unchanged, alpha -= fade
+
     def darken_screen(self, screen: pygame.Surface, alpha: int | None = None) -> None:
         """
         Darken a surface by blitting a black overlay with the given opacity.
@@ -1734,6 +1848,27 @@ class Game():
 
     # Number of seconds of no brick kills before we chuck a bonus ball in
     boring_timeout = 10
+
+    # Laser mode emission cadence: each bat fires one beam every `laser_period` seconds, with successive bats
+    # offset by `laser_stagger` seconds so the beams feel rhythmic rather than simultaneous
+    laser_period = 0.5
+    laser_stagger = 4.0 / 60.0
+
+    # Rate at which the blackout (black hole brick) effect darkens and then clears, in alpha units per second
+    blackout_rate = 30.0
+
+    # Fraction of its speed an intro ball retains after one second of drifting (simulated friction)
+    intro_damping = 0.887
+
+    # Ball speed limits, in pixels per second at the 1080p reference resolution (multiplied by the window scale
+    # ratio at run time, see `min_ball_speed()` / `max_ball_speed()`). The minimum stops balls drifting about
+    # uselessly; the maximum is only a safety net that keeps the physics stable and is deliberately generous.
+    #
+    # NOTE: the minimum is a straight conversion of the old per-frame value, (3 * level + 1.5) px/frame at 60 fps.
+    # The proper speed model (a target speed per difficulty with a gentle ramp per level) is still to come.
+    min_speed_base = 90.0
+    min_speed_per_level = 180.0
+    max_speed_base = 2400.0
 
     # The following tables define which brick types go where in each level
     #
@@ -1889,32 +2024,32 @@ class Game():
             channel.set_volume(left_vol, right_vol)
 
     @classmethod
-    def get_next_alpha(cls, alpha: float | None) -> float | None:
+    def get_next_alpha(cls, alpha: float | None, dt: float) -> float | None:
         """
         Step a fade alpha toward darkness or light, with a wrap at -300 -> 255.
 
         Args:
-            alpha: Current alpha. Negative values continue decreasing toward -300.
-                   Non-negative values step down by 0.5 toward 0. None halts fading.
+            alpha: Current alpha. Negative values continue decreasing toward -300 (getting darker; the drawing code
+                   uses the absolute value, capped at 255). Non-negative values step down toward 0 (getting lighter).
+                   None halts fading.
+            dt: Time to advance the fade by (seconds). The fade moves `blackout_rate` alpha units per second.
 
         Returns:
-            float | None: Next alpha, 255 at the -300 wrap, or None when the fade completes.
+            float | None: Next alpha, 255 once the -300 point is reached, or None when the fade completes.
         """
 
         # While -ve, we're getting darker, while +ve, we're getting lighter
         #
-        # Run all the way down to -300, then fade straight back from 255 to 0.
-        if alpha is not None:
-            if alpha < 0:
-                if alpha == -300:
-                    return 255
-                else:
-                    return alpha - 0.5
-            else:
-                if alpha < 0.5:
-                    return None
-                else:
-                    return alpha - 0.5
+        # Run all the way down to -300 (which holds the screen fully black for a while, since the drawn alpha is
+        # capped at 255), then fade straight back from 255 to 0.
+        if alpha is None:
+            return None
+
+        alpha -= Game.blackout_rate * dt
+        if alpha <= -300:
+            return 255.0
+        if 0 <= alpha < 0.5:
+            return None
         return alpha
 
     def __init__(self, monitor: int | None = 0, resize: float = 1.0) -> None:
@@ -1962,24 +2097,34 @@ class Game():
         self.win_sound = None
         self._load_sounds(path=Game.sounds_path, brick_types=Game.num_brick_types)
 
-        Laser.set_speed(self.gfx.window_height // 32)
+        # Laser bolts cross the full window height in a little over half a second (this was `height // 32` pixels
+        # per frame at 60 fps)
+        Laser.set_speed(self.gfx.window_height * 1.875)
+
+        # The game clock: seconds of *simulated* time. It only advances inside `update()`, so it stands still while
+        # the game is paused or a splash screen is showing. Every gameplay timer is measured against it.
+        self.time = 0.0
+
+        # How long the most recently rendered frame took (seconds); this is what the next `update()` simulates
+        self.frame_dt = 1.0 / GAME_FPS
 
         # Create bat instances
-        hero_bat = Bat(0, self.gfx.bat_img, self.gfx)
+        hero_bat = Bat(0, self.gfx.bat_img, self.gfx, self)
         self.bats = [hero_bat]
         self.extra_bats = []
         offset = [0, -1, 1, -2, 2, -3, 3]
         for idx in range(1, 7):
             dx = offset[idx] * hero_bat.width
-            bat = Bat(idx, self.gfx.bonus_bat_img, self.gfx, dx=dx)
+            bat = Bat(idx, self.gfx.bonus_bat_img, self.gfx, self, dx=dx)
             self.extra_bats.append(bat)
 
         # Initialise other important variables required in the game loops
         self.running = True
         self.paused = False
         self.dark_alpha = 0
-        self.inversion = 0
-        self.laser_count = 0
+        self.inversion_remaining = 0.0   # Seconds of control inversion left (0 = not inverted)
+        self.laser_remaining = 0.0       # Seconds of laser mode left (0 = lasers off)
+        self.boring_deadline = 0.0       # Game time at which we add a bonus ball if nothing has been destroyed
         self.clock = pygame.time.Clock()
         self.lowest_brick = 0
 
@@ -2002,7 +2147,6 @@ class Game():
         self._level = None
         self._difficulty = 0
         self._frame = 0
-        self.last_kill = 0
         self.reset()
 
         # Create the text overlay objects (lives remaining and current level)
@@ -2049,14 +2193,47 @@ class Game():
     def level(self, value: int):
         self._level = int(value)
 
+    @property
+    def inverted(self) -> bool:
+        """True while the player's controls are reversed."""
+
+        return self.inversion_remaining > 0
+
     def get_fps(self) -> int:
         """
         Get the current frame rate.
 
         Returns:
             int: Smoothed frames per second over recent frames (as an integer).
+
+        Notes:
+            For display and debugging only. Nothing in the game is timed by this value any more: timers run off
+            `self.time` and motion off `frame_dt`.
         """
         return int(self.clock.get_fps())
+
+    def min_ball_speed(self, level: int) -> float:
+        """
+        The slowest a ball is allowed to travel on a given level.
+
+        Args:
+            level: Level number starting at 1.
+
+        Returns:
+            float: Speed in pixels per second, scaled for this window.
+        """
+
+        return (Game.min_speed_per_level * level + Game.min_speed_base) * self.gfx.scale_ratio
+
+    def max_ball_speed(self) -> float:
+        """
+        The fastest a ball is ever allowed to travel (a safety limit for the physics, not a gameplay tuning).
+
+        Returns:
+            float: Speed in pixels per second, scaled for this window.
+        """
+
+        return Game.max_speed_base * self.gfx.scale_ratio
 
     def reset(self, level: int = 1) -> None:
         """
@@ -2073,6 +2250,7 @@ class Game():
         """
 
         self.level = level
+        self.paused = False
 
         # Set the hero ball lives to the starting value
         bonus_lives = 2 - self.difficulty
@@ -2119,21 +2297,22 @@ class Game():
         self.hero_ball.x = middle
         self.hero_ball.y = self.bats[0].y - self.hero_ball.height
 
-        # Initialise the hero ball's velocity
-        vx = randint(-2, 2) * self.gfx.scale_ratio
-        vy = -randint(2, 4) * (self.level + 1)
-        vy -= 2 - self.difficulty
-        self.hero_ball.vx, self.hero_ball.vy = vx, vy * self.gfx.scale_ratio
+        # Serve the hero ball: a slight random sideways drift and an upward speed that grows with the level and
+        # the difficulty. Values are pixels per second at the reference resolution, scaled to this window.
+        # (A straight x60 conversion of the old per-frame serve; the proper speed model is still to come.)
+        vx = randint(-2, 2) * 60.0
+        vy = -(randint(2, 4) * (self.level + 1) + (2 - self.difficulty)) * 60.0
+        self.hero_ball.vx, self.hero_ball.vy = vx * self.gfx.scale_ratio, vy * self.gfx.scale_ratio
 
-        # Start at frame zero and set the last brick kill time to now
+        # Start at frame zero and give the player the full "boring" timeout before a bonus ball appears
         self.frame = 0
-        self.last_kill = time.time() + Game.boring_timeout
+        self.boring_deadline = self.time + Game.boring_timeout
 
         # We're not darkening the screen at the moment
         self.dark_alpha = None
 
         # We're not inverted
-        self.inversion = 0
+        self.inversion_remaining = 0.0
         for bat in self.bats + self.extra_bats:
             bat.restore()
 
@@ -2146,9 +2325,9 @@ class Game():
             ball = self.balls.pop()
             del ball
 
-        # Create an empty list of laser beams
+        # Create an empty list of laser beams, and switch laser mode off
         self.lasers = []
-        self.laser_count = 0
+        self.laser_remaining = 0.0
 
     def _load_sounds(self, path: str, brick_types: int) -> None:
         """
@@ -2197,17 +2376,18 @@ class Game():
         Map a 2D velocity vector to a scalar volume in [0.0, 1.0].
 
         Args:
-            vx: Horizontal velocity in pixels per frame.
-            vy: Vertical velocity in pixels per frame.
+            vx: Horizontal velocity in pixels per second.
+            vy: Vertical velocity in pixels per second.
 
         Returns:
             float: Volume proportional to speed, capped at 1.0 using a scale factor
                    derived from `gfx.scale_ratio`.
         """
 
-        # Given a velocity, calculate the sound volume, in the range 0.0 - 1.0
+        # Given a velocity, calculate the sound volume, in the range 0.0 - 1.0. Full volume is reached at
+        # 3000 px/s at the reference resolution (the old 50 px/frame at 60 fps).
         vn = vx * vx + vy * vy
-        factor = 50 * self.gfx.scale_ratio
+        factor = 3000.0 * self.gfx.scale_ratio
         return min(factor, math.sqrt(vn)) / factor
 
     def create_bricks(self) -> None:
@@ -2368,6 +2548,8 @@ class Game():
                 self.extra_bats.sort(key=lambda obj: obj.id)
                 bat = self.extra_bats.pop(0)
                 bat.reset(self.gfx.mouse_x)
+                # If lasers are already firing, slot the new bat into the emission rhythm behind the others
+                bat.next_fire = self.time + len(self.bats) * Game.laser_stagger
                 self.bats.append(bat)
 
         # White bricks give an extra life
@@ -2381,12 +2563,13 @@ class Game():
         # Yellow bricks temporarily reverse the player controls
         elif brick.type == 5:
             # If we're about to enter inversion mode...
-            if self.inversion == 0:
+            if not self.inverted:
                 # Reflect the mouse pointer to the opposite side of the screen
                 x, y = self.gfx.get_mouse_pos(cache=False)
                 self.gfx.set_mouse_pos(self.gfx.window_width - x, y)
 
-            self.inversion = self.get_fps() * Game.inversion_seconds
+            # Another yellow brick while already inverted restarts the clock rather than stacking
+            self.inversion_remaining = float(Game.inversion_seconds)
 
             for bat in self.bats + self.extra_bats:
                 bat.invert(force=True)
@@ -2409,12 +2592,16 @@ class Game():
         elif brick.type == 7:
             return
 
-        # Laser bricks restart (or increase) the laser shooting duration
+        # Laser bricks start (or extend) the laser shooting duration
         elif brick.type == 8:
-            duration = Laser.duration * self.get_fps()
-            self.laser_count += duration
+            if self.laser_remaining <= 0:
+                # Laser mode is just starting: schedule each bat's first beam, slightly staggered
+                for idx, bat in enumerate(self.bats):
+                    bat.next_fire = self.time + idx * Game.laser_stagger
+            self.laser_remaining += Laser.duration
 
-        self.last_kill = time.time() + Game.boring_timeout
+        # Something was destroyed, so the player isn't bored: push the bonus-ball deadline back
+        self.boring_deadline = self.time + Game.boring_timeout
 
     def draw_all_objects(self) -> bool:
         """
@@ -2432,15 +2619,16 @@ class Game():
         # Blend the glowing trails over the background
         self.gfx.screen.blit(self.gfx.trail_sfc, (0, 0))
 
-        # Draw all of the HUD and objects in a sensible order
+        # Draw all of the HUD and objects in a sensible order. Bricks are drawn exactly once: each draw of an
+        # exploding brick advances its animation, so drawing them twice ran the explosions at double speed.
         self.lives_text.draw()
         self.level_text.draw()
-        self.gfx.draw_objects(self.bricks)
+        bricks_remaining = self.gfx.draw_objects(self.bricks)
         self.gfx.draw_objects(self.lasers)
         self.gfx.draw_objects(self.balls)
         self.gfx.draw_objects(self.bats)
 
-        return self.gfx.draw_objects(self.bricks) == 0
+        return bricks_remaining == 0
 
     def undraw_all_objects(self) -> None:
         """
@@ -2458,53 +2646,99 @@ class Game():
         # self.lives_text.undraw()
         # self.level_text.undraw()
 
-    def display(self, fps: int = 60):
+    def display(self, fps: int = GAME_FPS) -> float:
         """
-        Update the display with the latest frame.
+        Present the latest frame, wait for the next frame slot, and measure how long the frame took.
 
         Args:
-            fps: Maximum frame rate.
+            fps: Maximum frame rate (a render cap only; it has no effect on game speed).
+
+        Returns:
+            float: The measured frame time in seconds (clamped to MAX_FRAME_DT). This is also stored in
+                   `self.frame_dt` and is what the next `update()` should simulate.
         """
+
         self.gfx.display.blit(self.gfx.screen, (0, 0))
-        self.dark_alpha = Game.get_next_alpha(self.dark_alpha)
         self.gfx.darken_screen(self.gfx.display, self.dark_alpha)
         pygame.display.flip()
 
-        # After each frame, we do a liner fade of the glowing trails (towards transparent)
-        fade = 10  # 0..255 to subtract this frame
-        self.gfx.trail_sfc.fill((0, 0, 0, fade), special_flags=pygame.BLEND_RGBA_SUB)  # RGB unchanged, alpha -= fade
-
-        # Increment the frame counter
+        # Cap the frame rate and find out how long this frame really took
+        dt = frame_time(self.clock.tick(fps))
+        self.frame_dt = dt
         self.frame += 1
 
-        # Cap the frame rate to 60 frames per second
-        self.clock.tick(fps)
+        # Advance the blackout fade. It's a gameplay hazard, so it holds still while the game is paused.
+        if not self.paused:
+            self.dark_alpha = Game.get_next_alpha(self.dark_alpha, dt)
 
-    def check_inversion_mode(self) -> None:
+        # The glowing trails are purely cosmetic, so they keep fading even while paused
+        self.gfx.fade_trails(dt)
+
+        return dt
+
+    def update(self, dt: float) -> None:
+        """
+        Advance the whole simulation by `dt` seconds. Does nothing while the game is paused.
+
+        Args:
+            dt: Frame time to simulate (seconds), normally `self.frame_dt` from the previous `display()`.
+
+        Behaviour:
+            - Advances the game clock (`self.time`).
+            - Runs the once-per-frame bookkeeping: timed effects and bat positions. The bat simply follows the
+              mouse, so there's nothing to be gained from sub-stepping it.
+            - Integrates everything that moves under its own steam (balls, lasers) in fixed physics sub-steps,
+              resolving collisions after every step so fast objects can't tunnel through thin ones.
+            - Finally checks whether play has gone stale.
+        """
+
+        if self.paused:
+            return
+
+        self.time += dt
+
+        self.check_inversion_mode(dt)
+        self.check_lasers_mode(dt)
+        self.animate_bats(dt)
+
+        n, h = substeps(dt)
+        for _ in range(n):
+            self.move_lasers(h)
+            self.animate_balls(h)
+
+        self.check_boring()
+
+    def check_inversion_mode(self, dt: float) -> None:
         """
         Update the temporary control inversion effect and play tick/restore sounds.
 
+        Args:
+            dt: Time to advance by (seconds).
+
         Behaviour:
-            - Plays a tick sound every 120 frames; plays a restore sound on the last tick.
-            - Decrements `inversion` counter; when it reaches 0, restores bats and flips the mouse position to
+            - Plays a tick sound as each whole second of inversion passes (including one as it starts), and the
+              restore sound instead when one second remains.
+            - Counts `inversion_remaining` down; when it reaches 0, restores bats and flips the mouse position to
               avoid a lateral jump.
         """
 
-        if self.inversion > 0:
-            fps = 120 if self.get_fps() == 120 else 60
-            if (self.inversion % fps) == 0:
+        if self.inversion_remaining > 0:
+            before = self.inversion_remaining
+            after = max(0.0, before - dt)
+            self.inversion_remaining = after
+
+            # Did this step cross a whole-second boundary (6 -> 5, 5 -> 4, ... 1 -> 0)?
+            if math.floor(before) != math.floor(after) and after > 0:
                 pan = self.gfx.mouse_x / self.gfx.window_width
-                if self.inversion == fps:
+                if math.floor(after) == 0:
                     # Play this only one second before restoration
                     Game.play_stereo_sound(self.restore_sound, stereo=pan)
                 else:
                     # Play each second during inversion mode
                     Game.play_stereo_sound(self.tick_sound, stereo=pan)
 
-            self.inversion -= 1
-
             # If we're exiting inversion mode...
-            if self.inversion == 0:
+            if after == 0:
                 # Restore all of the bats
                 for bat in self.bats + self.extra_bats:
                     bat.restore()
@@ -2513,23 +2747,22 @@ class Game():
                 x, y = self.gfx.get_mouse_pos(cache=False)
                 self.gfx.set_mouse_pos(self.gfx.window_width - x, y)
 
-    def check_lasers_mode(self) -> None:
+    def move_lasers(self, dt: float) -> None:
         """
-        Update active laser beams, handle brick collisions, and emit new beams while active.
+        Advance active laser beams by one physics step and resolve their brick collisions.
+
+        Args:
+            dt: Time to simulate (seconds); normally one physics sub-step.
 
         Behaviour:
-            - Moves beams, removes those off-screen, and checks collisions against bricks.
-            - On brick hit, applies damage and triggers kill effects if needed.
-            - While `laser_count > 0`, emits beams from active bats on staggered frames, and plays a laser sound
-              per emission. Decrements `laser_count`.
+            - Moves beams and removes those that have left the screen.
+            - A beam that hits a brick damages it (triggering kill effects if it's destroyed) and is removed.
         """
 
-        # Are we in 'lasers' mode?
         alive = []
 
-        # Move existing laser beams upwards
         for laser in self.lasers:
-            if laser.move():
+            if laser.move(dt):
                 # Has this beam collided with an alive brick?
                 for brick in self.bricks:
                     if not brick.expired() or brick.lives == 99:
@@ -2540,25 +2773,47 @@ class Game():
                             laser = None
                             break
 
-                # If the mean is still going, add it to the 'alive' list
+                # If the beam is still going, add it to the 'alive' list
                 if laser is not None:
                     alive.append(laser)
 
         # Update our list of alive laser beams
         self.lasers = alive
 
-        # Are we still emitting laser beams?
-        if self.laser_count > 0:
-            # Each active bat emits at a slightly different frame offset
+    def check_lasers_mode(self, dt: float) -> None:
+        """
+        Emit new laser beams while laser mode is active, and count the mode down.
+
+        Args:
+            dt: Time to advance by (seconds).
+
+        Behaviour:
+            - While `laser_remaining > 0`, each active bat fires whenever the game clock passes its `next_fire`
+              time, then reschedules itself `laser_period` later. Bats are staggered when the mode starts (see
+              `kill_a_brick`), which gives the rhythmic feel.
+            - Plays a (randomly chosen) laser sound per emission.
+        """
+
+        if self.laser_remaining > 0:
+            # Count the mode down first, so a beam scheduled for the very end of the mode doesn't sneak out on a
+            # floating-point residue after the time is really up
+            self.laser_remaining = max(0.0, self.laser_remaining - dt)
+            if self.laser_remaining < 1e-6:
+                self.laser_remaining = 0.0
+                return
+
             for idx, bat in enumerate(self.bats):
-                if self.frame % 30 == idx * 4:
+                if self.time >= bat.next_fire:
                     image = self.gfx.blue_laser_img if idx == 0 else self.gfx.green_laser_img
                     laser = Laser(image, self.gfx, bat.x, bat.y + bat.h2)
                     self.lasers.append(laser)
                     rnd = randint(0, 2)
                     pan = bat.x / self.gfx.window_width
                     Game.play_stereo_sound(self.laser_sounds[rnd], stereo=pan)
-            self.laser_count -= 1
+
+                    # Schedule the next beam. If we've fallen behind (a very long frame) don't try to catch up
+                    # with a burst of beams - just carry on from now.
+                    bat.next_fire = max(bat.next_fire + Game.laser_period, self.time)
 
     def check_boring(self) -> None:
         """
@@ -2566,21 +2821,23 @@ class Game():
         ball into play, and give it more lives than the normal bonus balls.
         """
 
-        now = time.time()
-        if now > self.last_kill:
-            self.last_kill = now + Game.boring_timeout
+        if self.time > self.boring_deadline:
+            self.boring_deadline = self.time + Game.boring_timeout
             x = self._add_bonus_ball(lives=3)
             pan = x / self.gfx.window_width
             Game.play_stereo_sound(self.bonus_sound, stereo=pan)
 
-    def animate_bats(self) -> None:
+    def animate_bats(self, dt: float) -> None:
         """
         Move bats to the current mouse x position and recycle expired bonus bats.
+
+        Args:
+            dt: Frame time (seconds), used to work out each bat's speed.
         """
 
         lost = []
         for bat in self.bats:
-            bat.move(self.gfx.mouse_x)
+            bat.move(self.gfx.mouse_x, dt)
             if bat.expired():
                 lost.append(bat)
 
@@ -2589,9 +2846,12 @@ class Game():
             self.bats.remove(bat)
             self.extra_bats.append(bat)
 
-    def animate_balls(self) -> None:
+    def animate_balls(self, dt: float) -> None:
         """
-        Advance balls, resolve collisions with bats/bricks/other balls, and cull lost ones.
+        Advance balls by one physics step, resolve collisions with bats/bricks/other balls, and cull lost ones.
+
+        Args:
+            dt: Time to simulate (seconds); normally one physics sub-step.
 
         Behaviour:
             - Calls `move()` on each ball with current level.
@@ -2606,7 +2866,7 @@ class Game():
 
         for ball in self.balls:
             # Move the ball and see if it hit a bat
-            ball.move(self.level)
+            ball.move(dt, self.level)
             for bat in self.bats:
                 ball.check_bat_collision(bat)
 
@@ -2750,6 +3010,11 @@ def intro(gfx: Graphics, game: Game, widget: MonitorSelector, image_path: str) -
         warped = cv2.warpPerspective(image, matrix, (gfx.window_width, gfx.window_height))
         return warped
 
+    # Rotation rates for the card, in degrees per second (the old per-frame increments at 120 fps)
+    pitch_rate = 20.0
+    yaw_rate = 40.0
+    roll_rate = 10.0
+
     intro_balls = []
     for idx in range(15):
         intro_ball = Ball(
@@ -2759,8 +3024,9 @@ def intro(gfx: Graphics, game: Game, widget: MonitorSelector, image_path: str) -
             game,
             randint(0, gfx.window_width - 1),
             randint(0, gfx.window_height - 1),
-            vx=randint(-5, 5) * gfx.scale_ratio,
-            vy=randint(-5, 5) * gfx.scale_ratio,
+            # Starting velocities of up to 600 px/s at the reference resolution
+            vx=randint(-5, 5) * 120.0 * gfx.scale_ratio,
+            vy=randint(-5, 5) * 120.0 * gfx.scale_ratio,
             lives=1,
             intro=True
         )
@@ -2797,9 +3063,11 @@ def intro(gfx: Graphics, game: Game, widget: MonitorSelector, image_path: str) -
     messages.append(Text(gfx, game, "Click or press any key to continue", Graphics.colours['presskey'], x, gfx.window_height * 0.46, size=60, alpha=200))
     title = messages[0]
 
-    # Main intro loop
+    # Main intro loop. `dt` is the time the previous frame took (a sensible guess for the first one) and `elapsed`
+    # is how long the intro has been running, which drives the pulsing title colour.
     more = True
-    game.frame = 0
+    dt = 1.0 / INTRO_FPS
+    elapsed = 0.0
     while more:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -2824,17 +3092,21 @@ def intro(gfx: Graphics, game: Game, widget: MonitorSelector, image_path: str) -
 
                 more = False
 
-        # Move all of the balls
+        # Move all of the balls (in physics sub-steps, same as the game, so a slow machine doesn't let them tunnel)
+        n, h = substeps(dt)
         for ball in intro_balls:
             if ball != intro_hero_ball:
-                ball.move()
+                for _ in range(n):
+                    ball.move(h)
             if ball.lives < 1:
                 ball.lives = 1
 
-        # Control the hero ball with the mouse, calculate the velocity vector, and update our cached mouse coordinates
+        # Control the hero ball with the mouse. Its velocity (pixels per second) is how far the mouse moved this
+        # frame divided by the frame time, so flicking it into the other balls gives a frame-rate independent shove.
         x, y = gfx.get_mouse_pos(cache=False)
         intro_hero_ball.x, intro_hero_ball.y = x, y
-        intro_hero_ball.vx, intro_hero_ball.vy = x - gfx.mouse_x, y - gfx.mouse_y
+        if dt > 0:
+            intro_hero_ball.vx, intro_hero_ball.vy = (x - gfx.mouse_x) / dt, (y - gfx.mouse_y) / dt
         gfx.mouse_x, gfx.mouse_y = x, y
 
         # Handle balls colliding with each other
@@ -2842,11 +3114,10 @@ def intro(gfx: Graphics, game: Game, widget: MonitorSelector, image_path: str) -
             for j in range(i + 1, len(intro_balls)):
                 intro_balls[i].check_ball_collision(intro_balls[j])
 
-        # Increment background image rotation angles
-        scale = 3
-        pitch += math.radians(0.5) / scale
-        yaw += math.radians(1.0) / scale
-        roll += math.radians(0.25) / scale
+        # Rotate the card by this frame's worth of each rate
+        pitch += math.radians(pitch_rate) * dt
+        yaw += math.radians(yaw_rate) * dt
+        roll += math.radians(roll_rate) * dt
 
         # Rotate and project vertices from 3D to 2D
         transformed_vertices = [rotate_vertex(v, pitch, yaw, roll) for v in vertices]
@@ -2882,8 +3153,8 @@ def intro(gfx: Graphics, game: Game, widget: MonitorSelector, image_path: str) -
                 game.difficulty = difficulty
                 break
 
-        # Pulse the colour of the title text
-        wave = int(64 * math.sin(math.radians(game.frame)))
+        # Pulse the colour of the title text, one full cycle every three seconds
+        wave = int(64 * math.sin(2 * math.pi * elapsed / 3.0))
         red = Graphics.colours['title'][0] + wave
         grn = Graphics.colours['title'][1] + wave
         blu = Graphics.colours['title'][2] + wave
@@ -2909,13 +3180,12 @@ def intro(gfx: Graphics, game: Game, widget: MonitorSelector, image_path: str) -
         # Update the display
         pygame.display.flip()
 
-        # After each frame, we do a liner fade of the glowing trails (towards transparent)
-        fade = 10  # 0..255 to subtract this frame
-        gfx.trail_sfc.fill((0, 0, 0, fade), special_flags=pygame.BLEND_RGBA_SUB)  # RGB unchanged, alpha -= fade
+        # Cap the frame rate and measure how long this frame took: that's what the next iteration simulates
+        dt = frame_time(game.clock.tick(INTRO_FPS))
+        elapsed += dt
 
-        # Cap the frame rate to 120 frames per second
-        game.clock.tick(120)
-        game.frame += 1
+        # Fade the glowing trails. The intro fades them twice as fast as the game does.
+        gfx.fade_trails(dt, rate=1200.0)
 
     return "start"
 
@@ -2941,7 +3211,8 @@ def splash_screen(
 
     Behaviour:
         Runs for about three seconds, drawing `Text(...)` each frame, blitting `screen` to `display`, applying a
-        black overlay via `darken_screen(...)`, flipping the display, and capping to 120 FPS.
+        black overlay via `darken_screen(...)`, flipping the display, and capping to GAME_FPS. The game clock does
+        not advance during a splash, so power-up timers are untouched by it.
     """
 
     if text is None:
@@ -2975,8 +3246,8 @@ def splash_screen(
         # Output the splash text
         banner.draw()
 
-        # Flip the gfx.display after applying the darkening effect
-        game.display(fps=60)
+        # Flip the gfx.display after applying the darkening effect (which fades in real time here)
+        game.display(fps=GAME_FPS)
 
     # Return False if the user didn't quit
     return False
@@ -3034,12 +3305,15 @@ def game_loop(game: object, gfx: object):
                     # Update cached mouse position; apply inversion if active
                     if not game.paused:
                         gfx.get_mouse_pos()
-                        if game.inversion > 0:
+                        if game.inverted:
                             gfx.mouse_x = gfx.window_width - gfx.mouse_x
 
                 # More debugging cheats...
                 elif event.type == pygame.MOUSEBUTTONDOWN:
                     if event.button == 1:
+                        # Left click: give all of the balls a bit of a speed kick
+                        game.kick_all_balls()
+
                         # Left click: destroy the brick under the cursor
                         x, y = gfx.get_mouse_pos(cache=False)
                         for brick in game.bricks:
@@ -3059,19 +3333,9 @@ def game_loop(game: object, gfx: object):
                         # Right button released: show cursor
                         pygame.mouse.set_visible(True)
 
-                elif event.type == pygame.MOUSEBUTTONDOWN:
-                    if event.button == 1:
-                        # Left click: give all of the balls a bit of a speed kick
-                        game.kick_all_balls()
-
-            if not game.paused:
-                game.check_inversion_mode()
-                game.check_lasers_mode()
-                game.animate_bats()
-                game.animate_balls()
-                game.check_boring()
-            else:
-                game.last_kill += 1.0 / game.get_fps()
+            # Simulate the time the previous frame took (nothing happens while paused, and the game clock that all
+            # the power-up timers run off stands still too)
+            game.update(game.frame_dt)
 
             # Stop if no lives remain
             if game.lives <= 0:
@@ -3083,8 +3347,8 @@ def game_loop(game: object, gfx: object):
                 # All bricks disintegrated
                 break
 
-            # Present the frame, optionally blending with black
-            game.display(fps=60)
+            # Present the frame, optionally blending with black, and measure the frame time for the next update
+            game.display(fps=GAME_FPS)
 
         # Left the inner loop due to one of:
         # - Out of lives, or
