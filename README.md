@@ -157,11 +157,11 @@ Copy the `web` folder to a static web server (SFTP, S3, GitHub Pages, whatever y
 | **Q** | Back to the intro |
 | **H / C** | Help and Credits pages, also reachable from the links on the intro |
 
-Moving the bat from one side of the playfield to the other takes the same hand movement on any screen, as in the desktop version, except that the mouse is never slowed down: on a screen or window narrower than 1920 pixels the cursor's full width maps to the full playfield, so the bat can always reach the sides. A touch drag moves the bat a quarter faster than the finger, so the sides can be reached without the finger having to run off the edge of the screen.
+Moving the bat from one side of the playfield to the other takes the same hand movement on any screen, as in the desktop version, except that the mouse is never slowed down: on a screen or window narrower than 1920 pixels the cursor's full width maps to the full playfield, so the bat can always reach the sides. A touch drag moves the bat exactly in step with the finger.
 
 ### On a phone or tablet
 
-The page notices when it's on a touch-only device (no mouse to hover with) and adjusts itself: the prompts say "tap", the mouse is never captured, the bats sit a little higher so a fingertip doesn't hide them, and the Help page describes the gestures instead of the keys. A two-finger tap is the way to get at everything the keyboard would otherwise do. It's best played in landscape; turning fullscreen on from the Options page also asks the browser to lock the orientation to landscape, where it allows that. Adding `?mobile=1` or `?mobile=0` to the address forces the mobile or desktop behaviour, which is handy for trying the touch layout on a desktop with a touch screen.
+The page notices when it's on a touch-only device (no mouse to hover with) and adjusts itself: the prompts say "tap", the mouse is never captured, the bats sit a little higher and are drawn twice as wide in landscape so they show either side of the fingertip driving them, and the Help page describes the gestures instead of the keys. A two-finger tap is the way to get at everything the keyboard would otherwise do. It's best played in landscape; turning fullscreen on from the Options page also asks the browser to lock the orientation to landscape, where it allows that. Adding `?mobile=1` or `?mobile=0` to the address forces the mobile or desktop behaviour, which is handy for trying the touch layout on a desktop with a touch screen.
 
 ### Options
 

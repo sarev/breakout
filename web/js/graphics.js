@@ -5,8 +5,8 @@
 // in the game is a playfield pixel, and `scale` says how big that is relative to the 1080p reference.
 
 import {
-  BALL_HEIGHT_PCT, BAT_HEIGHT_PCT, LASER_HEIGHT_PCT, MAX_PLAYFIELD_ASPECT, MIN_PLAYFIELD_ASPECT,
-  REFERENCE_HEIGHT, REFERENCE_WIDTH, TOUCH_DRAG_GAIN,
+  BALL_HEIGHT_PCT, BAT_HEIGHT_PCT, LASER_HEIGHT_PCT, MAX_PLAYFIELD_ASPECT, MIN_PLAYFIELD_ASPECT, MOBILE_BAT_WIDEN,
+  MOBILE_WIDE_ASPECT, REFERENCE_HEIGHT, REFERENCE_WIDTH, TOUCH_DRAG_GAIN,
 } from './config.js';
 
 /** CSS colour string from an [r, g, b] triple and an alpha 0..1. */
@@ -55,6 +55,32 @@ export function scaleImage(img, height) {
 }
 
 /**
+ * Widen a bat sprite without distorting it: the two rounded end caps (each half the height wide) are kept as they
+ * are and only the straight middle section is stretched, so the ball's end-cap collision circles still match
+ * what's drawn. A factor of 1 returns the sprite unchanged.
+ *
+ * @param {HTMLCanvasElement} sprite A scaled bat.
+ * @param {number} factor Width multiplier.
+ * @returns {HTMLCanvasElement}
+ */
+export function widenImage(sprite, factor) {
+  if (factor === 1) return sprite;
+  const w = sprite.width;
+  const h = sprite.height;
+  const cap = Math.min(Math.floor(h / 2), Math.floor(w / 4));
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.max(1, Math.round(w * factor));
+  canvas.height = h;
+  const ctx = canvas.getContext('2d');
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(sprite, 0, 0, cap, h, 0, 0, cap, h);
+  ctx.drawImage(sprite, cap, 0, w - 2 * cap, h, cap, 0, canvas.width - 2 * cap, h);
+  ctx.drawImage(sprite, w - cap, 0, cap, h, canvas.width - cap, 0, cap, h);
+  return canvas;
+}
+
+/**
  * Tint a sprite by multiplying it with a colour, keeping its alpha (the inverted-controls bat).
  *
  * @param {HTMLCanvasElement} sprite
@@ -80,9 +106,11 @@ export class Graphics {
    * @param {HTMLCanvasElement} canvas The page's canvas.
    * @param {Object<string, HTMLImageElement>} images Loaded source images.
    * @param {number} sensitivity Mouse sensitivity multiplier.
+   * @param {boolean} mobile True on a phone or tablet: the bats are drawn wider in landscape (see buildSprites).
    */
-  constructor(canvas, images, sensitivity = 1) {
+  constructor(canvas, images, sensitivity = 1, mobile = false) {
     this.canvas = canvas;
+    this.mobile = mobile;
     this.ctx = canvas.getContext('2d');
     this.images = images;
     this.sensitivity = sensitivity;
@@ -144,11 +172,20 @@ export class Graphics {
       bonusBall: scaleImage(im.bonusBall, h(BALL_HEIGHT_PCT)),
       blueGlow: scaleImage(im.blueGlow, h(BALL_HEIGHT_PCT)),
       redGlow: scaleImage(im.redGlow, h(BALL_HEIGHT_PCT)),
-      bat: scaleImage(im.bat, h(BAT_HEIGHT_PCT)),
-      bonusBat: scaleImage(im.bonusBat, h(BAT_HEIGHT_PCT)),
+      bat: widenImage(scaleImage(im.bat, h(BAT_HEIGHT_PCT)), this.batWiden()),
+      bonusBat: widenImage(scaleImage(im.bonusBat, h(BAT_HEIGHT_PCT)), this.batWiden()),
       blueLaser: scaleImage(im.blueLaser, h(LASER_HEIGHT_PCT)),
       greenLaser: scaleImage(im.greenLaser, h(LASER_HEIGHT_PCT)),
     };
+  }
+
+  /**
+   * How much wider than normal the bats are drawn: on a phone or tablet in landscape the finger driving the bat
+   * covers it, so it's made wide enough to show either side of the fingertip. In portrait the playfield is
+   * narrow (letterboxed to 4:3) and a doubled bat would be too much of it, so it stays normal there.
+   */
+  batWiden() {
+    return this.mobile && this.aspect >= MOBILE_WIDE_ASPECT ? MOBILE_BAT_WIDEN : 1;
   }
 
   /**

@@ -174,8 +174,12 @@ export const BAT_FADE_SECONDS = 2;      // Warning fade before it goes
 export const BAT_VELOCITY_SMOOTHING = 0.06; // Time constant for the smoothed sideways speed
 
 // Touch
-export const TOUCH_DRAG_GAIN = 1.25;    // Bat movement per finger movement when dragging in play (times sensitivity)
+export const TOUCH_DRAG_GAIN = 1;       // Bat movement per finger movement when dragging in play (times sensitivity):
+                                        // 1 keeps the bat exactly in step with the finger; more and it runs ahead
 export const MOBILE_BAT_LIFT = 2;       // Bat heights the bats sit higher on a mobile device, clear of the fingertip
+export const MOBILE_BAT_WIDEN = 2;      // Bats this many times wider on a mobile device in landscape, so that they
+                                        // show either side of the finger driving them (the end caps keep their shape)
+export const MOBILE_WIDE_ASPECT = 1.5;  // ...when the playfield is at least this wide for its height (landscape)
 
 // Intro
 export const INTRO_DAMPING = 0.887;     // Fraction of speed an intro ball keeps after one second

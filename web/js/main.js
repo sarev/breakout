@@ -7,7 +7,8 @@
 // fullscreen, help, quit), which stands in for the keys.
 //
 // A mobile device (a phone or tablet: touch, no mouse, one screen) is detected at start-up, and there the prompts
-// say "tap", the mouse is never captured, the bats sit higher so a fingertip doesn't hide them, and the Help page
+// say "tap", the mouse is never captured, the bats sit higher and (in landscape) twice as wide so a fingertip
+// doesn't hide them, and the Help page
 // describes the gestures rather than the keys. ?mobile=1 or ?mobile=0 overrides the detection, for testing.
 //
 // ?debug=1 enables the cheats (D clears the level, left-click destroys the brick under the pointer). ?music=0
@@ -117,7 +118,7 @@ async function boot() {
   audio.sfx = new Sfx(audio.ctx, sounds);
   audio.music = new Music(audio.ctx, tracks, MUSIC_ON, MUSIC_VOLUME);
 
-  const gfx = new Graphics(canvas, images, SENSITIVITY);
+  const gfx = new Graphics(canvas, images, SENSITIVITY, MOBILE);
   const input = new Input(canvas, gfx, MOBILE);
   const game = new Game(gfx, audio.sfx, input, { debug: DEBUG, mobile: MOBILE });
   const intro = new Intro(gfx, game, audio.sfx, input, images.intro);
