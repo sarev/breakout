@@ -275,10 +275,17 @@ async function boot() {
     if (scene === 'gate') {
       leaveGate();
     } else if (scene === 'intro') {
-      // A click or tap on one of the links opens its page instead of starting a game
+      // A click or tap on one of the links opens its page instead of starting a game. Otherwise the label under
+      // the pointer (if any) is selected first: a quick tap can land and lift between two frames, before the
+      // intro has had a chance to notice where the finger went
       const p = input.playfield();
       const link = intro.linkAt(p.x, p.y);
-      if (link) openModal(link); else startGame();
+      if (link) {
+        openModal(link);
+      } else {
+        intro.selectAt(p.x, p.y);
+        startGame();
+      }
     } else if (scene === 'splash') {
       splash.elapsed = 1e9;
     } else if (scene === 'game') {

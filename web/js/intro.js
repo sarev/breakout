@@ -165,16 +165,31 @@ export class Intro {
     }
 
     // Menu: steering the hero ball over a label selects it
+    this.selectAt(this.hero.x, this.hero.y);
+
+    gfx.fadeTrails(dt, TRAIL_FADE_INTRO);
+  }
+
+  /**
+   * Select the difficulty whose label is under a playfield point, if any. Called every frame with the hero ball's
+   * position, and by the tap / click handler with the pointer's position just before a game starts: a tap on a
+   * phone is over in less time than a frame takes (and the idle intro runs at a low rate), so without that the
+   * game would start with whatever was selected before the finger landed.
+   *
+   * @returns {boolean} True if the selection changed.
+   */
+  selectAt(x, y) {
+    let changed = false;
     this.menuBoxes.forEach((box, i) => {
       if (!box || i === this.difficulty) return;
-      if (this.hero.x >= box.x && this.hero.x <= box.x + box.w && this.hero.y >= box.y && this.hero.y <= box.y + box.h) {
+      if (x >= box.x && x <= box.x + box.w && y >= box.y && y <= box.y + box.h) {
         this.difficulty = i;
         this.game.difficulty = i;
         this.sfx.play('click');
+        changed = true;
       }
     });
-
-    gfx.fadeTrails(dt, TRAIL_FADE_INTRO);
+    return changed;
   }
 
   /** Rotate a card-space point and project it to the playfield. Returns null if the card is edge-on. */
