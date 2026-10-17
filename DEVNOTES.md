@@ -134,9 +134,20 @@ class Game:
       --noconsole \
       --add-data "sprites;sprites" \
       --add-data "sounds;sounds" \
+      --add-data "music;music" \
       breakout.py
   ```
 - At runtime the `_MEIPASS` override ensures lookups work without special-casing the frozen build.
+
+# Music
+
+Background music is streamed from OGG files in `music/` through `pygame.mixer.music`, which is a separate channel from the sound effects, so the stereo panning and volumes of the effects are untouched and the music has its own volume (`Music.volume`, 0.4 by default, overridable with `--music-volume`).
+
+- The `Music` class maps short track names to files (`intro`, `stage1`, `stage2`, `boss`). A missing file makes that name silent and a missing folder means no music at all, so the game runs identically without the assets.
+- The intro plays `intro`; each level plays `Music.level_track(level)`, which cycles through `stage1`, `stage2`, `boss` so the final level lands on the boss track.
+- `play()` is a no-op if the requested track is already playing, which is what lets the music run on uninterrupted across the monitor-switch re-initialisation.
+- Pausing the game pauses the music; game over and the win fade it out under the splash; **M** toggles it in the intro and during play; `--no-music` starts with it off.
+- The tracks are CC0 (Juhani Junkala's "Chiptune Adventures", via OpenGameArt); `music/CREDITS.txt` carries the attribution.
 
 # MonitorSelector widget
 

@@ -2177,6 +2177,136 @@ class Graphics():
                 obj.undraw(surface=surface)
 
 
+class Music():
+    """
+    Background music, streamed from OGG files in the `music` folder through pygame's dedicated music channel.
+
+    The music channel is separate from the sound-effect channels, so the stereo-panned effects are unaffected and
+    the music has its own volume. Tracks are referred to by short names (`intro`, `stage1`, ...) that map to files
+    in the folder; a missing file simply means that name is silent, and a missing folder means no music at all,
+    so the game runs the same with or without the assets.
+    """
+
+    # Music volume (0..1). Kept well below the effects so they cut through.
+    volume: float = 0.4
+
+    # Fade-out length when a track is stopped (milliseconds)
+    fade_ms: int = 800
+
+    # Track names the game asks for, and the files they live in
+    files = {
+        "intro": "intro.ogg",
+        "stage1": "stage1.ogg",
+        "stage2": "stage2.ogg",
+        "boss": "boss.ogg",
+    }
+
+    # Level tracks, in the order the levels cycle through them (so the last level gets the boss track)
+    level_tracks = ("stage1", "stage2", "boss")
+
+    def __init__(self, path: str, enabled: bool = True, volume: float | None = None) -> None:
+        """
+        Find the music files and set the volume.
+
+        Args:
+            path: Folder containing the music files.
+            enabled: Start with music on. The M key toggles it during play.
+            volume: Music volume 0..1, or None for the class default.
+        """
+
+        self.enabled = enabled
+        self.volume = Music.volume if volume is None else max(0.0, min(1.0, volume))
+        self.current: str | None = None   # Name of the track that is (or was last) playing
+
+        # Only tracks whose files exist are playable
+        self.tracks = {}
+        for name, filename in Music.files.items():
+            full = os.path.join(path, filename)
+            if os.path.isfile(full):
+                self.tracks[name] = full
+        if not self.tracks:
+            print("No music files found - running without music")
+
+        try:
+            pygame.mixer.music.set_volume(self.volume)
+        except pygame.error:
+            # No mixer (no audio device): nothing we can do, and nothing else will work either
+            self.tracks = {}
+
+    @classmethod
+    def level_track(cls, level: int) -> str:
+        """
+        The track name for a level: levels cycle through `level_tracks`.
+
+        Args:
+            level: Level number starting at 1.
+
+        Returns:
+            str: Track name.
+        """
+
+        return cls.level_tracks[(level - 1) % len(cls.level_tracks)]
+
+    def play(self, name: str) -> None:
+        """
+        Start a track looping. Does nothing if music is off, the track is missing, or it's already playing.
+
+        Args:
+            name: Track name (a key of `files`).
+        """
+
+        if not self.enabled or name not in self.tracks:
+            return
+        if name == self.current and pygame.mixer.music.get_busy():
+            return
+        try:
+            pygame.mixer.music.load(self.tracks[name])
+            pygame.mixer.music.play(loops=-1)
+            self.current = name
+        except pygame.error as e:
+            print(f"Error playing music '{name}': {e}")
+
+    def stop(self, fade: bool = True) -> None:
+        """
+        Stop the music, with a short fade by default.
+
+        Args:
+            fade: Fade out over `fade_ms` rather than stopping dead.
+        """
+
+        if fade:
+            pygame.mixer.music.fadeout(Music.fade_ms)
+        else:
+            pygame.mixer.music.stop()
+
+    def pause(self) -> None:
+        """Pause the music (alongside the game)."""
+
+        pygame.mixer.music.pause()
+
+    def resume(self) -> None:
+        """Resume paused music."""
+
+        pygame.mixer.music.unpause()
+
+    def toggle(self) -> bool:
+        """
+        Switch the music off or on. Switching on restarts whichever track was last asked for.
+
+        Returns:
+            bool: The new enabled state.
+        """
+
+        self.enabled = not self.enabled
+        if self.enabled:
+            if self.current is not None:
+                name, self.current = self.current, None   # Force `play()` to restart it
+                self.play(name)
+        else:
+            self.stop(fade=False)
+        return self.enabled
+
+
 class Game():
     # Modify file paths if running as a PyInstaller bundle
     base_path = sys._MEIPASS if hasattr(sys, '_MEIPASS') else os.path.abspath(".")
@@ -2184,6 +2314,7 @@ class Game():
     # Relative file system paths to various game resources
     sprites_path = os.path.join(base_path, "sprites")
     sounds_path = os.path.join(base_path, "sounds")
+    music_path = os.path.join(base_path, "music")
 
     # There are this many varieties of bricks
     num_brick_types = 9
@@ -2445,6 +2576,8 @@ class Game():
         resize: float = 1.0,
         debug: bool = False,
         sensitivity: float = 1.0,
+        music: bool = True,
+        music_volume: float | None = None,
     ) -> None:
         """
         Set up graphics, audio, game state, and initial objects.
@@ -2454,6 +2587,8 @@ class Game():
             resize: Graphics resizing (downsampling) ratio.
             debug: Enable the developer cheats (see `game_loop()`).
             sensitivity: Mouse sensitivity multiplier (see `Graphics.mouse_gain`).
+            music: Start with background music on.
+            music_volume: Music volume 0..1, or None for the default.
 
         Side effects:
             - Creates `Graphics` and loads sprites and sounds.
@@ -2497,6 +2632,9 @@ class Game():
         self.wall_hit_sound = None
         self.win_sound = None
         self._load_sounds(path=Game.sounds_path, brick_types=Game.num_brick_types)
+
+        # Background music (streams from the music folder; silent if the folder or files are missing)
+        self.music = Music(Game.music_path, enabled=music, volume=music_volume)
 
         # Laser bolts cross the full window height in a little over half a second (this was `height // 32` pixels
         # per frame at 60 fps)
@@ -3593,6 +3731,9 @@ def intro(gfx: Graphics, game: Game, widget: MonitorSelector, image_path: str) -
         warped = cv2.warpPerspective(image, shift @ matrix, (x1 - x0, y1 - y0))
         return warped, (x0, y0)
 
+    # The intro has its own tune
+    game.music.play("intro")
+
     # Rotation rates for the card, in degrees per second (the old per-frame increments at 120 fps)
     pitch_rate = 20.0
     yaw_rate = 40.0
@@ -3662,6 +3803,9 @@ def intro(gfx: Graphics, game: Game, widget: MonitorSelector, image_path: str) -
                     return None
                 elif event.key == pygame.K_ESCAPE:
                     return None
+                elif event.key == pygame.K_m:
+                    # M toggles the music without starting the game
+                    game.music.toggle()
                 else:
                     more = False
 
@@ -3856,8 +4000,9 @@ def game_loop(game: object, gfx: object):
 
     # Main loops: outer loop progresses levels; inner loop runs a single level
     while game.running and game.level <= Game.get_max_level() and game.lives > 0:
-        # Prepare this level
+        # Prepare this level, and start its tune
         game.initialise_level()
+        game.music.play(Music.level_track(game.level))
 
         while game.running:
             # Restore background over previously drawn objects
@@ -3879,11 +4024,17 @@ def game_loop(game: object, gfx: object):
                             # Show the mouse pointer and allow it to move outside the pygame window
                             pygame.mouse.set_visible(True)
                             pygame.event.set_grab(False)
+                            game.music.pause()
                         else:
                             # Hide the mouse pointer, put it back where it was when we paused, lock it within the pygame window
                             pygame.mouse.set_visible(False)
                             gfx.set_mouse_pos(gfx.mouse_x, gfx.mouse_y, cache=False)
                             pygame.event.set_grab(True)
+                            game.music.resume()
+
+                    elif event.key == pygame.K_m:
+                        # M toggles the music
+                        game.music.toggle()
 
                     # Debug cheat (--debug only): D destroys every brick, which skips the level
                     elif event.key == pygame.K_d and game.debug:
@@ -3946,7 +4097,8 @@ def game_loop(game: object, gfx: object):
         # - Level cleared, or
         # - Quit requested
         if game.lives == 0:
-            # Out of lives
+            # Out of lives: the music fades out under the splash
+            game.music.stop()
             Game.play_stereo_sound(game.die_sound)
             splash = "Game Over!"
             splash_col = Graphics.colours['die']
@@ -3962,7 +4114,8 @@ def game_loop(game: object, gfx: object):
                 splash = f"Level {game.level}..."
                 splash_col = Graphics.colours['advance']
             else:
-                # Final level completed: play win sound and show win splash
+                # Final level completed: fade the music, play the win sound and show the win splash
+                game.music.stop()
                 Game.play_stereo_sound(game.win_sound)
                 splash = "YOU WIN!"
                 splash_col = Graphics.colours['win']
@@ -3985,7 +4138,8 @@ def game_loop(game: object, gfx: object):
 
 def menu_loop(args: argparse.Namespace) -> int:
     # Create the initial Game and get a reference to the Graphics object
-    game = Game(monitor=args.monitor, resize=args.resize, debug=args.debug, sensitivity=args.sensitivity)
+    game = Game(monitor=args.monitor, resize=args.resize, debug=args.debug, sensitivity=args.sensitivity,
+                music=not args.no_music, music_volume=args.music_volume)
     gfx = game.gfx
 
     # Initialise a monitor selection widget. Its position is given in reference (1080p) coordinates; `reposition()`
@@ -4018,7 +4172,11 @@ def menu_loop(args: argparse.Namespace) -> int:
                 del game
 
                 # Create new Game and Graphics objects, having selected a different monitor
-                game = Game(monitor=widget.monitor, resize=args.resize, debug=args.debug, sensitivity=args.sensitivity)
+                # (The music keeps playing across the display re-init: the new Game's `Music` sees the intro
+                # track is already going and leaves it alone.)
+                music_on = game.music.enabled
+                game = Game(monitor=widget.monitor, resize=args.resize, debug=args.debug, sensitivity=args.sensitivity,
+                            music=music_on, music_volume=args.music_volume)
                 gfx = game.gfx
 
                 # The new monitor may be a different size, so re-scale the widget's position and hit box for it
@@ -4049,6 +4207,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                         help="Ratio for down-sizing the graphics for a more retro feel. Default: 1.0")
     parser.add_argument("--monitor", "-m", type=int,
                         help="Index of the monitor to display on (0 is primary).")
+    parser.add_argument("--no-music", action="store_true",
+                        help="Start with the background music off (M toggles it during play).")
+    parser.add_argument("--music-volume", type=float, default=None,
+                        help=f"Background music volume, 0.0 to 1.0. Default: {Music.volume}")
     parser.add_argument("--sensitivity", "-s", type=float, default=1.0,
                         help="Mouse sensitivity multiplier. At 1.0 the bat crosses the playfield with the same hand "
                              "movement on any monitor; 2.0 needs half as much, 0.5 twice as much. Default: 1.0")

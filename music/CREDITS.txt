@@ -1,0 +1,17 @@
+Background music: "Chiptune Adventures" by Juhani Junkala (SubspaceAudio)
+Source: https://opengameart.org/content/4-chiptunes-adventure
+Licence: CC0 1.0 (public domain dedication) - https://creativecommons.org/publicdomain/zero/1.0/
+
+  intro.ogg   = "4. Stage Select"
+  stage1.ogg  = "1. Stage 1"
+  stage2.ogg  = "2. Stage 2"
+  boss.ogg    = "3. Boss Fight"
+
+The author's note from the pack:
+
+Hi, I'm Juhani Junkala, the author of this music collection. I'm a classically trained composer, producer and a
+sound designer with over 20 years of experience.
+
+These music tracks have been released under CC0 creative commons license. You can do anything you want with these tunes.
+
+Homepage: https://juhanijunkala.com/
