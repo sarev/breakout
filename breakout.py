@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 #
-# Copyright (c) 2025, 7th software Ltd.
+# Copyright (c) 2025-26, 7th software Ltd.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -3872,7 +3872,7 @@ def intro(gfx: Graphics, game: Game, widget: MonitorSelector, image_path: str) -
     # Create some other text objects
     messages = []
     messages.append(Text(gfx, game, "Breakout", Graphics.colours['title'], x, gfx.window_height * 0.2, size=400, alpha=224, italic=True, bold=True))
-    messages.append(Text(gfx, game, "Copyright © 2025, 7th software Ltd.", Graphics.colours['copyright'], x, gfx.window_height * 0.35, size=80, alpha=200))
+    messages.append(Text(gfx, game, "Copyright © 2025-26, 7th software Ltd.", Graphics.colours['copyright'], x, gfx.window_height * 0.35, size=80, alpha=200))
     messages.append(Text(gfx, game, "All rights reserved.", Graphics.colours['rights'], x, gfx.window_height * 0.41, size=80, alpha=200))
     messages.append(Text(gfx, game, "Click or press any key to continue", Graphics.colours['presskey'], x, gfx.window_height * 0.46, size=60, alpha=200))
     title = messages[0]

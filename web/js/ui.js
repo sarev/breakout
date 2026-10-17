@@ -44,7 +44,7 @@ bonus ball is thrown in.</p>
 
 const CREDITS = `
 <h2>Credits</h2>
-<p>Breakout is &copy; 2025 7th software Ltd. A modern take on the classic brick-breaker, with a nod to Arkanoid,
+<p>Breakout is &copy; 2025-26 7th software Ltd. A modern take on the classic brick-breaker, with a nod to Arkanoid,
 Fireball 2 on the Archimedes, and the other classics.</p>
 <ul>
 <li>Sound effects made with <a href="https://sfxr.me/" target="_blank" rel="noopener">sfxr</a></li>
