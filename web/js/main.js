@@ -16,12 +16,13 @@
 
 import { AudioSystem, Music, Sfx } from './audio.js';
 import { loadAudioSet, loadImages } from './assets.js';
+import { Certificate } from './certificate.js';
 import { COLOURS, MAX_FRAME_DT, MUSIC_FILES, SOUND_NAMES } from './config.js';
 import { Game } from './game.js';
 import { Graphics } from './graphics.js';
 import { Input } from './input.js';
 import { Intro } from './intro.js';
-import { closeModal, modalOpen, openModal, openOptions, renderOptions, setMobile } from './ui.js';
+import { closeModal, modalOpen, openCamera, openModal, openOptions, renderOptions, setMobile } from './ui.js';
 
 const params = new URLSearchParams(window.location.search);
 const DEBUG = params.get('debug') === '1';
@@ -139,11 +140,13 @@ async function boot() {
   const input = new Input(canvas, gfx, MOBILE);
   const game = new Game(gfx, audio.sfx, input, { debug: DEBUG, mobile: MOBILE });
   const intro = new Intro(gfx, game, audio.sfx, input, images.intro);
+  const certificate = new Certificate(gfx, MOBILE);
   const music = audio.music;
   setMobile(MOBILE);
 
   // --- Scenes -----------------------------------------------------------------------------------------------
-  // 'gate' -> 'intro' -> 'splash' (Level 1...) -> 'game' -> 'splash' (Level N... / Game Over! / YOU WIN!) -> ...
+  // 'gate' -> 'intro' -> 'splash' (Level 1...) -> 'game' -> 'splash' (Level N...) -> 'game' -> ...
+  //                                              '-> 'over' (the win / game-over certificate, until dismissed) -> 'intro'
   //
   // The gate is a title card that waits for the first click, tap or key. Browsers keep the audio context
   // suspended until the page has had a user gesture, and without the gate that first gesture would also be the
@@ -237,23 +240,36 @@ async function boot() {
   function leaveSplash() {
     const next = splash.next;
     splash = null;
-    if (next === 'level') {
-      startLevel();
-    } else {
-      // Back to the intro
-      input.releaseLock();
-      intro.relayout();
-      music.play('intro');
-      scene = 'intro';
-    }
+    if (next === 'level') startLevel(); else backToIntro();
+  }
+
+  /** Back to the intro after a game (the certificate being dismissed). */
+  function backToIntro() {
+    input.releaseLock();
+    intro.relayout();
+    music.play('intro');
+    scene = 'intro';
+  }
+
+  /**
+   * The game is over, won or lost: its sound, then the certificate (certificate.js), which stays up until the
+   * player taps or clicks away from its boxes or presses a key. The mouse is freed so the boxes can be clicked.
+   *
+   * @param {boolean} won True for the last level cleared, false for the last life lost.
+   */
+  function showCertificate(won) {
+    music.stop();
+    audio.sfx.play(won ? 'win' : 'die');
+    input.releaseLock();
+    notice = null;   // A notice from the last seconds of play would sit over the certificate's text
+    certificate.start(game, won);
+    scene = 'over';
   }
 
   function endOfLevel() {
     // Called when the game loop ends a level: out of lives, or all bricks gone
     if (game.lives <= 0) {
-      music.stop();
-      audio.sfx.play('die');
-      showSplash('Game Over!', COLOURS.die, 'intro');
+      showCertificate(false);
       return;
     }
     game.level += 1;
@@ -262,9 +278,8 @@ async function boot() {
       gfx.buildBackground(game.level);
       showSplash(`Level ${game.level}...`, COLOURS.advance, 'level');
     } else {
-      music.stop();
-      audio.sfx.play('win');
-      showSplash('YOU WIN!', COLOURS.win, 'intro');
+      game.level = Game.maxLevel;   // Not past the last level: a resize on the certificate re-lays its bricks out
+      showCertificate(true);
     }
   }
 
@@ -345,6 +360,13 @@ async function boot() {
       }
     } else if (scene === 'splash') {
       splash.elapsed = 1e9;
+    } else if (scene === 'over') {
+      // The certificate's boxes, or anywhere else to leave. The raw pointer is the real cursor or finger here
+      // (the lock was released on the way in), so no gain is wanted for hit-testing
+      const hit = certificate.hit(input.raw.x, input.raw.y);
+      if (hit === 'selfie') openCamera((photo) => certificate.setPhoto(photo));
+      else if (hit === 'save') certificate.save();
+      else backToIntro();
     } else if (scene === 'game') {
       if (game.paused) {
         setPaused(false);
@@ -443,6 +465,8 @@ async function boot() {
       else if (key !== 'escape' && key !== 'q' && !e.repeat) startGame();
     } else if (scene === 'splash') {
       if (key === 'q') quitToIntro(); else splash.elapsed = 1e9;
+    } else if (scene === 'over') {
+      if (key === 's') certificate.save(); else if (!e.repeat) backToIntro();
     } else if (scene === 'game') {
       if (key === ' ') {
         e.preventDefault();
@@ -471,7 +495,7 @@ async function boot() {
 
   /** The frame rate to throttle to right now, or 0 for the display's full rate. */
   function idleRate(now) {
-    if (scene === 'gate') return IDLE_FPS;
+    if (scene === 'gate' || scene === 'over') return IDLE_FPS;   // Both are still pages that only wait for input
     if (scene === 'intro') {
       const settled = intro.totalSpeed() < IDLE_SPEED * gfx.scale;
       const wantIdle = modalOpen() || (settled && now - lastInput > IDLE_AFTER * 1000);
@@ -534,6 +558,8 @@ async function boot() {
       }
       game.drawBlackout(ctx);
       if (splash.elapsed >= 3) leaveSplash();
+    } else if (scene === 'over') {
+      certificate.draw(ctx);
     } else if (scene === 'game') {
       game.update(dt);
       const complete = game.draw(ctx);
@@ -569,7 +595,7 @@ async function boot() {
   }
 
   // Expose the live objects for poking at from the console (and for the automated smoke test)
-  window.breakout = { game, gfx, input, intro, audio, mobile: MOBILE, get scene() { return scene; }, get frames() { return frames; } };
+  window.breakout = { game, gfx, input, intro, certificate, audio, mobile: MOBILE, get scene() { return scene; }, get frames() { return frames; } };
 
   requestAnimationFrame(frame);
 

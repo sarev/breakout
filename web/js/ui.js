@@ -84,6 +84,7 @@ let overlay = null;
 let body = null;
 let onClose = null;
 let options = null;   // {getState, actions} while the Options page is showing
+let camera = null;    // {overlay, video, stream, onPhoto} while the selfie camera is showing
 
 /** Tell the pages which device they're on (affects the Help controls table). */
 export function setMobile(flag) {
@@ -157,6 +158,10 @@ export function renderOptions() {
 }
 
 export function closeModal() {
+  if (camera) {   // Escape with the camera up gives up on the photo
+    closeCamera();
+    return;
+  }
   if (!overlay || overlay.hidden) return;
   overlay.hidden = true;
   options = null;
@@ -166,5 +171,85 @@ export function closeModal() {
 }
 
 export function modalOpen() {
-  return !!overlay && !overlay.hidden;
+  return (!!overlay && !overlay.hidden) || !!camera;
+}
+
+// --- Selfie camera (the win certificate) ------------------------------------------------------------------------
+
+/**
+ * Open the selfie camera over the page: a mirrored live preview from the front camera, with a button to take the
+ * photo and one to give up. The photo is the middle square of the frame, mirrored as the preview was (so the
+ * player gets what they saw), handed back as a canvas no bigger than 640 px. Nothing is kept: the stream stops
+ * as soon as the photo is taken or the page is closed. A device without a camera, or a refused permission,
+ * just says so and offers Cancel.
+ *
+ * @param {Function} onPhoto Called with the canvas when a photo is taken.
+ */
+export function openCamera(onPhoto) {
+  if (camera) return;
+  const overlay = document.getElementById('camera');
+  const video = document.getElementById('camera-video');
+  const note = document.getElementById('camera-note');
+  const snap = overlay.querySelector('[data-camera=snap]');
+  camera = { overlay, video, stream: null, onPhoto };
+  if (!overlay.dataset.wired) {
+    overlay.dataset.wired = '1';
+    overlay.addEventListener('click', (e) => {
+      const button = e.target.closest('button[data-camera]');
+      if (!button || !camera) return;
+      if (button.dataset.camera === 'snap') takePhoto(); else closeCamera();
+    });
+  }
+  const fail = (message) => { note.textContent = message; snap.hidden = true; };
+  snap.hidden = false;
+  note.textContent = 'Starting the camera\u2026';
+  overlay.hidden = false;
+  const media = navigator.mediaDevices;
+  if (!media || !media.getUserMedia) {
+    fail('No camera is available here');
+    return;
+  }
+  media.getUserMedia({ video: { facingMode: 'user' }, audio: false }).then((stream) => {
+    if (!camera) {   // Cancelled while the browser was asking
+      stream.getTracks().forEach((track) => track.stop());
+      return undefined;
+    }
+    camera.stream = stream;
+    video.srcObject = stream;
+    note.textContent = '';
+    return video.play().catch(() => {});
+  }).catch((err) => fail(`The camera couldn't be started (${err && err.name ? err.name : err})`));
+}
+
+/** Take the middle square of the current frame, mirrored, and hand it over. */
+function takePhoto() {
+  const { video, onPhoto } = camera;
+  const vw = video.videoWidth;
+  const vh = video.videoHeight;
+  if (!vw || !vh) return;   // No frame has arrived yet
+  const size = Math.min(vw, vh);
+  const out = Math.min(size, 640);
+  const canvas = document.createElement('canvas');
+  canvas.width = out;
+  canvas.height = out;
+  const ctx = canvas.getContext('2d');
+  ctx.translate(out, 0);
+  ctx.scale(-1, 1);
+  ctx.drawImage(video, (vw - size) / 2, (vh - size) / 2, size, size, 0, 0, out, out);
+  closeCamera();
+  onPhoto(canvas);
+}
+
+/** Stop the camera and hide the overlay. */
+function closeCamera() {
+  if (!camera) return;
+  const { overlay, video, stream } = camera;
+  if (stream) stream.getTracks().forEach((track) => track.stop());
+  video.srcObject = null;
+  overlay.hidden = true;
+  camera = null;
+}
+
+export function cameraOpen() {
+  return !!camera;
 }

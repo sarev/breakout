@@ -45,6 +45,19 @@
                              border-radius: 10px; border: 1px solid rgba(128, 168, 255, 0.35); font-size: 20px;
                              background: rgba(128, 168, 255, 0.15); color: #dde6ff; cursor: pointer; text-align: left; }
     #modal .options button:hover, #modal .options button:active { background: rgba(128, 168, 255, 0.35); color: #fff; }
+
+    /* Selfie camera (the win certificate): a live preview filling the screen, mirrored like a mirror, with the
+       buttons along the bottom and a status line along the top */
+    #camera { position: fixed; inset: 0; background: #000; cursor: default; z-index: 20; }
+    #camera[hidden] { display: none; }
+    #camera video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+    #camera .camera-note { position: absolute; top: 24px; left: 0; right: 0; margin: 0; padding: 0 16px; text-align: center;
+                           color: #dde6ff; font-size: 18px; text-shadow: 0 0 4px #000, 0 0 4px #000; }
+    #camera .camera-bar { position: absolute; left: 0; right: 0; bottom: max(24px, env(safe-area-inset-bottom));
+                          display: flex; justify-content: center; gap: 16px; }
+    #camera button { padding: 14px 24px; border-radius: 10px; border: 1px solid rgba(128, 168, 255, 0.5); font-size: 20px;
+                     background: rgba(12, 18, 36, 0.85); color: #dde6ff; cursor: pointer; }
+    #camera button:hover, #camera button:active { background: rgba(128, 168, 255, 0.35); color: #fff; }
   </style>
 </head>
 <body>
@@ -53,6 +66,14 @@
     <div class="panel">
       <button class="close" type="button" aria-label="Close">&times;</button>
       <div id="modal-body"></div>
+    </div>
+  </div>
+  <div id="camera" hidden>
+    <video id="camera-video" autoplay playsinline muted></video>
+    <p class="camera-note" id="camera-note"></p>
+    <div class="camera-bar">
+      <button type="button" data-camera="snap">Take the photo</button>
+      <button type="button" data-camera="cancel">Cancel</button>
     </div>
   </div>
   <script type="module" src="js/main.js"></script>

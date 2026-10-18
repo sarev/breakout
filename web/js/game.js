@@ -66,6 +66,8 @@ export class Game {
     this.serveDeadline = 0;
     this.level = 1;
     this.difficulty = 0;
+    this.playSeconds = 0;       // Time in play this game (the game clock: no banners, no pauses), for the certificate
+    this.startedAt = null;      // Wall-clock Date the first level began, for the certificate
     this.lowestBrick = 0;
 
     this.buildSprites();
@@ -123,6 +125,8 @@ export class Game {
     this.paused = false;
     this.running = true;
     this.lives = STARTING_LIVES + (2 - this.difficulty);
+    this.playSeconds = 0;
+    this.startedAt = null;
     this.balls = [this.heroBall];
     this.gfx.buildBackground(this.level);
     this.input.centre();
@@ -133,6 +137,7 @@ export class Game {
   initialiseLevel() {
     this.gfx.buildBricks(Game.columns(this.level));
     this.createBricks();
+    if (!this.startedAt) this.startedAt = new Date();   // The first level of the game: stamped on the certificate
     this.input.centre();
     this.bats[0].x = this.gfx.W / 2;
     this.wipe.reset(this.gfx.W / 2, this.time);
@@ -390,6 +395,7 @@ export class Game {
   update(dt) {
     if (this.paused) return;
     this.time += dt;
+    this.playSeconds += dt;
     this.bricksRemaining = this.countLiveBricks();
 
     this.checkInversion(dt);
