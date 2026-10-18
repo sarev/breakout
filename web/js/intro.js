@@ -183,6 +183,7 @@ export class Intro {
         this.hero.vx = (p.x - this.hero.x) / dt;
         this.hero.vy = (p.y - this.hero.y) / dt;
       }
+      this.hero.spin(p.x - this.hero.x, p.y - this.hero.y, dt);   // It doesn't go through move(), so spin it here
       this.hero.x = p.x;
       this.hero.y = p.y;
     }

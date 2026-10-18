@@ -5,8 +5,9 @@
 // game (for the clock, the speed model and sounds).
 
 import {
-  BAT_ANGLE_JITTER, BAT_FADE_SECONDS, BAT_HIT_COOLDOWN, BAT_HIT_SPEED_GAIN, BAT_LIFETIME,
-  BAT_VELOCITY_SMOOTHING, BRICK_COLOURS, BRICK_LIVES, INTRO_DAMPING, MAX_BAT_ANGLE, NET_SLOW, REGEN_POP,
+  BALL_SPIN_MAX_TURNS, BALL_SPIN_RATE, BAT_ANGLE_JITTER, BAT_FADE_SECONDS, BAT_HIT_COOLDOWN,
+  BAT_HIT_SPEED_GAIN, BAT_LIFETIME, BAT_VELOCITY_SMOOTHING, BRICK_COLOURS, BRICK_LIVES, INTRO_DAMPING,
+  MAX_BAT_ANGLE, NET_SLOW, REGEN_POP,
 } from './config.js';
 import { rgba } from './graphics.js';
 
@@ -313,6 +314,25 @@ export class Ball {
     this.serveOnDrop = serveOnDrop;
     this.dropped = false;       // Set by move() when it falls off the bottom; the game reads and clears it
     this.lastBatHit = -1e9;     // Game time of the most recent bat contact (speed-gain cool-off)
+    this.angle = 0;             // The sprite's rotation, radians clockwise: it spins as it travels (spin())
+    this.spinSense = 1;         // +1 clockwise, -1 anticlockwise: the last clear direction of travel
+  }
+
+  /**
+   * Turn the sprite for a step of travel: at `BALL_SPIN_RATE` of a rolling ball's rate (the distance over the
+   * radius), capped at `BALL_SPIN_MAX_TURNS` a second. The sense is clockwise when heading right and
+   * anticlockwise when heading left, held through a vertical stretch rather than flickering about zero.
+   *
+   * @param {number} dx Distance moved this step, px.
+   * @param {number} dy
+   * @param {number} dt Seconds the step took (for the cap).
+   */
+  spin(dx, dy, dt) {
+    const distance = Math.hypot(dx, dy);
+    if (distance === 0 || dt <= 0) return;
+    if (Math.abs(dx) > distance * 0.2) this.spinSense = dx > 0 ? 1 : -1;
+    const turn = Math.min((distance / this.h2) * BALL_SPIN_RATE, BALL_SPIN_MAX_TURNS * 2 * Math.PI * dt);
+    this.angle = (this.angle + turn * this.spinSense) % (2 * Math.PI);
   }
 
   setImage(image, glow) {
@@ -331,7 +351,16 @@ export class Ball {
   draw(ctx) {
     const px = this.x - this.w2;
     const py = this.y - this.h2;
-    ctx.drawImage(this.image, px, py);
+    if (this.angle === 0) {
+      ctx.drawImage(this.image, px, py);
+    } else {
+      // Rotated about its centre; the glow is round, so it needs no turning
+      ctx.save();
+      ctx.translate(this.x, this.y);
+      ctx.rotate(this.angle);
+      ctx.drawImage(this.image, -this.w2, -this.h2);
+      ctx.restore();
+    }
     this.gfx.addGlow(this.glow, px, py);
   }
 
@@ -379,6 +408,7 @@ export class Ball {
 
     this.x += this.vx * dt;
     this.y += this.vy * dt;
+    this.spin(this.vx * dt, this.vy * dt, dt);
     if (this.intro) {
       const retain = Math.pow(INTRO_DAMPING, dt);
       this.vx *= retain;

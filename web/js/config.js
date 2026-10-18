@@ -30,6 +30,11 @@ export const MAX_PLAYFIELD_ASPECT = 16 / 9;
 
 // Sprite heights as a percentage of the playfield height
 export const BALL_HEIGHT_PCT = 4.5;
+// Balls spin as they travel (the sprite is rotated): at BALL_SPIN_RATE of the rate a ball rolling on the ground
+// would turn (one turn per circumference covered), but never faster than BALL_SPIN_MAX_TURNS a second, or a
+// fast ball is a blur. The sense follows the direction of travel: clockwise heading right, anticlockwise left.
+export const BALL_SPIN_RATE = 1;
+export const BALL_SPIN_MAX_TURNS = 3;
 export const INTRO_HERO_SCALE = 2;      // The intro's hero ball is drawn this many times the size of a ball in play
 export const BAT_HEIGHT_PCT = 6;
 export const LASER_HEIGHT_PCT = 6;
