@@ -122,6 +122,7 @@ The intro and each level have their own chiptune track, played at a volume that 
 | ![Warning triangle](./web/sprites/sm-brick8.png) | **Warning triangle** | Enables laser mode for a duration |
 | ![Red lens](./web/sprites/sm-brick9.png) | **Red lens** | Blurs your view and reddens its edges for the rest of the level, and every one makes it worse (web version only; Hard and Insane have one, two and three of them on levels 4 to 6, Medium at most one a level, Easy none) |
 | ![Safety net](./web/sprites/sm-brick10.png) | **Safety net** | A glowing bar floats up from below to just under the bat and stays for a few seconds; any ball that reaches it bounces back up, a little slower. Another one while it's up keeps it longer (web version only) |
+| ![Regenerator](./web/sprites/sm-brick11.png) | **Regenerator** | Brings back a tenth of the level's bricks, one at a time over a few seconds, each popping into the place of a brick you'd already broken (never one the ball is in). They come back as ordinary bricks. One on levels 2 and 3, two on each level after (web version only) |
 
 Different brick types require different numbers of hits to destroy. If no brick is destroyed for a while, an extra bonus ball is introduced.
 
@@ -180,7 +181,7 @@ Options go on the URL, for example `http://localhost:8000/?music=0&sensitivity=1
 | `volume=0.25` | Music volume, 0 to 1 (default 0.4) |
 | `sensitivity=1.5` | Mouse sensitivity multiplier (default 1) |
 | `mobile=1` / `mobile=0` | Force the phone-and-tablet behaviour on or off, instead of detecting it |
-| `debug=1` | Developer cheats: **D** destroys every brick, a click destroys the brick under the pointer, and a digit key jumps straight to that level |
+| `debug=1` | Developer cheats: 99 lives, **D** destroys every brick, a click destroys the brick under the pointer, and a digit key jumps straight to that level |
 
 ### Things worth knowing
 
@@ -205,13 +206,13 @@ Run with `--debug` to enable a few developer cheats during play: **D** destroys 
 
 ## Credits
 
-- Pygame community (https://www.pygame.org/contribute.html) for an excellent Python module
-- The very useful sfxr (https://sfxr.me/) for sound effect generation
-- Background music: "Chiptune Adventures" by Juhani Junkala (https://juhanijunkala.com/), released under CC0 via OpenGameArt (https://opengameart.org/content/4-chiptunes-adventure)
+- Pygame community ( https://www.pygame.org/contribute.html ) for an excellent Python module
+- The very useful sfxr ( https://sfxr.me/ ) for sound effect generation
+- Background music: "Chiptune Adventures" by Juhani Junkala ( https://juhanijunkala.com/ ), released under CC0 via OpenGameArt ( https://opengameart.org/content/4-chiptunes-adventure )
 - A nod to Arkanoid, Fireball 2 (Archimedes), and other classics
-- Final level background: Rosette Nebula (Dylan O'Donnell, https://deography.com/will-you-accept-this-rose-ngc2237/)
+- Final level background: Rosette Nebula ( Dylan O'Donnell, https://deography.com/will-you-accept-this-rose-ngc2237/ )
 - Thanks to ChatGPT for art assistance
-- Web conversion by Anthropic's Claude (https://www.anthropic.com/claude)
+- Web conversion by Anthropic's Claude ( https://www.anthropic.com/claude )
 
 ---
 

@@ -11,8 +11,9 @@
 // doesn't hide them, and the Help page
 // describes the gestures rather than the keys. ?mobile=1 or ?mobile=0 overrides the detection, for testing.
 //
-// ?debug=1 enables the cheats (D clears the level, left-click destroys the brick under the pointer). ?music=0
-// starts silent, ?sensitivity=1.5 scales mouse movement, ?volume=0.3 sets the music volume.
+// ?debug=1 enables the cheats (99 lives, D clears the level, left-click destroys the brick under the pointer, a
+// digit key jumps to that level). ?music=0 starts silent, ?sensitivity=1.5 scales mouse movement, ?volume=0.3
+// sets the music volume.
 
 import { AudioSystem, Music, Sfx } from './audio.js';
 import { loadAudioSet, loadImages } from './assets.js';

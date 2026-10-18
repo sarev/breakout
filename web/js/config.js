@@ -49,6 +49,7 @@ export const COLOURS = {
   laser: [32, 32, 200],
   haze: [255, 48, 48],
   net: [64, 160, 255],
+  regen: [224, 64, 208],
   black: [0, 0, 0],
   lives: [196, 224, 255],
   advance: [128, 255, 192],
@@ -64,18 +65,19 @@ export const COLOURS = {
 };
 export const BRICK_COLOURS = [
   COLOURS.blue, COLOURS.red, COLOURS.green, COLOURS.white, COLOURS.magenta, COLOURS.yellow, COLOURS.fire,
-  COLOURS.metal, COLOURS.laser, COLOURS.haze, COLOURS.net,
+  COLOURS.metal, COLOURS.laser, COLOURS.haze, COLOURS.net, COLOURS.regen,
 ];
 
 // ---------------------------------------------------------------------------------------------------------------
 // Bricks and levels
 // ---------------------------------------------------------------------------------------------------------------
 
-export const NUM_BRICK_TYPES = 11;
+export const NUM_BRICK_TYPES = 12;
 
 // Hits to destroy each brick type: blue, red (extra ball), green (extra bat), white (extra life), black (blackout),
-// yellow (inversion), fire (cascade), metal (indestructible), dark blue (lasers), red lens (haze), safety net
-export const BRICK_LIVES = [1, 3, 2, 2, 4, 3, 2, 99, 3, 3, 2];
+// yellow (inversion), fire (cascade), metal (indestructible), dark blue (lasers), red lens (haze), safety net,
+// regenerator
+export const BRICK_LIVES = [1, 3, 2, 2, 4, 3, 2, 99, 3, 3, 2, 3];
 
 // Brick layouts. 0 is filled randomly with blue / red / green by difficulty; 7 is metal; see breakout.py. The
 // red lens bricks (9) sit in the top rows, out of the way early on, and these layouts carry Hard's full set:
@@ -89,30 +91,30 @@ export const LEVEL_DEFS = [
   ],
   [
     [0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0],
-    [0, 0, 0, 0, 0, 4, 0, 0, 6, 0, 0, 0],
+    [0, 11, 0, 0, 0, 4, 0, 0, 6, 0, 0, 0],
     [7, 0, 0, 0, 0, 7, 7, 0, 0, 3, 0, 7],
   ],
   [
     [0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0],
     [0, 7, 0, 6, 0, 8, 0, 3, 0, 0, 10, 0, 7, 5],
-    [0, 0, 7, 6, 0, 0, 4, 0, 0, 0, 6, 7, 0, 0],
+    [0, 0, 7, 6, 0, 0, 4, 0, 11, 0, 6, 7, 0, 0],
     [0, 0, 0, 0, 10, 0, 0, 7, 8, 0, 0, 0, 0, 3],
   ],
   [
     [0, 6, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0],
-    [0, 0, 6, 0, 0, 0, 0, 0, 4, 0, 0, 0, 9, 0, 0, 0],
+    [0, 0, 6, 0, 0, 11, 0, 0, 4, 0, 0, 0, 9, 0, 0, 0],
     [8, 0, 0, 4, 0, 5, 0, 0, 0, 0, 5, 0, 6, 0, 10, 0],
     [0, 0, 0, 0, 0, 7, 0, 3, 6, 0, 7, 0, 0, 0, 0, 0],
-    [5, 0, 0, 0, 0, 0, 7, 7, 7, 7, 0, 0, 0, 4, 0, 0],
+    [5, 0, 0, 0, 0, 0, 7, 7, 7, 7, 0, 11, 0, 4, 0, 0],
     [0, 0, 10, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 8],
   ],
   [
     [0, 0, 0, 0, 0, 0, 0, 0, 0, 7, 3, 0, 0, 0, 0, 0, 9, 0, 0, 0],
     [0, 0, 0, 6, 0, 0, 0, 0, 0, 5, 7, 0, 0, 4, 0, 9, 0, 0, 6, 0],
-    [0, 0, 0, 0, 6, 0, 0, 8, 0, 0, 4, 0, 0, 0, 10, 0, 0, 0, 0, 0],
+    [0, 11, 0, 0, 6, 0, 0, 8, 0, 0, 4, 0, 0, 0, 10, 0, 0, 0, 0, 0],
     [0, 0, 4, 0, 0, 6, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 8, 0, 0],
     [0, 0, 0, 0, 7, 0, 0, 0, 0, 4, 7, 0, 6, 0, 0, 7, 0, 0, 0, 0],
-    [3, 0, 5, 7, 0, 0, 0, 0, 7, 7, 0, 6, 0, 0, 0, 0, 7, 4, 0, 0],
+    [3, 0, 5, 7, 0, 0, 0, 0, 7, 7, 0, 6, 0, 0, 11, 0, 7, 4, 0, 0],
     [0, 7, 7, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 7, 7, 5],
     [0, 0, 0, 0, 0, 10, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0],
   ],
@@ -120,11 +122,11 @@ export const LEVEL_DEFS = [
     [7, 0, 0, 9, 0, 0, 5, 0, 0, 4, 0, 0, 4, 0, 0, 5, 0, 0, 0, 0, 0, 7],
     [0, 10, 7, 0, 6, 0, 0, 0, 0, 0, 8, 3, 0, 0, 9, 0, 0, 6, 0, 7, 10, 0],
     [0, 4, 0, 0, 0, 6, 0, 0, 5, 0, 9, 0, 5, 0, 0, 6, 0, 0, 0, 4, 0, 0],
-    [0, 0, 0, 0, 0, 0, 7, 7, 7, 6, 0, 0, 6, 7, 7, 7, 0, 0, 0, 0, 0, 0],
+    [0, 0, 11, 0, 0, 0, 7, 7, 7, 6, 0, 0, 6, 7, 7, 7, 0, 0, 0, 0, 0, 0],
     [0, 0, 4, 0, 0, 0, 7, 0, 0, 4, 0, 8, 4, 0, 0, 7, 0, 0, 0, 4, 0, 0],
     [0, 6, 0, 0, 7, 0, 0, 0, 6, 0, 7, 0, 0, 6, 0, 0, 7, 0, 0, 0, 6, 0],
     [5, 10, 0, 7, 0, 0, 0, 8, 0, 0, 6, 0, 0, 0, 8, 0, 0, 7, 0, 0, 10, 5],
-    [0, 0, 0, 0, 0, 7, 0, 3, 6, 0, 7, 0, 6, 3, 0, 7, 0, 0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0, 7, 0, 3, 6, 0, 7, 0, 6, 3, 0, 7, 0, 0, 0, 11, 0, 0],
     [0, 0, 0, 5, 0, 0, 0, 0, 4, 0, 0, 0, 4, 0, 0, 0, 0, 0, 5, 0, 0, 0],
     [7, 0, 10, 0, 0, 6, 0, 0, 0, 8, 0, 0, 0, 8, 0, 0, 0, 6, 0, 10, 0, 7],
   ],
@@ -142,6 +144,7 @@ export const RANDOM_BRICK_TYPES = [
 // ---------------------------------------------------------------------------------------------------------------
 
 export const STARTING_LIVES = 3;        // Plus (2 - difficulty) bonus lives
+export const DEBUG_LIVES = 99;          // Lives in ?debug=1 mode instead, so testing a late level isn't cut short
 export const INVERSION_SECONDS = 6;     // How long a yellow brick reverses the controls
 export const BORING_TIMEOUT = 10;       // Seconds without a kill before a bonus ball is thrown in
 export const MAX_BALLS = 6;             // Bonus balls are refused beyond this
@@ -160,6 +163,13 @@ export const NET_GAP = 0.2;             // Bat heights between the bottom of the
 export const NET_THICKNESS = 0.5;       // Bat heights thick
 export const NET_SLOW = 0.85;           // The ball's speed is multiplied by this on the bounce
 export const NET_PULSE = 0.8;           // Seconds per pulse of the glow
+
+// Regenerator (brick 11): breaking it brings back a share of the level's broken bricks, one at a time, each
+// popping into the place of a brick already destroyed (never one a ball is in), as an ordinary brick.
+export const REGEN_FRACTION = 0.1;      // Share of the level's destructible bricks brought back (at least one)
+export const REGEN_INTERVAL = 0.4;      // Seconds between one brick popping in and the next
+export const REGEN_POP = 0.25;          // Seconds a returning brick takes to grow to full size
+export const REGEN_PATIENCE = 2;        // Seconds to wait for a free spot before giving up on the rest
 
 // Blackout (black hole brick): darkens at `rate` alpha units (0..255) per second, holds, then clears
 export const BLACKOUT_RATE = 60;
@@ -245,7 +255,8 @@ export const TRAIL_FADE_INTRO = 1200;
 // Audio
 // ---------------------------------------------------------------------------------------------------------------
 export const SOUND_NAMES = [
-  'ball-hit', 'bat-hit', 'bonus', 'brick-hit', 'click', 'die', 'drop', 'restore', 'tick', 'wall-hit', 'win',
+  'ball-hit', 'bat-hit', 'bonus', 'brick-hit', 'click', 'die', 'drop', 'respawn', 'restore', 'tick', 'wall-hit',
+  'win',
   'explode0', 'explode1', 'explode2', 'explode3', 'explode4', 'explode5', 'explode6', 'explode7', 'explode8',
   'laser0', 'laser1', 'laser2',
 ];

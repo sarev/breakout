@@ -1,12 +1,12 @@
 // The Game: owns the playfield state and advances it. A port of the Game class in breakout.py.
 
 import {
-  BASE_BALL_SPEED, BLACKOUT_HOLD, BLACKOUT_RATE, BORING_TIMEOUT, COLOURS, ENDGAME_SPEED_BOOST,
+  BASE_BALL_SPEED, BLACKOUT_HOLD, BLACKOUT_RATE, BORING_TIMEOUT, COLOURS, DEBUG_LIVES, ENDGAME_SPEED_BOOST,
   FULL_VOLUME_SPEED, INVERSION_SECONDS, KICK_SPEED_GAIN, LASER_DURATION, LASER_PERIOD, LASER_SPEED_FACTOR,
   LASER_STAGGER, LEVEL_DEFS, LEVEL_SPEED_RAMP, MAX_BALLS, MAX_SPEED_FRACTION, MIN_SPEED_FRACTION,
   MOBILE_BAT_LIFT, NET_GAP, NET_HOLD, NET_PULSE, NET_THICKNESS, NET_TRAVEL, PHYSICS_HZ,
-  RANDOM_BRICK_TYPES, SERVE_FLICK_GAIN, SERVE_JITTER, SERVE_MAX_ANGLE, SERVE_TIMEOUT, STARTING_LIVES,
-  TRAIL_FADE_GAME, WIPE_TIRED_SPEED,
+  RANDOM_BRICK_TYPES, REGEN_FRACTION, REGEN_INTERVAL, REGEN_PATIENCE, SERVE_FLICK_GAIN, SERVE_JITTER,
+  SERVE_MAX_ANGLE, SERVE_TIMEOUT, STARTING_LIVES, TRAIL_FADE_GAME, WIPE_TIRED_SPEED,
 } from './config.js';
 import { Ball, Bat, Brick, Laser } from './entities.js';
 import { tintImage } from './graphics.js';
@@ -62,6 +62,7 @@ export class Game {
     this.inversionRemaining = 0;
     this.laserRemaining = 0;
     this.haze = 0;              // Red lens bricks broken this level: each blurs and reddens the view further
+    this.regen = null;          // {left, nextAt, waitingSince} while a regenerator is bringing bricks back
     this.net = null;            // The safety net while it's about: {y (its top), holdUntil, leaving}
     this.boringDeadline = 0;
     this.serving = false;
@@ -126,7 +127,7 @@ export class Game {
     this.level = level;
     this.paused = false;
     this.running = true;
-    this.lives = STARTING_LIVES + (2 - this.difficulty);
+    this.lives = this.debug ? DEBUG_LIVES : STARTING_LIVES + (2 - this.difficulty);   // A cheat, for testing
     this.playSeconds = 0;
     this.startedAt = null;
     this.balls = [this.heroBall];
@@ -141,6 +142,7 @@ export class Game {
     this.createBricks();
     this.haze = 0;   // The haze lasts for the rest of a level, and no further
     this.net = null;
+    this.regen = null;
     if (!this.startedAt) this.startedAt = new Date();   // The first level of the game: stamped on the certificate
     this.input.centre();
     this.bats[0].x = this.gfx.W / 2;
@@ -407,6 +409,9 @@ export class Game {
       case 10:
         this.raiseNet();
         break;
+      case 11:
+        this.startRegeneration();
+        break;
       default:
         break;
     }
@@ -428,6 +433,7 @@ export class Game {
     this.checkLasers(dt);
     this.animateBats(dt);
     this.animateNet(dt);
+    this.regenerate();
 
     if (this.serving) {
       this.holdHeroBall();
@@ -555,6 +561,55 @@ export class Game {
         a.checkBall(b);
       }
     }
+  }
+
+  // --- Regenerator ------------------------------------------------------------------------------------------
+
+  /**
+   * A regenerator brick has been broken: queue up a share (`REGEN_FRACTION`) of the level's destructible
+   * bricks to be brought back, one every `REGEN_INTERVAL` seconds. Another regenerator while that's still
+   * going adds its share to the queue.
+   */
+  startRegeneration() {
+    const share = Math.max(1, Math.round(this.bricksTotal * REGEN_FRACTION));
+    if (this.regen) {
+      this.regen.left += share;
+    } else {
+      this.regen = { left: share, nextAt: this.time + REGEN_INTERVAL, waitingSince: null };
+    }
+  }
+
+  /**
+   * Pop the next queued brick back in, when its time comes: into the place of a brick whose explosion has
+   * finished and that no ball is in or touching (a brick appearing round a ball would trap it), as an
+   * ordinary brick of the difficulty's random mix. If every such place is taken the pop waits for one, and
+   * after `REGEN_PATIENCE` seconds of that the rest of the queue is dropped, so the level can still end.
+   */
+  regenerate() {
+    const regen = this.regen;
+    if (!regen || this.time < regen.nextAt) return;
+    const free = this.bricks.filter((b) => b.lives < -20 && !this.ballNear(b));
+    if (!free.length) {
+      if (regen.waitingSince === null) regen.waitingSince = this.time;
+      if (this.time - regen.waitingSince > REGEN_PATIENCE) this.regen = null;
+      return;
+    }
+    const brick = free[randInt(0, free.length - 1)];
+    brick.revive(RANDOM_BRICK_TYPES[this.difficulty][randInt(0, 9)], this.time);
+    this.sfx.play('respawn', brick.x / this.gfx.W);
+    regen.left -= 1;
+    regen.nextAt = this.time + REGEN_INTERVAL;
+    regen.waitingSince = null;
+    if (regen.left <= 0) this.regen = null;
+  }
+
+  /** Whether any ball is inside, or within its own diameter of, a brick's cell. */
+  ballNear(brick) {
+    for (const ball of this.balls) {
+      const reach = ball.height;
+      if (Math.abs(ball.x - brick.x) < brick.w2 + reach && Math.abs(ball.y - brick.y) < brick.h2 + reach) return true;
+    }
+    return false;
   }
 
   // --- Safety net -------------------------------------------------------------------------------------------
@@ -686,7 +741,8 @@ export class Game {
    * to a layer and composited through the blur and vignette, and the HUD goes on top of that, crisp; otherwise
    * everything is drawn straight to the canvas in the same order.
    *
-   * @returns {boolean} True if no destroyable bricks remain (the level is complete).
+   * @returns {boolean} True if no destroyable bricks remain, and no regenerator is about to bring any back
+   *   (the level is complete).
    */
   draw(ctx) {
     const gfx = this.gfx;
@@ -702,11 +758,16 @@ export class Game {
     this.drawNet(field);
     if (this.haze > 0) gfx.drawHazed(ctx, this.haze);
 
-    gfx.text(ctx, String(this.lives), { x: gfx.W / 16, y: gfx.H * 0.9, size: 300, colour: COLOURS.lives, alpha: 164 / 255 });
+    // The lives sit a sixteenth of the width in, but never off the left edge: two digits (a run of extra-life
+    // bricks, or the debug cheat) are wider than that on a 4:3 playfield
+    const livesText = String(this.lives);
+    const livesPx = Math.round(300 * 0.72 * gfx.scale);   // The font size `text()` makes of size 300
+    const livesX = Math.max(gfx.W / 16, livesText.length * livesPx * 0.3 + livesPx * 0.1);
+    gfx.text(ctx, livesText, { x: livesX, y: gfx.H * 0.9, size: 300, colour: COLOURS.lives, alpha: 164 / 255 });
     gfx.text(ctx, String(this.level), { x: gfx.W * 0.95, y: gfx.H * 0.9, size: 300, colour: COLOURS.level, alpha: 164 / 255 });
 
     this.drawBlackout(ctx);
-    return remaining === 0;
+    return remaining === 0 && !this.regen;
   }
 
   /** The black hole overlay, if active. */

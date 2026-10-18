@@ -6,7 +6,7 @@
 
 import {
   BAT_ANGLE_JITTER, BAT_FADE_SECONDS, BAT_HIT_COOLDOWN, BAT_HIT_SPEED_GAIN, BAT_LIFETIME,
-  BAT_VELOCITY_SMOOTHING, BRICK_COLOURS, BRICK_LIVES, INTRO_DAMPING, MAX_BAT_ANGLE, NET_SLOW,
+  BAT_VELOCITY_SMOOTHING, BRICK_COLOURS, BRICK_LIVES, INTRO_DAMPING, MAX_BAT_ANGLE, NET_SLOW, REGEN_POP,
 } from './config.js';
 import { rgba } from './graphics.js';
 
@@ -167,22 +167,40 @@ export class Brick {
    * @param {object} game
    * @param {number} x Centre.
    * @param {number} y Centre.
-   * @param {number} type 0..10.
+   * @param {number} type 0..11.
    */
   constructor(id, gfx, game, x, y, type) {
     this.id = id;
     this.gfx = gfx;
     this.game = game;
-    this.type = type;
     this.x = x;
     this.y = y;
+    this.born = null;   // Game time a regenerated brick popped back in, for its growing-in animation
+    this.become(type);
+    this.setSize(gfx.brickSize);
+  }
+
+  /** Make this a fresh brick of a type: full lives, its colour, and random flips for variety. */
+  become(type) {
+    this.type = type;
     this.lives = BRICK_LIVES[type];
     this.colour = BRICK_COLOURS[type];
     // Random flips for variety (not for the metal brick, whose rivets would look odd)
     const rnd = type < 7 ? randInt(0, 3) : 0;
     this.flipX = (rnd & 1) === 1;
     this.flipY = (rnd & 2) === 2;
-    this.setSize(gfx.brickSize);
+  }
+
+  /**
+   * Bring a destroyed brick back (the regenerator's doing) as a fresh brick of a type, growing in from its
+   * centre over `REGEN_POP` seconds.
+   *
+   * @param {number} type The type to come back as.
+   * @param {number} time The game clock now.
+   */
+  revive(type, time) {
+    this.become(type);
+    this.born = time;
   }
 
   setSize(size) {
@@ -217,10 +235,19 @@ export class Brick {
   draw(ctx) {
     if (this.lives > 0) {
       const img = this.gfx.brickImages[this.type];
-      if (this.flipX || this.flipY) {
+      // A regenerated brick grows in from its centre, out of a fading flash of its own colour
+      const age = this.born === null ? Infinity : this.game.time - this.born;
+      const grow = age < REGEN_POP ? Math.max(0.05, age / REGEN_POP) : 1;
+      if (grow < 1) {
+        ctx.fillStyle = rgba(this.colour, 1 - grow);
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.h2 * (0.5 + grow), 0, Math.PI * 2);
+        ctx.fill();
+      }
+      if (this.flipX || this.flipY || grow < 1) {
         ctx.save();
         ctx.translate(this.x, this.y);
-        ctx.scale(this.flipX ? -1 : 1, this.flipY ? -1 : 1);
+        ctx.scale((this.flipX ? -1 : 1) * grow, (this.flipY ? -1 : 1) * grow);
         ctx.drawImage(img, -this.w2, -this.h2);
         ctx.restore();
       } else {
