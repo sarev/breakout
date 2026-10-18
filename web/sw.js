@@ -1,9 +1,26 @@
-// A minimal service worker. It exists only so that browsers which still insist on one before they will install
-// a page as an app from its manifest (Samsung Internet, older Chrome) will do so. It caches nothing: every
-// request goes to the network as usual, so a freshly uploaded version is always what's played. main.js registers
-// it only on a secure (HTTPS) page, which is the other condition for installing.
+// The service worker does two small jobs.
+//
+// 1. It exists. Browsers that still insist on a service worker before they will install a page as an app from
+//    its manifest (Samsung Internet, older Chrome) then do so. main.js registers it only on a secure (HTTPS)
+//    page, which is the other condition for installing.
+//
+// 2. It keeps the game fresh. Static hosts tend to give scripts and images long cache lifetimes, and an
+//    installed app has no address bar to force a reload from, so after an upload a phone could carry on
+//    running the old scripts for days. Every same-origin fetch for a script, image, sound or track is made with
+//    `cache: 'no-cache'`, which makes the browser check with the server first: a conditional request that
+//    returns the cached copy if the file is unchanged, or the new file if it isn't. Navigations (the page
+//    itself) are left alone, since a response built here for a navigation has restrictions of its own and the
+//    browser revalidates the HTML anyway. Nothing is stored by this worker.
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', (event) => event.waitUntil(self.clients.claim()));
-// A genuine pass-through, not an empty handler: Chromium-based browsers treat an empty fetch handler as no
-// handler at all when deciding whether the page can be installed
-self.addEventListener('fetch', (event) => event.respondWith(fetch(event.request)));
+self.addEventListener('fetch', (event) => {
+  const request = event.request;
+  const sameOrigin = new URL(request.url).origin === self.location.origin;
+  if (request.method === 'GET' && request.mode !== 'navigate' && sameOrigin) {
+    event.respondWith(
+      fetch(request.url, { cache: 'no-cache', credentials: 'same-origin' }).catch(() => fetch(request)),
+    );
+  } else {
+    event.respondWith(fetch(request));
+  }
+});

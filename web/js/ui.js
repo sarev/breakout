@@ -131,7 +131,7 @@ export function openModal(kind, closed = null) {
  *
  * @param {Function} getState Returns {inGame, music, fullscreen, fullscreenAvailable}; read afresh on each render
  *                            so the buttons always show the current state.
- * @param {Object<string, Function>} actions Handlers keyed by button: resume, music, fullscreen, help, quit.
+ * @param {Object<string, Function>} actions Handlers keyed by button: resume, music, fullscreen, help, credits, quit.
  * @param {Function} [closed] Called when it's dismissed (by any means).
  */
 export function openOptions(getState, actions, closed = null) {
@@ -149,10 +149,9 @@ export function renderOptions() {
   rows.push(button('resume', s.inGame ? 'Resume' : 'Close'));
   rows.push(button('music', `Music: ${s.music ? 'on' : 'off'}`));
   if (s.fullscreenAvailable) rows.push(button('fullscreen', `Fullscreen: ${s.fullscreen ? 'on' : 'off'}`));
-  if (s.inGame) {
-    rows.push(button('help', 'Help'));
-    rows.push(button('quit', 'Quit to the menu'));
-  }
+  rows.push(button('help', 'Help'));
+  if (s.inGame) rows.push(button('quit', 'Quit to the menu'));
+  else rows.push(button('credits', 'Credits'));   // On the intro the page is also how a phone reaches Credits
   body.innerHTML = `<h2>${s.inGame ? 'Paused' : 'Options'}</h2><div class="options">${rows.join('')}</div>`;
 }
 

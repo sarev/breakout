@@ -266,10 +266,17 @@ export class Intro {
       });
     });
 
+    // On a phone the Help and Credits pages live on the two-finger-tap menu, so the links give way to a hint
+    if (this.input.mobile) {
+      this.linkBoxes = {};
+      gfx.text(ctx, 'Two-finger tap for the menu', { x, y: gfx.H * 0.88, size: 60, alpha: 0.8, colour: COLOURS.presskey, outline: [0, 0, 0] });
+    }
+
     // Help and Credits links, underlined, lit up when the hero ball is over them. The hit boxes are padded a
     // little so a ball or a finger doesn't have to land exactly on the letters.
     const hover = this.linkAt(this.hero.x, this.hero.y);
-    [['help', 'Help', gfx.W * 0.42], ['credits', 'Credits', gfx.W * 0.58]].forEach(([name, label, lx]) => {
+    const links = this.input.mobile ? [] : [['help', 'Help', gfx.W * 0.42], ['credits', 'Credits', gfx.W * 0.58]];
+    links.forEach(([name, label, lx]) => {
       const lit = hover === name;
       const box = gfx.text(ctx, label, {
         x: lx, y: gfx.H * 0.88, size: 60, alpha: lit ? 1 : 0.8, colour: lit ? COLOURS.white : COLOURS.presskey,

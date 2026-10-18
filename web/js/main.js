@@ -32,16 +32,19 @@ const MUSIC_VOLUME = params.has('volume') ? parseFloat(params.get('volume')) : n
 /**
  * Is this a mobile device: a phone or tablet whose only pointer is a finger?
  *
- * The media query is the standard way to ask: a device whose primary pointer is coarse and can't hover. A touch
- * laptop has a mouse or trackpad too, so it reports a fine pointer and keeps the desktop behaviour (its touch
- * screen still works). The user-agent fallback covers older browsers without the query. ?mobile=1 / ?mobile=0
- * forces the answer, which is handy for trying the mobile layout on a desktop.
+ * The media query asks whether the device's primary pointer is coarse (a finger). A touch laptop has a mouse or
+ * trackpad too, so it reports a fine pointer and keeps the desktop behaviour (its touch screen still works).
+ * The query deliberately doesn't also ask whether the pointer can hover, which would be the textbook way to
+ * spot a phone: Samsung touchscreens tell Android they can hover, so on every Samsung phone `(hover: none)` is
+ * false and that test would say "desktop". The user-agent fallback covers browsers without the query, and
+ * any that get the query wrong. ?mobile=1 / ?mobile=0 forces the answer, which is handy for trying the mobile
+ * layout on a desktop.
  */
 function detectMobile() {
   const forced = params.get('mobile');
   if (forced === '1') return true;
   if (forced === '0') return false;
-  if (window.matchMedia) return window.matchMedia('(hover: none) and (pointer: coarse)').matches;
+  if (window.matchMedia && window.matchMedia('(pointer: coarse)').matches) return true;
   return navigator.maxTouchPoints > 0 && /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 }
 const MOBILE = detectMobile();
@@ -262,8 +265,9 @@ async function boot() {
       resume: () => closeModal(),
       music: () => music.toggle(),
       fullscreen: () => toggleFullscreen(),
-      // Help opens over the top; closing it comes back here, still paused
+      // Help and Credits open over the top; closing them comes back here (still paused, in play)
       help: () => openModal('help', () => showOptions()),
+      credits: () => openModal('credits', () => showOptions()),
       quit: () => { closeModal(); quitToIntro(); },
     };
     openOptions(state, actions, () => { if (inGame) setPaused(false); });
