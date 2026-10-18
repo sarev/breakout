@@ -2,7 +2,7 @@
 // and the difficulty menu, which is chosen by steering the hero ball into a label.
 
 import {
-  CARD_PITCH_RATE, CARD_ROLL_RATE, CARD_YAW_RATE, COLOURS, INTRO_BALLS, TRAIL_FADE_INTRO,
+  CARD_PITCH_RATE, CARD_ROLL_RATE, CARD_YAW_RATE, COLOURS, INTRO_BALLS, TRAIL_FADE_INTRO, TILT_ACCEL, TILT_DAMPING,
 } from './config.js';
 import { Ball } from './entities.js';
 import { substeps } from './game.js';
@@ -68,7 +68,36 @@ export class Intro {
     this.menuBoxes = [null, null, null];
     this.linkBoxes = { help: null, credits: null };   // Hit boxes for the Help / Credits links
     this.idle = false;                                // Settling the card to face the viewer (see setIdle)
+    this.tiltActive = false;                          // Hero ball rolled by the device's tilt (phones), not the pointer
+    this.tilt = { x: 0, y: 0 };                       // Current tilt as a roll vector in screen terms, -1..1 each way
     this.spawnBalls();
+  }
+
+  /**
+   * Feed a device orientation reading (a phone). Level is truly flat, lying on its back, which is the sensor's
+   * own zero: hold the phone flat and every deviation rolls the ball, like a ball on a tray. Held at a viewing
+   * angle instead, the ball simply rests against the bottom edge. The reading is in the device's own frame
+   * (beta tilts about its short axis, gamma about its long one), so it's turned to match which way round the
+   * screen is.
+   *
+   * @param {number} beta Degrees, positive when the top of the device is raised.
+   * @param {number} gamma Degrees, positive when the right-hand side of the device is lowered.
+   * @param {number} angle The screen's rotation from the device's natural (portrait) orientation: 0, 90, 180, 270.
+   */
+  onOrientation(beta, gamma, angle) {
+    const toRad = Math.PI / 180;
+    // Which way the ball rolls, in the device's frame: towards its right-hand side, and towards its bottom
+    const right = Math.sin(gamma * toRad);
+    const down = Math.sin(beta * toRad);
+    // ...turned into screen terms. At 90 degrees the device has been turned anticlockwise, so its right-hand
+    // side is at the top of the screen and its bottom is at the screen's right; 270 is the mirror of that.
+    switch (((angle % 360) + 360) % 360) {
+      case 90: this.tilt = { x: down, y: -right }; break;
+      case 180: this.tilt = { x: -right, y: -down }; break;
+      case 270: this.tilt = { x: -down, y: right }; break;
+      default: this.tilt = { x: right, y: down };
+    }
+    this.tiltActive = true;
   }
 
   /**
@@ -103,7 +132,7 @@ export class Intro {
     const s = gfx.sprites;
     this.balls = [];
     for (let i = 0; i < INTRO_BALLS; i++) {
-      this.balls.push(new Ball(i === 0 ? s.ball : s.bonusBall, i === 0 ? s.blueGlow : s.redGlow, gfx, this.game,
+      this.balls.push(new Ball(i === 0 ? s.introBall : s.bonusBall, i === 0 ? s.introGlow : s.redGlow, gfx, this.game,
         randInt(0, gfx.W - 1), randInt(0, gfx.H - 1),
         { vx: randInt(-5, 5) * 120 * gfx.scale, vy: randInt(-5, 5) * 120 * gfx.scale, lives: 1, intro: true }));
     }
@@ -119,7 +148,8 @@ export class Intro {
   totalSpeed() {
     let total = 0;
     for (const ball of this.balls) {
-      if (ball !== this.hero) total += Math.hypot(ball.vx, ball.vy);
+      // The hero ball counts when it's rolling under tilt (it's then part of the scene, not the pointer)
+      if (ball !== this.hero || this.tiltActive) total += Math.hypot(ball.vx, ball.vy);
     }
     return total;
   }
@@ -129,19 +159,30 @@ export class Intro {
     this.elapsed += dt;
 
     const [n, h] = substeps(dt);
+    if (this.tiltActive) {
+      // The hero ball rolls with the tilt: accelerated by it, slowed by rolling friction, and bouncing off
+      // the edges like the others (it goes through the same move)
+      this.hero.vx += this.tilt.x * TILT_ACCEL * gfx.scale * dt;
+      this.hero.vy += this.tilt.y * TILT_ACCEL * gfx.scale * dt;
+      const retain = Math.pow(TILT_DAMPING, dt);
+      this.hero.vx *= retain;
+      this.hero.vy *= retain;
+    }
     for (const ball of this.balls) {
-      if (ball !== this.hero) for (let i = 0; i < n; i++) ball.move(h);
+      if (ball !== this.hero || this.tiltActive) for (let i = 0; i < n; i++) ball.move(h);
       if (ball.lives < 1) ball.lives = 1;
     }
 
-    // The hero ball is the pointer; its velocity is how far it moved this frame, so a flick shoves the others
-    const p = gfx.pointerToPlayfield(this.input.raw.x, this.input.raw.y);
-    if (dt > 0) {
-      this.hero.vx = (p.x - this.hero.x) / dt;
-      this.hero.vy = (p.y - this.hero.y) / dt;
+    if (!this.tiltActive) {
+      // The hero ball is the pointer; its velocity is how far it moved this frame, so a flick shoves the others
+      const p = gfx.pointerToPlayfield(this.input.raw.x, this.input.raw.y);
+      if (dt > 0) {
+        this.hero.vx = (p.x - this.hero.x) / dt;
+        this.hero.vy = (p.y - this.hero.y) / dt;
+      }
+      this.hero.x = p.x;
+      this.hero.y = p.y;
     }
-    this.hero.x = p.x;
-    this.hero.y = p.y;
 
     for (let i = 0; i < this.balls.length; i++) {
       for (let j = i + 1; j < this.balls.length; j++) this.balls[i].checkBall(this.balls[j]);

@@ -7,7 +7,7 @@
 // fullscreen, help, quit), which stands in for the keys.
 //
 // A mobile device (a phone or tablet: touch, no mouse, one screen) is detected at start-up, and there the prompts
-// say "tap", the mouse is never captured, the bats sit higher and (in landscape) twice as wide so a fingertip
+// say "tap", the mouse is never captured, the bats sit higher and (in landscape) wider so a fingertip
 // doesn't hide them, and the Help page
 // describes the gestures rather than the keys. ?mobile=1 or ?mobile=0 overrides the detection, for testing.
 //
@@ -52,26 +52,40 @@ const MOBILE = detectMobile();
 /** Fullscreen helpers with the WebKit-prefixed fallbacks that iOS and older browsers still need. */
 const fullscreenAvailable = () => !!(document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen);
 const isFullscreen = () => !!(document.fullscreenElement || document.webkitFullscreenElement);
-function toggleFullscreen() {
-  const doc = document;
-  const root = doc.documentElement;
+let leavingFullscreen = false;   // True while an exit we asked for is in progress (see fullscreenchange below)
+function enterFullscreen() {
+  const root = document.documentElement;
   try {
-    if (isFullscreen()) {
-      const exit = doc.exitFullscreen || doc.webkitExitFullscreen;
-      if (exit) { const p = exit.call(doc); if (p && p.catch) p.catch(() => {}); }
-    } else {
-      const enter = root.requestFullscreen || root.webkitRequestFullscreen;
-      if (!enter) return;
-      const p = enter.call(root);
-      if (p && p.then) {
-        // On a phone, fullscreen is the moment to ask for landscape: the playfield is tiny in portrait. The
-        // request is refused on desktops and some browsers, and that's fine.
-        p.then(() => {
-          if (MOBILE && screen.orientation && screen.orientation.lock) screen.orientation.lock('landscape').catch(() => {});
-        }).catch(() => {});
-      }
-    }
+    const enter = root.requestFullscreen || root.webkitRequestFullscreen;
+    if (!enter) return;
+    const p = enter.call(root);
+    if (p && p.catch) p.catch(() => {});
   } catch (e) { /* fullscreen not permitted here; nothing to do */ }
+}
+function exitFullscreen() {
+  try {
+    const exit = document.exitFullscreen || document.webkitExitFullscreen;
+    if (!exit) return;
+    leavingFullscreen = true;
+    const p = exit.call(document);
+    if (p && p.catch) p.catch(() => {});
+  } catch (e) { /* nothing to do */ }
+}
+function toggleFullscreen() {
+  if (isFullscreen()) exitFullscreen(); else enterFullscreen();
+}
+
+// On a phone, fullscreen follows the orientation rather than being locked: landscape is fullscreen (that's
+// where the game is playable, and the address bar would only steal height), portrait isn't (it adds nothing,
+// and giving the browser back is how the player escapes without feeling trapped). A page may leave fullscreen
+// whenever it likes but may only enter it from a tap, so turning to portrait drops out at once, and turning
+// to landscape arms the next tap to go fullscreen. If the player backs out of fullscreen while still in
+// landscape, taps leave it alone until the phone has been turned again.
+const isLandscape = () => window.innerWidth > window.innerHeight;
+let autoFullscreen = MOBILE;
+/** Called from every tap: go fullscreen if the orientation calls for it and the player hasn't opted out. */
+function fullscreenOnTap() {
+  if (MOBILE && autoFullscreen && isLandscape() && !isFullscreen()) enterFullscreen();
 }
 
 const ASSET_BASE = './';    // The sprites, sounds and music folders sit beside this page, so web/ is self-contained
@@ -144,12 +158,33 @@ async function boot() {
     notice = { text, until: performance.now() / 1000 + seconds };
   }
 
+  /**
+   * On a phone the intro's hero ball rolls with the device's tilt rather than following a finger. iOS wants
+   * permission for orientation readings, asked for from a user gesture (the gate's tap); Android just sends
+   * them (on a secure page). The ball stays finger-driven until the first reading arrives, so a device with no
+   * sensors or a refused permission loses nothing.
+   */
+  function startTilt() {
+    if (!MOBILE || !window.DeviceOrientationEvent) return;
+    const screenAngle = () => {
+      const a = (screen.orientation && typeof screen.orientation.angle === 'number') ? screen.orientation.angle
+        : (typeof window.orientation === 'number' ? window.orientation : 0);
+      return ((a % 360) + 360) % 360;
+    };
+    const listen = () => window.addEventListener('deviceorientation', (e) => {
+      if (e.beta === null || e.gamma === null) return;
+      intro.onOrientation(e.beta, e.gamma, screenAngle());
+    });
+    if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+      DeviceOrientationEvent.requestPermission().then((r) => { if (r === 'granted') listen(); }).catch(() => {});
+    } else {
+      listen();
+    }
+  }
+
   function leaveGate() {
     audio.unlock();
-    // On a phone the first tap is also the moment to fill the screen and turn to landscape: when the page is
-    // opened in the browser rather than from an installed home-screen icon, nothing else will. Both requests
-    // need a user gesture, which this is.
-    if (MOBILE && !isFullscreen()) toggleFullscreen();
+    startTilt();
     music.play('intro');
     scene = 'intro';
   }
@@ -282,8 +317,9 @@ async function boot() {
     } else if (scene === 'intro') {
       // A click or tap on one of the links opens its page instead of starting a game. Otherwise the label under
       // the pointer (if any) is selected first: a quick tap can land and lift between two frames, before the
-      // intro has had a chance to notice where the finger went
-      const p = input.playfield();
+      // intro has had a chance to notice where the finger went. When the ball is rolled by tilt, the ball is
+      // what chooses, wherever the finger tapped
+      const p = intro.tiltActive ? { x: intro.hero.x, y: intro.hero.y } : input.playfield();
       const link = intro.linkAt(p.x, p.y);
       if (link) {
         openModal(link);
@@ -327,14 +363,35 @@ async function boot() {
   input.onLockChange = (locked) => {
     if (locked) showNotice('Mouse captured. Esc or L releases it.', 5);
   };
-  input.onTap = () => primaryAction();
+  input.onTap = () => { fullscreenOnTap(); primaryAction(); };
   game.wipe.onTired = () => showNotice('Too frantic! The bat is worn out for a moment', 2.5);
   input.onTwoFingerTap = () => {
     audio.unlock();
+    fullscreenOnTap();
     if (scene === 'game' || scene === 'intro') showOptions();
   };
   // The Options page shows the fullscreen state, which can also change by other means (Esc, the F key)
-  for (const type of ['fullscreenchange', 'webkitfullscreenchange']) document.addEventListener(type, renderOptions);
+  for (const type of ['fullscreenchange', 'webkitfullscreenchange']) {
+    document.addEventListener(type, () => {
+      renderOptions();
+      // Leaving fullscreen in landscape without us asking (the back gesture) is the player opting out
+      if (!isFullscreen() && !leavingFullscreen && isLandscape()) autoFullscreen = false;
+      leavingFullscreen = false;
+    });
+  }
+  if (MOBILE) {
+    // Orientation changes arrive as resizes (the viewport swaps its sides); there's no gesture to enter
+    // fullscreen on, so landscape only arms the next tap, with a hint
+    let landscape = isLandscape();
+    window.addEventListener('resize', () => {
+      const now = isLandscape();
+      if (now === landscape) return;
+      landscape = now;
+      autoFullscreen = true;
+      if (!now && isFullscreen()) exitFullscreen();
+      if (now && !isFullscreen()) showNotice('Tap to go fullscreen', 3);
+    });
+  }
 
   canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 

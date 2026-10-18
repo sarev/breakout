@@ -12,6 +12,9 @@ import { Ball, Bat, Brick, Laser } from './entities.js';
 import { tintImage } from './graphics.js';
 import { WipeDetector } from './wipe.js';
 
+// Where each bat sits relative to the hero bat (id 0), in hero-bat widths: the bonus bats alternate left and right
+const BAT_OFFSETS = [0, -1, 1, -2, 2, -3, 3];
+
 const rand = (lo, hi) => lo + Math.random() * (hi - lo);
 const randInt = (lo, hi) => lo + Math.floor(Math.random() * (hi - lo + 1));
 
@@ -79,9 +82,8 @@ export class Game {
     if (this.bats.length === 0 && this.extraBats.length === 0) {
       const hero = new Bat(0, this.sprites.bat, this.sprites.invBat, this.gfx, this);
       this.bats = [hero];
-      const offsets = [0, -1, 1, -2, 2, -3, 3];
       for (let i = 1; i < 7; i++) {
-        this.extraBats.push(new Bat(i, this.sprites.bonusBat, this.sprites.invBonusBat, this.gfx, this, offsets[i] * hero.width));
+        this.extraBats.push(new Bat(i, this.sprites.bonusBat, this.sprites.invBonusBat, this.gfx, this, BAT_OFFSETS[i] * hero.width));
       }
     }
   }
@@ -186,10 +188,15 @@ export class Game {
   /** Re-scale everything after the viewport changed. */
   relayout(sx, sy) {
     this.buildSprites();
-    for (const bat of this.bats.concat(this.extraBats)) {
+    const allBats = this.bats.concat(this.extraBats);
+    for (const bat of allBats) {
       bat.relayout(bat.id === 0 ? this.sprites.bat : this.sprites.bonusBat,
         bat.id === 0 ? this.sprites.invBat : this.sprites.invBonusBat, sx);
     }
+    // The bonus bats sit side by side with the hero bat, so their offsets follow its width, which can change by
+    // more than the viewport did (the bats are drawn wider on a phone in landscape than in portrait)
+    const heroWidth = allBats.find((bat) => bat.id === 0).width;
+    for (const bat of allBats) bat.dx = BAT_OFFSETS[bat.id] * heroWidth;
     for (const ball of this.balls) {
       ball.setImage(ball === this.heroBall ? this.sprites.ball : this.sprites.bonusBall,
         ball === this.heroBall ? this.sprites.blueGlow : this.sprites.redGlow);

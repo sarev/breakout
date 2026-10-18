@@ -30,6 +30,7 @@ export const MAX_PLAYFIELD_ASPECT = 16 / 9;
 
 // Sprite heights as a percentage of the playfield height
 export const BALL_HEIGHT_PCT = 4.5;
+export const INTRO_HERO_SCALE = 2;      // The intro's hero ball is drawn this many times the size of a ball in play
 export const BAT_HEIGHT_PCT = 6;
 export const LASER_HEIGHT_PCT = 6;
 
@@ -187,10 +188,14 @@ export const WIPE_TIRED_SPEED = 0.25;   // Playfield widths per second the bat c
 export const WIPE_HYSTERESIS = 0.01;    // Playfield widths of reverse travel before a sweep counts as turned round
 
 // Touch
-export const MOBILE_BAT_LIFT = 2;       // Bat heights the bats sit higher on a mobile device, clear of the fingertip
-export const MOBILE_BAT_WIDEN = 2;      // Bats this many times wider on a mobile device in landscape, so that they
+export const MOBILE_BAT_LIFT = 1;       // Bat heights the bats sit higher on a mobile device, clear of the fingertip
+export const MOBILE_BAT_WIDEN = 1.5;    // Bats this many times wider on a mobile device in landscape, so that they
                                         // show either side of the finger driving them (the end caps keep their shape)
 export const MOBILE_WIDE_ASPECT = 1.5;  // ...when the playfield is at least this wide for its height (landscape)
+
+// Intro on a phone: the hero ball rolls with the device's tilt, like a ball on a tray
+export const TILT_ACCEL = 4500;         // Acceleration (px/s^2 at the reference scale) at a full 90 degrees of tilt
+export const TILT_DAMPING = 0.3;        // Fraction of the hero ball's speed kept after one second (rolling friction)
 
 // Intro
 export const INTRO_DAMPING = 0.887;     // Fraction of speed an intro ball keeps after one second

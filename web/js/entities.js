@@ -91,11 +91,10 @@ export class Bat {
     this.y = this.gfx.H - Math.floor(this.height * (1.3 + this.game.batLift));
   }
 
-  /** Re-scale after a viewport change. */
+  /** Re-scale after a viewport change (the game then resets `dx` from the hero bat's new width). */
   relayout(image, invImage, sx) {
     this.normalImage = image;
     this.invertedImage = invImage;
-    this.dx *= sx;
     this.x *= sx;
     this.setImage(image);
   }
