@@ -17,7 +17,7 @@
 import { AudioSystem, Music, Sfx } from './audio.js';
 import { loadAudioSet, loadImages } from './assets.js';
 import { Certificate } from './certificate.js';
-import { COLOURS, MAX_FRAME_DT, MUSIC_FILES, SOUND_NAMES } from './config.js';
+import { COLOURS, MAX_FRAME_DT, MUSIC_FILES, NUM_BRICK_TYPES, SOUND_NAMES } from './config.js';
 import { Game } from './game.js';
 import { Graphics } from './graphics.js';
 import { Input } from './input.js';
@@ -140,7 +140,7 @@ async function boot() {
     ball: 'ball.png', bonusBall: 'extra-ball.png', blueGlow: 'blue-glow.png', redGlow: 'red-glow.png',
     bat: 'bat.png', bonusBat: 'extra-bat.png', blueLaser: 'blue.png', greenLaser: 'green.png', intro: 'intro.png',
   };
-  for (let i = 0; i < 9; i++) imageNames[`brick${i}`] = `brick${i}.png`;
+  for (let i = 0; i < NUM_BRICK_TYPES; i++) imageNames[`brick${i}`] = `brick${i}.png`;
   for (let i = 1; i <= 6; i++) imageNames[`tile${i}`] = `tile${i}.png`;
 
   const audio = new AudioSystem();
@@ -278,6 +278,7 @@ async function boot() {
     music.stop();
     audio.sfx.play(won ? 'win' : 'die');
     input.releaseLock();
+    game.clearInversion();
     notice = null;   // A notice from the last seconds of play would sit over the certificate's text
     certificate.start(game, won);
     scene = 'over';
@@ -330,6 +331,7 @@ async function boot() {
     input.releaseLock();
     audio.resume();
     game.paused = false;
+    game.clearInversion();
     intro.relayout();
     music.play('intro');
     scene = 'intro';
@@ -497,6 +499,14 @@ async function boot() {
         quitToIntro();
       } else if (key === 'd' && DEBUG) {
         for (const brick of game.bricks) brick.hit(0, null, true);
+      } else if (DEBUG && key >= '1' && key <= '9' && !e.repeat) {
+        // Jump straight to that level, banner first, keeping the lives as they are
+        const level = parseInt(key, 10);
+        if (level <= Game.maxLevel) {
+          game.level = level;
+          gfx.buildBackground(level);
+          showSplash(`Level ${level}...`, COLOURS.advance, 'level');
+        }
       }
     }
   });

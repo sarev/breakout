@@ -19,6 +19,7 @@ const BRICKS = [
   ['sm-brick6.png', 'Cracked fire', 'Destroys neighbouring bricks (cascade)'],
   ['sm-brick7.png', 'Metal', 'Indestructible'],
   ['sm-brick8.png', 'Warning triangle', 'Lasers for a while'],
+  ['sm-brick9.png', 'Red lens', 'Blurs your view and reddens its edges for the rest of the level; each one makes it worse'],
 ];
 
 // The controls table differs by device: a phone or tablet has no keyboard, so it gets the touch gestures only

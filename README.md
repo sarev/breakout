@@ -120,6 +120,7 @@ The intro and each level have their own chiptune track, played at a volume that 
 | ![Cracked fire](./web/sprites/sm-brick6.png) | **Cracked fire** | Destroys neighbouring bricks (cascade) |
 | ![Metal](./web/sprites/sm-brick7.png) | **Metal** | Indestructible |
 | ![Warning triangle](./web/sprites/sm-brick8.png) | **Warning triangle** | Enables laser mode for a duration |
+| ![Red lens](./web/sprites/sm-brick9.png) | **Red lens** | Blurs your view and reddens its edges for the rest of the level, and every one makes it worse (web version only; Hard and Insane have one, two and three of them on levels 4 to 6, Medium at most one a level, Easy none) |
 
 Different brick types require different numbers of hits to destroy. If no brick is destroyed for a while, an extra bonus ball is introduced.
 
@@ -178,7 +179,7 @@ Options go on the URL, for example `http://localhost:8000/?music=0&sensitivity=1
 | `volume=0.25` | Music volume, 0 to 1 (default 0.4) |
 | `sensitivity=1.5` | Mouse sensitivity multiplier (default 1) |
 | `mobile=1` / `mobile=0` | Force the phone-and-tablet behaviour on or off, instead of detecting it |
-| `debug=1` | Developer cheats: **D** destroys every brick, and a click destroys the brick under the pointer |
+| `debug=1` | Developer cheats: **D** destroys every brick, a click destroys the brick under the pointer, and a digit key jumps straight to that level |
 
 ### Things worth knowing
 

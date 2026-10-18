@@ -61,6 +61,7 @@ export class Game {
     this.darkAlpha = null;      // Blackout state: negative = darkening, positive = clearing, null = off
     this.inversionRemaining = 0;
     this.laserRemaining = 0;
+    this.haze = 0;              // Red lens bricks broken this level: each blurs and reddens the view further
     this.boringDeadline = 0;
     this.serving = false;
     this.serveDeadline = 0;
@@ -137,6 +138,7 @@ export class Game {
   initialiseLevel() {
     this.gfx.buildBricks(Game.columns(this.level));
     this.createBricks();
+    this.haze = 0;   // The haze lasts for the rest of a level, and no further
     if (!this.startedAt) this.startedAt = new Date();   // The first level of the game: stamped on the certificate
     this.input.centre();
     this.bats[0].x = this.gfx.W / 2;
@@ -144,9 +146,7 @@ export class Game {
     if (this.steer) this.steer.level();   // However the phone is held as the level starts is level
     this.boringDeadline = this.time + BORING_TIMEOUT;
     this.darkAlpha = null;
-    this.inversionRemaining = 0;
-    this.input.setInverted(false);
-    for (const bat of this.bats.concat(this.extraBats)) bat.restore();
+    this.clearInversion();
     while (this.bats.length > 1) this.extraBats.push(this.bats.pop());
     this.balls.length = 1;
     this.lasers = [];
@@ -162,13 +162,20 @@ export class Game {
     this.bottomEdge = size * rows.length;
     this.lowestBrick = this.bottomEdge + this.heroBall.height;
     const mix = RANDOM_BRICK_TYPES[this.difficulty];
+    // Red lens bricks: the layouts carry Hard's full set (one on level 4, two on 5, three on 6); Medium keeps
+    // only the first on any level, and Easy has none. The rest become ordinary bricks.
+    let lensesLeft = this.difficulty >= 2 ? Infinity : (this.difficulty === 1 ? 1 : 0);
     let id = 0;
     rows.forEach((row, yn) => {
       const y = Math.floor(size / 2) + yn * size;
       row.forEach((cell, xn) => {
         const x = Math.floor(size / 2) + xn * size;
         let type = cell;
-        if (type === 0) {
+        if (type === 9 && lensesLeft > 0) {
+          lensesLeft -= 1;
+        } else if (type === 9) {
+          type = mix[randInt(0, 9)];
+        } else if (type === 0) {
           type = mix[randInt(0, 9)];
         } else if (this.difficulty === 0 && (type === 7 || type === 4)) {
           type = 0;   // Easy: no metal or black hole bricks
@@ -182,6 +189,16 @@ export class Game {
     });
     this.bricksTotal = this.countLiveBricks();
     this.bricksRemaining = this.bricksTotal;
+  }
+
+  /**
+   * End the yellow brick's reversed controls at once: at a level start, and when a game ends, so the intro's
+   * pointer isn't left mirrored (which once sent a click on Help to Credits).
+   */
+  clearInversion() {
+    this.inversionRemaining = 0;
+    this.input.setInverted(false);
+    for (const bat of this.bats.concat(this.extraBats)) bat.restore();
   }
 
   countLiveBricks() {
@@ -381,6 +398,9 @@ export class Game {
         }
         this.laserRemaining += LASER_DURATION;
         break;
+      case 9:
+        this.haze += 1;   // Worse with every one, until the level ends
+        break;
       default:
         break;
     }
@@ -561,19 +581,28 @@ export class Game {
    * @param {CanvasRenderingContext2D} ctx
    * @returns {boolean} True if every destructible brick is gone (level complete).
    */
+  /**
+   * Draw the frame. Under the haze of a red lens brick the playfield (backdrop, bricks, balls and bats) is drawn
+   * to a layer and composited through the blur and vignette, and the HUD goes on top of that, crisp; otherwise
+   * everything is drawn straight to the canvas in the same order.
+   *
+   * @returns {boolean} True if no destroyable bricks remain (the level is complete).
+   */
   draw(ctx) {
     const gfx = this.gfx;
-    ctx.drawImage(gfx.background, 0, 0);
-    gfx.drawTrails(ctx);
+    const field = this.haze > 0 ? gfx.layerContext() : ctx;
+    field.drawImage(gfx.background, 0, 0);
+    gfx.drawTrails(field);
+
+    let remaining = 0;
+    for (const brick of this.bricks) if (brick.draw(field)) remaining++;
+    for (const laser of this.lasers) laser.draw(field);
+    for (const ball of this.balls) ball.draw(field);
+    for (const bat of this.bats) bat.draw(field);
+    if (this.haze > 0) gfx.drawHazed(ctx, this.haze);
 
     gfx.text(ctx, String(this.lives), { x: gfx.W / 16, y: gfx.H * 0.9, size: 300, colour: COLOURS.lives, alpha: 164 / 255 });
     gfx.text(ctx, String(this.level), { x: gfx.W * 0.95, y: gfx.H * 0.9, size: 300, colour: COLOURS.level, alpha: 164 / 255 });
-
-    let remaining = 0;
-    for (const brick of this.bricks) if (brick.draw(ctx)) remaining++;
-    for (const laser of this.lasers) laser.draw(ctx);
-    for (const ball of this.balls) ball.draw(ctx);
-    for (const bat of this.bats) bat.draw(ctx);
 
     this.drawBlackout(ctx);
     return remaining === 0;

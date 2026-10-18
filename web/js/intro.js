@@ -177,7 +177,8 @@ export class Intro {
 
     if (!this.tiltActive) {
       // The hero ball is the pointer; its velocity is how far it moved this frame, so a flick shoves the others
-      const p = gfx.pointerToPlayfield(this.input.raw.x, this.input.raw.y);
+      // The same mapping as a click uses (main.js), so the link the ball lights up is the one a click opens
+      const p = this.input.playfield();
       if (dt > 0) {
         this.hero.vx = (p.x - this.hero.x) / dt;
         this.hero.vy = (p.y - this.hero.y) / dt;

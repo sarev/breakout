@@ -47,6 +47,7 @@ export const COLOURS = {
   fire: [255, 32, 16],
   metal: [181, 192, 201],
   laser: [32, 32, 200],
+  haze: [255, 48, 48],
   black: [0, 0, 0],
   lives: [196, 224, 255],
   advance: [128, 255, 192],
@@ -60,19 +61,24 @@ export const COLOURS = {
   item: [32, 164, 32],
   selitem: [96, 224, 96],
 };
-export const BRICK_COLOURS = Object.values(COLOURS).slice(0, 9);
+export const BRICK_COLOURS = [
+  COLOURS.blue, COLOURS.red, COLOURS.green, COLOURS.white, COLOURS.magenta, COLOURS.yellow, COLOURS.fire,
+  COLOURS.metal, COLOURS.laser, COLOURS.haze,
+];
 
 // ---------------------------------------------------------------------------------------------------------------
 // Bricks and levels
 // ---------------------------------------------------------------------------------------------------------------
 
-export const NUM_BRICK_TYPES = 9;
+export const NUM_BRICK_TYPES = 10;
 
 // Hits to destroy each brick type: blue, red (extra ball), green (extra bat), white (extra life), black (blackout),
-// yellow (inversion), fire (cascade), metal (indestructible), dark blue (lasers)
-export const BRICK_LIVES = [1, 3, 2, 2, 4, 3, 2, 99, 3];
+// yellow (inversion), fire (cascade), metal (indestructible), dark blue (lasers), red lens (haze)
+export const BRICK_LIVES = [1, 3, 2, 2, 4, 3, 2, 99, 3, 3];
 
-// Brick layouts. 0 is filled randomly with blue / red / green by difficulty; 7 is metal; see breakout.py.
+// Brick layouts. 0 is filled randomly with blue / red / green by difficulty; 7 is metal; see breakout.py. The
+// red lens bricks (9) sit in the top rows, out of the way early on, and these layouts carry Hard's full set:
+// one on level 4, two on 5, three on 6. Medium keeps one per level and Easy none (see Game.createBricks).
 export const LEVEL_DEFS = [
   [
     [7, 0, 0, 0, 4, 0, 0, 0, 0, 7],
@@ -91,15 +97,15 @@ export const LEVEL_DEFS = [
   ],
   [
     [0, 6, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0],
-    [0, 0, 6, 0, 0, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0],
+    [0, 0, 6, 0, 0, 0, 0, 0, 4, 0, 0, 0, 9, 0, 0, 0],
     [8, 0, 0, 4, 0, 5, 0, 0, 0, 0, 5, 0, 6, 0, 0, 0],
     [0, 0, 0, 0, 0, 7, 0, 3, 6, 0, 7, 0, 0, 0, 0, 0],
     [5, 0, 0, 0, 0, 0, 7, 7, 7, 7, 0, 0, 0, 4, 0, 0],
     [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 8],
   ],
   [
-    [0, 0, 0, 0, 0, 0, 0, 0, 0, 7, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-    [0, 0, 0, 6, 0, 0, 0, 0, 0, 5, 7, 0, 0, 4, 0, 0, 0, 0, 6, 0],
+    [0, 0, 0, 0, 0, 0, 0, 0, 0, 7, 3, 0, 0, 0, 0, 0, 9, 0, 0, 0],
+    [0, 0, 0, 6, 0, 0, 0, 0, 0, 5, 7, 0, 0, 4, 0, 9, 0, 0, 6, 0],
     [0, 0, 0, 0, 6, 0, 0, 8, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0],
     [0, 0, 4, 0, 0, 6, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 8, 0, 0],
     [0, 0, 0, 0, 7, 0, 0, 0, 0, 4, 7, 0, 6, 0, 0, 7, 0, 0, 0, 0],
@@ -108,9 +114,9 @@ export const LEVEL_DEFS = [
     [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0],
   ],
   [
-    [7, 0, 0, 0, 0, 0, 5, 0, 0, 4, 0, 0, 4, 0, 0, 5, 0, 0, 0, 0, 0, 7],
-    [0, 0, 7, 0, 6, 0, 0, 0, 0, 0, 8, 3, 0, 0, 0, 0, 0, 6, 0, 7, 0, 0],
-    [0, 4, 0, 0, 0, 6, 0, 0, 5, 0, 0, 0, 5, 0, 0, 6, 0, 0, 0, 4, 0, 0],
+    [7, 0, 0, 9, 0, 0, 5, 0, 0, 4, 0, 0, 4, 0, 0, 5, 0, 0, 0, 0, 0, 7],
+    [0, 0, 7, 0, 6, 0, 0, 0, 0, 0, 8, 3, 0, 0, 9, 0, 0, 6, 0, 7, 0, 0],
+    [0, 4, 0, 0, 0, 6, 0, 0, 5, 0, 9, 0, 5, 0, 0, 6, 0, 0, 0, 4, 0, 0],
     [0, 0, 0, 0, 0, 0, 7, 7, 7, 6, 0, 0, 6, 7, 7, 7, 0, 0, 0, 0, 0, 0],
     [0, 0, 4, 0, 0, 0, 7, 0, 0, 4, 0, 8, 4, 0, 0, 7, 0, 0, 0, 4, 0, 0],
     [0, 6, 0, 0, 7, 0, 0, 0, 6, 0, 7, 0, 0, 6, 0, 0, 7, 0, 0, 0, 6, 0],
@@ -146,6 +152,13 @@ export const LASER_SPEED_FACTOR = 1.875; // Beam speed = playfield height * this
 // Blackout (black hole brick): darkens at `rate` alpha units (0..255) per second, holds, then clears
 export const BLACKOUT_RATE = 60;
 export const BLACKOUT_HOLD = 0.75;
+
+// Haze (red lens brick): the view blurs and a red haze creeps in from the edges for the rest of the level, and
+// every further one makes it worse
+export const HAZE_BLUR_PER_BRICK = 2.5;     // Blur radius per brick, px at the reference scale
+export const HAZE_BLUR_MAX = 8;
+export const HAZE_VIGNETTE_PER_BRICK = 0.3; // Opacity of the red at the edges, per brick
+export const HAZE_VIGNETTE_MAX = 0.85;
 
 // ---------------------------------------------------------------------------------------------------------------
 // Ball speed model (see DEVNOTES "Speed model")

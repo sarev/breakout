@@ -167,7 +167,7 @@ export class Brick {
    * @param {object} game
    * @param {number} x Centre.
    * @param {number} y Centre.
-   * @param {number} type 0..8.
+   * @param {number} type 0..9.
    */
   constructor(id, gfx, game, x, y, type) {
     this.id = id;

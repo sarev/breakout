@@ -5,9 +5,9 @@
 // in the game is a playfield pixel, and `scale` says how big that is relative to the 1080p reference.
 
 import {
-  BALL_HEIGHT_PCT, BAT_HEIGHT_PCT, INTRO_HERO_SCALE, LASER_HEIGHT_PCT, MAX_PLAYFIELD_ASPECT, MIN_PLAYFIELD_ASPECT,
-  MOBILE_BAT_WIDEN,
-  MOBILE_WIDE_ASPECT, REFERENCE_HEIGHT, REFERENCE_WIDTH,
+  BALL_HEIGHT_PCT, BAT_HEIGHT_PCT, HAZE_BLUR_MAX, HAZE_BLUR_PER_BRICK, HAZE_VIGNETTE_MAX,
+  HAZE_VIGNETTE_PER_BRICK, INTRO_HERO_SCALE, LASER_HEIGHT_PCT, MAX_PLAYFIELD_ASPECT, MIN_PLAYFIELD_ASPECT,
+  MOBILE_BAT_WIDEN, MOBILE_WIDE_ASPECT, NUM_BRICK_TYPES, REFERENCE_HEIGHT, REFERENCE_WIDTH,
 } from './config.js';
 
 /** CSS colour string from an [r, g, b] triple and an alpha 0..1. */
@@ -156,9 +156,72 @@ export class Graphics {
 
     if (changed) {
       this.trailMarks = [];
+      this.layer = null;   // Rebuilt at the new size when next wanted
       this.buildSprites();
     }
     return changed;
+  }
+
+  /**
+   * An offscreen canvas the size of the playfield, for drawing a frame that is then composited with an effect
+   * (see drawHazed). Made on first use and kept until the playfield changes size.
+   *
+   * @returns {CanvasRenderingContext2D}
+   */
+  layerContext() {
+    if (!this.layer) {
+      this.layer = document.createElement('canvas');
+      this.layer.width = this.W;
+      this.layer.height = this.H;
+    }
+    return this.layer.getContext('2d');
+  }
+
+  /**
+   * Composite the layer onto the playfield through the haze of the red lens brick: blurred, with a red vignette
+   * creeping in from the edges, both deeper the more lenses have been broken. The blur uses the context's own
+   * filter where the browser has one (Chromium, Firefox); otherwise the layer is drawn down to a small canvas and
+   * back up, which smears it much the same way.
+   *
+   * @param {CanvasRenderingContext2D} ctx The playfield context (origin already at the playfield's corner).
+   * @param {number} count How many red lens bricks have been broken this level (at least 1).
+   */
+  drawHazed(ctx, count) {
+    const layer = this.layer;
+    const W = this.W;
+    const H = this.H;
+    const px = Math.min(HAZE_BLUR_MAX, HAZE_BLUR_PER_BRICK * count) * this.scale;
+    if (typeof ctx.filter === 'string') {
+      ctx.save();
+      ctx.filter = `blur(${px.toFixed(1)}px)`;
+      // Drawn a little larger than the playfield so the blur's soft edge falls outside the clip
+      const pad = Math.ceil(px * 2);
+      ctx.drawImage(layer, -pad, -pad, W + 2 * pad, H + 2 * pad);
+      ctx.restore();
+    } else {
+      const shrink = Math.max(2, Math.round(px));
+      if (!this.blurScratch) this.blurScratch = document.createElement('canvas');
+      const small = this.blurScratch;
+      small.width = Math.max(1, Math.round(W / shrink));
+      small.height = Math.max(1, Math.round(H / shrink));
+      const sctx = small.getContext('2d');
+      sctx.imageSmoothingEnabled = true;
+      sctx.drawImage(layer, 0, 0, small.width, small.height);
+      ctx.save();
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(small, 0, 0, W, H);
+      ctx.restore();
+    }
+    // The vignette: clear in the middle, red at the corners, closing in with every brick
+    const alpha = Math.min(HAZE_VIGNETTE_MAX, HAZE_VIGNETTE_PER_BRICK * count);
+    const outer = Math.hypot(W, H) / 2;
+    const inner = outer * Math.max(0.15, 0.55 - 0.1 * count);
+    const g = ctx.createRadialGradient(W / 2, H / 2, inner, W / 2, H / 2, outer);
+    g.addColorStop(0, 'rgba(255, 0, 0, 0)');
+    g.addColorStop(1, `rgba(220, 0, 0, ${alpha.toFixed(3)})`);
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, W, H);
   }
 
   /** Scale the sprites for the current playfield height. */
@@ -197,7 +260,7 @@ export class Graphics {
   buildBricks(columns) {
     this.brickSize = Math.floor(this.W / columns);
     this.brickImages = [];
-    for (let i = 0; i < 9; i++) {
+    for (let i = 0; i < NUM_BRICK_TYPES; i++) {
       const canvas = document.createElement('canvas');
       canvas.width = this.brickSize;
       canvas.height = this.brickSize;
