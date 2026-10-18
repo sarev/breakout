@@ -315,9 +315,12 @@ async function boot() {
     }
   }
 
-  /** L: capture or release the mouse (pointer lock). Opt-in, and announced on screen either way. */
+  /**
+   * L: capture or release the mouse (pointer lock). Opt-in, and announced on screen either way. Works on the
+   * level banner too, where the hint suggests it, as well as in play.
+   */
   function toggleLock() {
-    if (MOBILE || scene !== 'game' || game.paused) return;
+    if (MOBILE || (scene !== 'game' && scene !== 'splash') || game.paused) return;
     if (input.locked || input.wantLock) {
       input.releaseLock();
       showNotice('Mouse released');
@@ -488,7 +491,7 @@ async function boot() {
       else if (key === 'c') openModal('credits');
       else if (key !== 'escape' && key !== 'q' && !e.repeat) startGame();
     } else if (scene === 'splash') {
-      if (key === 'q') quitToIntro(); else splash.elapsed = 1e9;
+      if (key === 'q') quitToIntro(); else if (key !== 'l') splash.elapsed = 1e9;   // L was handled above
     } else if (scene === 'over') {
       if (key === 's') certificate.save(); else if (!e.repeat) backToIntro();
     } else if (scene === 'game') {
@@ -578,6 +581,13 @@ async function boot() {
         x: gfx.W / 2, y: gfx.H / 2, size: 300, colour: splash.colour, bold: true, italic: true,
         alpha: Math.min(0.9, splash.elapsed / 1.2),
       });
+      if (!MOBILE && splash.next === 'level' && !input.wantLock && !input.locked) {
+        // Without the capture, the cursor can wander off the page (onto another monitor, say) mid-game, and
+        // nothing else on screen says that L prevents it
+        gfx.text(ctx, "Press L to capture the mouse, so it can't stray off the page (Esc releases it)", {
+          x: gfx.W / 2, y: gfx.H * 0.64, size: 60, colour: COLOURS.presskey, alpha: Math.min(0.8, splash.elapsed / 1.2),
+        });
+      }
       if (MOBILE && splash.next === 'level') {
         // A phone gets the gestures under the level banner, since there's nothing else on screen to say
         // how to pause (and on Insane, that the finger no longer drives the bat)

@@ -156,7 +156,7 @@ Copy the `web` folder to a static web server (SFTP, S3, GitHub Pages, whatever y
 | **Space** | Pause or resume |
 | **M** | Music on or off (remembered for your next visit) |
 | **F** | Fullscreen on or off |
-| **L** | Capture the mouse so it can't leave the page while you play (a message confirms it; **Esc** or **L** releases it, and Esc also pauses) |
+| **L** | Capture the mouse so it can't leave the page while you play (a message confirms it; **Esc** or **L** releases it, and Esc also pauses). The level banner reminds you until you do, since on a multi-monitor desk an uncaptured cursor can wander onto another screen mid-game |
 | **Q** | Back to the intro |
 | **H / C** | Help and Credits pages, also reachable from the links on the intro |
 
