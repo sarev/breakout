@@ -303,14 +303,14 @@ export class Intro {
       const selected = i === this.difficulty;
       this.menuBoxes[i] = gfx.text(ctx, label, {
         x, y: gfx.H * (layout.menuTop + layout.menuStep * i), size: layout.menuSize, alpha: 224 / 255,
-        colour: selected ? COLOURS.selitem : COLOURS.item, bold: selected, outline: [0, 0, 0],
+        colour: selected ? COLOURS.selitem : COLOURS.item, bold: selected,
       });
     });
 
     // On a phone the Help and Credits pages live on the two-finger-tap menu, so the links give way to a hint
     if (this.input.mobile) {
       this.linkBoxes = {};
-      gfx.text(ctx, 'Two-finger tap for the menu', { x, y: gfx.H * 0.88, size: 60, alpha: 0.8, colour: COLOURS.presskey, outline: [0, 0, 0] });
+      gfx.text(ctx, 'Two-finger tap for the menu', { x, y: gfx.H * 0.88, size: 60, alpha: 0.8, colour: COLOURS.presskey });
     }
 
     // Help and Credits links, underlined, lit up when the hero ball is over them. The hit boxes are padded a
@@ -321,7 +321,6 @@ export class Intro {
       const lit = hover === name;
       const box = gfx.text(ctx, label, {
         x: lx, y: gfx.H * 0.88, size: 60, alpha: lit ? 1 : 0.8, colour: lit ? COLOURS.white : COLOURS.presskey,
-        outline: [0, 0, 0],
       });
       ctx.strokeStyle = lit ? 'rgba(255,255,255,0.9)' : 'rgba(64,224,224,0.6)';
       ctx.lineWidth = Math.max(1, 2 * gfx.scale);

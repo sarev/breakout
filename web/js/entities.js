@@ -547,21 +547,29 @@ export class Ball {
     const dx = other.x - this.x;
     const dy = other.y - this.y;
     const dist = Math.hypot(dx, dy);
-    const sumR = 2 * this.w2;
+    // The balls touch when their centres are the two radii apart: the balls in play are all one size, but the
+    // intro's hero ball is bigger than the rest
+    const sumR = this.w2 + other.w2;
     if (dist >= sumR || dist === 0) return false;
     const overlap = sumR - dist;
     const nx = dx / dist;
     const ny = dy / dist;
-    this.x -= (overlap / 2) * nx;
-    this.y -= (overlap / 2) * ny;
-    other.x += (overlap / 2) * nx;
-    other.y += (overlap / 2) * ny;
+    // Masses go with area, so a big ball shoves a small one aside and is barely deflected itself; equal sizes
+    // give the usual half-and-half. The separation and the impulse are both shared out by mass.
+    const m1 = this.w2 * this.w2;
+    const m2 = other.w2 * other.w2;
+    const share1 = m2 / (m1 + m2);   // This ball's share of the correction (the lighter it is, the more it moves)
+    const share2 = m1 / (m1 + m2);
+    this.x -= overlap * share1 * nx;
+    this.y -= overlap * share1 * ny;
+    other.x += overlap * share2 * nx;
+    other.y += overlap * share2 * ny;
     const vn = (this.vx - other.vx) * nx + (this.vy - other.vy) * ny;
     const damp = this.intro ? 0.7 : 1;
-    this.vx -= vn * nx * damp;
-    this.vy -= vn * ny * damp;
-    other.vx += vn * nx * damp;
-    other.vy += vn * ny * damp;
+    this.vx -= vn * nx * damp * 2 * share1;
+    this.vy -= vn * ny * damp * 2 * share1;
+    other.vx += vn * nx * damp * 2 * share2;
+    other.vy += vn * ny * damp * 2 * share2;
     const vol = Math.min(8, Math.sqrt(Math.abs(vn) / 60)) / 8;
     this.game.sfx.play('ball-hit', this.x / this.gfx.W, vol);
     return true;
