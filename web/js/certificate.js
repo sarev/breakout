@@ -2,8 +2,8 @@
 // WIN!") or the last life is lost ("GAME OVER!").
 //
 // It stays up until dismissed, and records the game: the difficulty, the time spent in play (the game clock,
-// which excludes the "Level N..." banners and pauses), the lives left (a win only: a loser has none by
-// definition), and when the first level began. Two boxes sit in the top
+// which excludes the "Level N..." banners and pauses), the lives left on a win or the level reached on a loss
+// (a loser's lives are none by definition), and when the first level began. Two boxes sit in the top
 // corners: a selfie box, which opens the front camera (ui.js openCamera) and then shows the photo, and a save
 // box that renders the certificate to a PNG and downloads it, which on a phone lands in the gallery's Downloads
 // album. The same `draw()` renders the on-screen page and the export; the export leaves out the save box, the
@@ -38,6 +38,7 @@ export class Certificate {
     this.difficulty = '';
     this.seconds = 0;
     this.lives = 0;
+    this.level = 1;
     this.startedAt = null;
     this.photo = null;        // A square canvas from the camera, or null for the placeholder
   }
@@ -45,7 +46,7 @@ export class Certificate {
   /**
    * Fill in a finished game.
    *
-   * @param {object} game The finished game: difficulty, tiltBat, playSeconds, lives and startedAt are read.
+   * @param {object} game The finished game: difficulty, tiltBat, playSeconds, lives, level and startedAt are read.
    * @param {boolean} won True for the last level cleared, false for the last life lost.
    */
   start(game, won = true) {
@@ -53,6 +54,7 @@ export class Certificate {
     this.difficulty = game.tiltBat ? 'Insane' : DIFFICULTY_NAMES[game.difficulty] || 'Easy';
     this.seconds = game.playSeconds;
     this.lives = game.lives;
+    this.level = game.level;
     this.startedAt = game.startedAt || new Date();
     this.photo = null;
   }
@@ -120,7 +122,8 @@ export class Certificate {
     gfx.text(ctx, title, { x, y: H * 0.33, size: 200, colour: titleColour, alpha: 0.95, bold: true, italic: true });
     gfx.text(ctx, `Difficulty: ${this.difficulty}`, { x, y: H * 0.46, size: 80, colour: lineColour, alpha: 0.9 });
     gfx.text(ctx, `${this.won ? 'Time' : 'You lasted'}: ${this.timeText()}`, { x, y: H * 0.53, size: 80, colour: lineColour, alpha: 0.9 });
-    if (this.won) gfx.text(ctx, `Lives remaining: ${this.lives}`, { x, y: H * 0.6, size: 80, colour: lineColour, alpha: 0.9 });
+    const third = this.won ? `Lives remaining: ${this.lives}` : `You reached level ${this.level}`;
+    gfx.text(ctx, third, { x, y: H * 0.6, size: 80, colour: lineColour, alpha: 0.9 });
     if (!forExport) {
       const prompt = this.mobile ? 'Tap anywhere else to continue' : 'Click or press any key to continue';
       gfx.text(ctx, prompt, { x, y: H * 0.7, size: 60, colour: COLOURS.presskey, alpha: 0.8 });

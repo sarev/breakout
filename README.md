@@ -121,6 +121,7 @@ The intro and each level have their own chiptune track, played at a volume that 
 | ![Metal](./web/sprites/sm-brick7.png) | **Metal** | Indestructible |
 | ![Warning triangle](./web/sprites/sm-brick8.png) | **Warning triangle** | Enables laser mode for a duration |
 | ![Red lens](./web/sprites/sm-brick9.png) | **Red lens** | Blurs your view and reddens its edges for the rest of the level, and every one makes it worse (web version only; Hard and Insane have one, two and three of them on levels 4 to 6, Medium at most one a level, Easy none) |
+| ![Safety net](./web/sprites/sm-brick10.png) | **Safety net** | A glowing bar floats up from below to just under the bat and stays for a few seconds; any ball that reaches it bounces back up, a little slower. Another one while it's up keeps it longer (web version only) |
 
 Different brick types require different numbers of hits to destroy. If no brick is destroyed for a while, an extra bonus ball is introduced.
 
@@ -163,7 +164,7 @@ Moving the bat from one side of the playfield to the other takes the same hand m
 
 ### Winning, and losing
 
-Clear the last level and the win screen is a certificate: the difficulty, the lives you had left, the time spent in play (the game clock, which stands still during the level banners and pauses) to the hundredth of a second, and the date and time the first level began. Lose your last life and you get the same certificate headed Game Over!, with how long you lasted (and no lives line, since the answer is always none). The box in the top-right corner takes a selfie with the front camera (the browser asks permission first; the preview is mirrored, and so is the photo, so you get what you saw) and puts it on the certificate. The box in the top-left saves the certificate as a PNG, named for the difficulty and the start time, which on a phone lands in the gallery's Downloads album; **S** does the same on a keyboard. Tap or click anywhere else, or press any other key, to go back to the intro.
+Clear the last level and the win screen is a certificate: the difficulty, the lives you had left, the time spent in play (the game clock, which stands still during the level banners and pauses) to the hundredth of a second, and the date and time the first level began. Lose your last life and you get the same certificate headed Game Over!, with how long you lasted and the level you reached in place of the lives line. The box in the top-right corner takes a selfie with the front camera (the browser asks permission first; the preview is mirrored, and so is the photo, so you get what you saw) and puts it on the certificate. The box in the top-left saves the certificate as a PNG, named for the difficulty and the start time, which on a phone lands in the gallery's Downloads album; **S** does the same on a keyboard. Tap or click anywhere else, or press any other key, to go back to the intro.
 
 ### On a phone or tablet
 

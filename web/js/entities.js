@@ -5,8 +5,8 @@
 // game (for the clock, the speed model and sounds).
 
 import {
-  BAT_ANGLE_JITTER, BAT_FADE_SECONDS, BAT_HIT_COOLDOWN, BAT_HIT_SPEED_GAIN, BAT_LIFETIME, BAT_VELOCITY_SMOOTHING,
-  BRICK_COLOURS, BRICK_LIVES, INTRO_DAMPING, MAX_BAT_ANGLE,
+  BAT_ANGLE_JITTER, BAT_FADE_SECONDS, BAT_HIT_COOLDOWN, BAT_HIT_SPEED_GAIN, BAT_LIFETIME,
+  BAT_VELOCITY_SMOOTHING, BRICK_COLOURS, BRICK_LIVES, INTRO_DAMPING, MAX_BAT_ANGLE, NET_SLOW,
 } from './config.js';
 import { rgba } from './graphics.js';
 
@@ -167,7 +167,7 @@ export class Brick {
    * @param {object} game
    * @param {number} x Centre.
    * @param {number} y Centre.
-   * @param {number} type 0..9.
+   * @param {number} type 0..10.
    */
   constructor(id, gfx, game, x, y, type) {
     this.id = id;
@@ -347,6 +347,9 @@ export class Ball {
       }
     }
 
+    // The safety net, if it's up and the ball is above it, is the floor for this step
+    const netY = this.intro ? null : this.game.netFloor(this);
+
     this.x += this.vx * dt;
     this.y += this.vy * dt;
     if (this.intro) {
@@ -385,6 +388,12 @@ export class Ball {
       this.y = this.h2;
       this.vy = -this.vy * damp;
       wallSound();
+    } else if (netY !== null && this.y > netY - this.h2) {
+      // Caught by the net: back up, a little slower than it came down
+      this.y = netY - this.h2;
+      this.vx *= NET_SLOW;
+      this.vy = -Math.abs(this.vy) * NET_SLOW;
+      this.game.sfx.play('bat-hit', this.x / gfx.W, 0.5 * this.game.velocityToVolume(this.vx, this.vy));
     } else if (this.y > gfx.H - this.h2) {
       if (this.intro) {
         this.y = gfx.H - this.h2;

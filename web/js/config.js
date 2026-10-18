@@ -48,6 +48,7 @@ export const COLOURS = {
   metal: [181, 192, 201],
   laser: [32, 32, 200],
   haze: [255, 48, 48],
+  net: [64, 160, 255],
   black: [0, 0, 0],
   lives: [196, 224, 255],
   advance: [128, 255, 192],
@@ -63,26 +64,28 @@ export const COLOURS = {
 };
 export const BRICK_COLOURS = [
   COLOURS.blue, COLOURS.red, COLOURS.green, COLOURS.white, COLOURS.magenta, COLOURS.yellow, COLOURS.fire,
-  COLOURS.metal, COLOURS.laser, COLOURS.haze,
+  COLOURS.metal, COLOURS.laser, COLOURS.haze, COLOURS.net,
 ];
 
 // ---------------------------------------------------------------------------------------------------------------
 // Bricks and levels
 // ---------------------------------------------------------------------------------------------------------------
 
-export const NUM_BRICK_TYPES = 10;
+export const NUM_BRICK_TYPES = 11;
 
 // Hits to destroy each brick type: blue, red (extra ball), green (extra bat), white (extra life), black (blackout),
-// yellow (inversion), fire (cascade), metal (indestructible), dark blue (lasers), red lens (haze)
-export const BRICK_LIVES = [1, 3, 2, 2, 4, 3, 2, 99, 3, 3];
+// yellow (inversion), fire (cascade), metal (indestructible), dark blue (lasers), red lens (haze), safety net
+export const BRICK_LIVES = [1, 3, 2, 2, 4, 3, 2, 99, 3, 3, 2];
 
 // Brick layouts. 0 is filled randomly with blue / red / green by difficulty; 7 is metal; see breakout.py. The
 // red lens bricks (9) sit in the top rows, out of the way early on, and these layouts carry Hard's full set:
 // one on level 4, two on 5, three on 6. Medium keeps one per level and Easy none (see Game.createBricks).
+// Safety nets (10) are scattered about as freely as the laser bricks (8), and the two deepest levels have one in
+// their bottom row, where the player starts.
 export const LEVEL_DEFS = [
   [
     [7, 0, 0, 0, 4, 0, 0, 0, 0, 7],
-    [0, 0, 0, 0, 0, 3, 0, 0, 8, 0],
+    [0, 10, 0, 0, 0, 3, 0, 0, 8, 0],
   ],
   [
     [0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0],
@@ -91,39 +94,39 @@ export const LEVEL_DEFS = [
   ],
   [
     [0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0],
-    [0, 7, 0, 6, 0, 8, 0, 3, 0, 0, 0, 0, 7, 5],
+    [0, 7, 0, 6, 0, 8, 0, 3, 0, 0, 10, 0, 7, 5],
     [0, 0, 7, 6, 0, 0, 4, 0, 0, 0, 6, 7, 0, 0],
-    [0, 0, 0, 0, 0, 0, 0, 7, 8, 0, 0, 0, 0, 3],
+    [0, 0, 0, 0, 10, 0, 0, 7, 8, 0, 0, 0, 0, 3],
   ],
   [
     [0, 6, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0],
     [0, 0, 6, 0, 0, 0, 0, 0, 4, 0, 0, 0, 9, 0, 0, 0],
-    [8, 0, 0, 4, 0, 5, 0, 0, 0, 0, 5, 0, 6, 0, 0, 0],
+    [8, 0, 0, 4, 0, 5, 0, 0, 0, 0, 5, 0, 6, 0, 10, 0],
     [0, 0, 0, 0, 0, 7, 0, 3, 6, 0, 7, 0, 0, 0, 0, 0],
     [5, 0, 0, 0, 0, 0, 7, 7, 7, 7, 0, 0, 0, 4, 0, 0],
-    [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 8],
+    [0, 0, 10, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 8],
   ],
   [
     [0, 0, 0, 0, 0, 0, 0, 0, 0, 7, 3, 0, 0, 0, 0, 0, 9, 0, 0, 0],
     [0, 0, 0, 6, 0, 0, 0, 0, 0, 5, 7, 0, 0, 4, 0, 9, 0, 0, 6, 0],
-    [0, 0, 0, 0, 6, 0, 0, 8, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 6, 0, 0, 8, 0, 0, 4, 0, 0, 0, 10, 0, 0, 0, 0, 0],
     [0, 0, 4, 0, 0, 6, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 8, 0, 0],
     [0, 0, 0, 0, 7, 0, 0, 0, 0, 4, 7, 0, 6, 0, 0, 7, 0, 0, 0, 0],
     [3, 0, 5, 7, 0, 0, 0, 0, 7, 7, 0, 6, 0, 0, 0, 0, 7, 4, 0, 0],
     [0, 7, 7, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 7, 7, 5],
-    [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0, 10, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0],
   ],
   [
     [7, 0, 0, 9, 0, 0, 5, 0, 0, 4, 0, 0, 4, 0, 0, 5, 0, 0, 0, 0, 0, 7],
-    [0, 0, 7, 0, 6, 0, 0, 0, 0, 0, 8, 3, 0, 0, 9, 0, 0, 6, 0, 7, 0, 0],
+    [0, 10, 7, 0, 6, 0, 0, 0, 0, 0, 8, 3, 0, 0, 9, 0, 0, 6, 0, 7, 10, 0],
     [0, 4, 0, 0, 0, 6, 0, 0, 5, 0, 9, 0, 5, 0, 0, 6, 0, 0, 0, 4, 0, 0],
     [0, 0, 0, 0, 0, 0, 7, 7, 7, 6, 0, 0, 6, 7, 7, 7, 0, 0, 0, 0, 0, 0],
     [0, 0, 4, 0, 0, 0, 7, 0, 0, 4, 0, 8, 4, 0, 0, 7, 0, 0, 0, 4, 0, 0],
     [0, 6, 0, 0, 7, 0, 0, 0, 6, 0, 7, 0, 0, 6, 0, 0, 7, 0, 0, 0, 6, 0],
-    [5, 0, 0, 7, 0, 0, 0, 8, 0, 0, 6, 0, 0, 0, 8, 0, 0, 7, 0, 0, 0, 5],
+    [5, 10, 0, 7, 0, 0, 0, 8, 0, 0, 6, 0, 0, 0, 8, 0, 0, 7, 0, 0, 10, 5],
     [0, 0, 0, 0, 0, 7, 0, 3, 6, 0, 7, 0, 6, 3, 0, 7, 0, 0, 0, 0, 0, 0],
     [0, 0, 0, 5, 0, 0, 0, 0, 4, 0, 0, 0, 4, 0, 0, 0, 0, 0, 5, 0, 0, 0],
-    [7, 0, 0, 0, 0, 6, 0, 0, 0, 8, 0, 0, 0, 8, 0, 0, 0, 6, 0, 0, 0, 7],
+    [7, 0, 10, 0, 0, 6, 0, 0, 0, 8, 0, 0, 0, 8, 0, 0, 0, 6, 0, 10, 0, 7],
   ],
 ];
 
@@ -148,6 +151,15 @@ export const LASER_DURATION = 6;        // Seconds per laser brick (they stack)
 export const LASER_PERIOD = 0.5;        // One beam per bat per this many seconds
 export const LASER_STAGGER = 4 / 60;    // Offset between successive bats' beams
 export const LASER_SPEED_FACTOR = 1.875; // Beam speed = playfield height * this, px/s
+
+// Safety net (brick 10): a glowing bar floats up from below the screen to just under the bat, stays a while,
+// then floats away. Balls that reach it bounce back up a little slower than they arrived.
+export const NET_HOLD = 5;              // Seconds the net stays up (another net brick adds the same again)
+export const NET_TRAVEL = 0.6;          // Seconds to float in or out
+export const NET_GAP = 0.2;             // Bat heights between the bottom of the bat and the top of the net
+export const NET_THICKNESS = 0.5;       // Bat heights thick
+export const NET_SLOW = 0.85;           // The ball's speed is multiplied by this on the bounce
+export const NET_PULSE = 0.8;           // Seconds per pulse of the glow
 
 // Blackout (black hole brick): darkens at `rate` alpha units (0..255) per second, holds, then clears
 export const BLACKOUT_RATE = 60;

@@ -1,12 +1,12 @@
 // The Game: owns the playfield state and advances it. A port of the Game class in breakout.py.
 
 import {
-  BASE_BALL_SPEED, BLACKOUT_HOLD, BLACKOUT_RATE, BORING_TIMEOUT, COLOURS, ENDGAME_SPEED_BOOST, FULL_VOLUME_SPEED,
-  INVERSION_SECONDS, KICK_SPEED_GAIN, LASER_DURATION, LASER_PERIOD, LASER_SPEED_FACTOR, LASER_STAGGER, LEVEL_DEFS,
-  LEVEL_SPEED_RAMP, MAX_BALLS, MAX_SPEED_FRACTION, MIN_SPEED_FRACTION, MOBILE_BAT_LIFT, PHYSICS_HZ,
-  RANDOM_BRICK_TYPES,
-  SERVE_FLICK_GAIN, SERVE_JITTER, SERVE_MAX_ANGLE, SERVE_TIMEOUT, STARTING_LIVES, TRAIL_FADE_GAME,
-  WIPE_TIRED_SPEED,
+  BASE_BALL_SPEED, BLACKOUT_HOLD, BLACKOUT_RATE, BORING_TIMEOUT, COLOURS, ENDGAME_SPEED_BOOST,
+  FULL_VOLUME_SPEED, INVERSION_SECONDS, KICK_SPEED_GAIN, LASER_DURATION, LASER_PERIOD, LASER_SPEED_FACTOR,
+  LASER_STAGGER, LEVEL_DEFS, LEVEL_SPEED_RAMP, MAX_BALLS, MAX_SPEED_FRACTION, MIN_SPEED_FRACTION,
+  MOBILE_BAT_LIFT, NET_GAP, NET_HOLD, NET_PULSE, NET_THICKNESS, NET_TRAVEL, PHYSICS_HZ,
+  RANDOM_BRICK_TYPES, SERVE_FLICK_GAIN, SERVE_JITTER, SERVE_MAX_ANGLE, SERVE_TIMEOUT, STARTING_LIVES,
+  TRAIL_FADE_GAME, WIPE_TIRED_SPEED,
 } from './config.js';
 import { Ball, Bat, Brick, Laser } from './entities.js';
 import { tintImage } from './graphics.js';
@@ -62,6 +62,7 @@ export class Game {
     this.inversionRemaining = 0;
     this.laserRemaining = 0;
     this.haze = 0;              // Red lens bricks broken this level: each blurs and reddens the view further
+    this.net = null;            // The safety net while it's about: {y (its top), holdUntil, leaving}
     this.boringDeadline = 0;
     this.serving = false;
     this.serveDeadline = 0;
@@ -139,6 +140,7 @@ export class Game {
     this.gfx.buildBricks(Game.columns(this.level));
     this.createBricks();
     this.haze = 0;   // The haze lasts for the rest of a level, and no further
+    this.net = null;
     if (!this.startedAt) this.startedAt = new Date();   // The first level of the game: stamped on the certificate
     this.input.centre();
     this.bats[0].x = this.gfx.W / 2;
@@ -224,6 +226,7 @@ export class Game {
     // more than the viewport did (the bats are drawn wider on a phone in landscape than in portrait)
     const heroWidth = allBats.find((bat) => bat.id === 0).width;
     for (const bat of allBats) bat.dx = BAT_OFFSETS[bat.id] * heroWidth;
+    if (this.net) this.net.y *= sy;
     for (const ball of this.balls) {
       ball.setImage(ball === this.heroBall ? this.sprites.ball : this.sprites.bonusBall,
         ball === this.heroBall ? this.sprites.blueGlow : this.sprites.redGlow);
@@ -401,6 +404,9 @@ export class Game {
       case 9:
         this.haze += 1;   // Worse with every one, until the level ends
         break;
+      case 10:
+        this.raiseNet();
+        break;
       default:
         break;
     }
@@ -421,6 +427,7 @@ export class Game {
     this.checkInversion(dt);
     this.checkLasers(dt);
     this.animateBats(dt);
+    this.animateNet(dt);
 
     if (this.serving) {
       this.holdHeroBall();
@@ -550,6 +557,99 @@ export class Game {
     }
   }
 
+  // --- Safety net -------------------------------------------------------------------------------------------
+
+  /**
+   * Where the top of the net rests: a small gap under the hero bat, but never off the bottom of the screen. On a
+   * phone the bats are lifted and the net floats in the space below them; on a desktop the bat sits almost on
+   * the bottom edge, so the net lies flush against it, along the very bottom.
+   */
+  netRestY() {
+    const bat = this.bats[0];
+    return Math.min(bat.y + bat.height * (1 + NET_GAP), this.gfx.H - this.netThickness());
+  }
+
+  /** How thick the net is drawn, in playfield pixels. */
+  netThickness() {
+    return Math.max(2, this.bats[0].height * NET_THICKNESS);
+  }
+
+  /**
+   * A safety net brick: send the net up from below the screen, or if it's already about, keep it for another
+   * spell (and call it back if it had started to leave).
+   */
+  raiseNet() {
+    if (this.net) {
+      this.net.holdUntil = Math.max(this.net.holdUntil, this.time) + NET_HOLD;
+      this.net.leaving = false;
+    } else {
+      this.net = { y: this.gfx.H + this.netThickness(), holdUntil: this.time + NET_TRAVEL + NET_HOLD, leaving: false };
+    }
+    this.sfx.play('bonus', this.bats[0].x / this.gfx.W);
+  }
+
+  /** Float the net in, hold it, then float it out and forget it. */
+  animateNet(dt) {
+    const net = this.net;
+    if (!net) return;
+    const rest = this.netRestY();
+    const gone = this.gfx.H + this.netThickness();
+    if (!net.leaving && this.time >= net.holdUntil) net.leaving = true;
+    const target = net.leaving ? gone : rest;
+    const step = ((gone - rest) / NET_TRAVEL) * dt;
+    net.y += Math.max(-step, Math.min(step, target - net.y));
+    if (net.leaving && net.y >= gone) this.net = null;
+  }
+
+  /**
+   * The net as a floor for a ball: the y its top is at, or null when there's no net on screen or the ball is
+   * already below it (one that had dropped past before the net came up falls as usual).
+   *
+   * @param {object} ball
+   * @returns {number|null}
+   */
+  netFloor(ball) {
+    if (!this.net || this.net.y >= this.gfx.H) return null;
+    return ball.y + ball.h2 <= this.net.y + 1 ? this.net.y : null;
+  }
+
+  /**
+   * Draw the net as a force field: a deep blue bar with a bright top edge, a glow spreading well above it, the
+   * whole thing pulsing, and a shimmer sweeping along its length. It has to read as something alive even along
+   * the very bottom of a desktop screen, where a plain bar looks like part of the desktop.
+   */
+  drawNet(ctx) {
+    const net = this.net;
+    if (!net) return;
+    const W = this.gfx.W;
+    const thick = this.netThickness();
+    const pulse = 0.6 + 0.4 * Math.sin((2 * Math.PI * this.time) / NET_PULSE);
+    const [r, g, b] = COLOURS.net;
+    // Glow: mostly above the bar, where there's room for it to be seen
+    const glow = ctx.createLinearGradient(0, net.y - thick * 3, 0, net.y + thick * 2);
+    glow.addColorStop(0, `rgba(${r}, ${g}, ${b}, 0)`);
+    glow.addColorStop(0.6, `rgba(${r}, ${g}, ${b}, ${(0.55 * pulse).toFixed(3)})`);
+    glow.addColorStop(1, `rgba(${r}, ${g}, ${b}, 0)`);
+    ctx.fillStyle = glow;
+    ctx.fillRect(0, net.y - thick * 3, W, thick * 5);
+    // The bar itself: bright at the top edge, deep blue below
+    const body = ctx.createLinearGradient(0, net.y, 0, net.y + thick);
+    body.addColorStop(0, `rgba(230, 250, 255, ${(0.7 + 0.3 * pulse).toFixed(3)})`);
+    body.addColorStop(0.25, `rgba(${r}, ${g}, ${b}, ${(0.75 + 0.25 * pulse).toFixed(3)})`);
+    body.addColorStop(1, `rgba(16, 64, 200, ${(0.8 + 0.2 * pulse).toFixed(3)})`);
+    ctx.fillStyle = body;
+    ctx.fillRect(0, net.y, W, thick);
+    // A shimmer sweeping left to right, once every couple of pulses
+    const band = W * 0.18;
+    const sweep = ((this.time / (NET_PULSE * 2)) % 1) * (W + band) - band;
+    const shimmer = ctx.createLinearGradient(sweep, 0, sweep + band, 0);
+    shimmer.addColorStop(0, 'rgba(255, 255, 255, 0)');
+    shimmer.addColorStop(0.5, 'rgba(255, 255, 255, 0.55)');
+    shimmer.addColorStop(1, 'rgba(255, 255, 255, 0)');
+    ctx.fillStyle = shimmer;
+    ctx.fillRect(Math.max(0, sweep), net.y, Math.min(band, W - sweep), thick);
+  }
+
   // --- Blackout ---------------------------------------------------------------------------------------------
 
   /**
@@ -599,6 +699,7 @@ export class Game {
     for (const laser of this.lasers) laser.draw(field);
     for (const ball of this.balls) ball.draw(field);
     for (const bat of this.bats) bat.draw(field);
+    this.drawNet(field);
     if (this.haze > 0) gfx.drawHazed(ctx, this.haze);
 
     gfx.text(ctx, String(this.lives), { x: gfx.W / 16, y: gfx.H * 0.9, size: 300, colour: COLOURS.lives, alpha: 164 / 255 });
