@@ -27,7 +27,9 @@ import { closeModal, modalOpen, openCamera, openModal, openOptions, renderOption
 const params = new URLSearchParams(window.location.search);
 const DEBUG = params.get('debug') === '1';
 const SENSITIVITY = parseFloat(params.get('sensitivity') || '1') || 1;
-const MUSIC_ON = params.get('music') !== '0';
+// Music on or off is remembered between visits; ?music=0 still starts a visit with it off
+const MUSIC_KEY = 'breakout-music';
+const MUSIC_ON = params.has('music') ? params.get('music') !== '0' : readSetting(MUSIC_KEY) !== 'off';
 const MUSIC_VOLUME = params.has('volume') ? parseFloat(params.get('volume')) : null;
 
 /**
@@ -41,6 +43,21 @@ const MUSIC_VOLUME = params.has('volume') ? parseFloat(params.get('volume')) : n
  * any that get the query wrong. ?mobile=1 / ?mobile=0 forces the answer, which is handy for trying the mobile
  * layout on a desktop.
  */
+/** A saved setting, or null where storage is unavailable (private windows, blocked site data). */
+function readSetting(key) {
+  try {
+    return localStorage.getItem(key);
+  } catch (e) {
+    return null;
+  }
+}
+
+function writeSetting(key, value) {
+  try {
+    localStorage.setItem(key, value);
+  } catch (e) { /* no storage: the setting lasts for this visit only */ }
+}
+
 function detectMobile() {
   const forced = params.get('mobile');
   if (forced === '1') return true;
@@ -322,6 +339,11 @@ async function boot() {
    * The Options page (two-finger tap): the keyboard's jobs for a touch screen. In play it pauses first and
    * closing it (Resume, a tap outside the buttons, or Escape) resumes; on the intro it just offers the toggles.
    */
+  /** M, or the Options page's Music button: switch the music and remember the choice for next time. */
+  function toggleMusic() {
+    writeSetting(MUSIC_KEY, music.toggle() ? 'on' : 'off');
+  }
+
   function showOptions() {
     if (modalOpen()) return;
     const inGame = scene === 'game';
@@ -329,7 +351,7 @@ async function boot() {
     const state = () => ({ inGame, music: music.enabled, fullscreen: isFullscreen(), fullscreenAvailable: fullscreenAvailable() });
     const actions = {
       resume: () => closeModal(),
-      music: () => music.toggle(),
+      music: () => toggleMusic(),
       fullscreen: () => toggleFullscreen(),
       // Help and Credits open over the top; closing them comes back here (still paused, in play)
       help: () => openModal('help', () => showOptions()),
@@ -450,7 +472,7 @@ async function boot() {
       return;
     }
     if (key === 'm') {
-      music.toggle();
+      toggleMusic();
       return;
     }
     if (key === 'l') {

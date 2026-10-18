@@ -152,7 +152,7 @@ Copy the `web` folder to a static web server (SFTP, S3, GitHub Pages, whatever y
 | **Click / tap** | Starts a game from the intro; launches the ball when it's sitting on the bat; otherwise speeds all the balls up a little |
 | **Two-finger tap** | Pauses and opens the Options page: music, fullscreen, help, and quit to the menu. On the intro it offers music, fullscreen, help and credits (on a phone, that's where Help and Credits live) |
 | **Space** | Pause or resume |
-| **M** | Music on or off |
+| **M** | Music on or off (remembered for your next visit) |
 | **F** | Fullscreen on or off |
 | **L** | Capture the mouse so it can't leave the page while you play (a message confirms it; **Esc** or **L** releases it, and Esc also pauses) |
 | **Q** | Back to the intro |
@@ -174,7 +174,7 @@ Options go on the URL, for example `http://localhost:8000/?music=0&sensitivity=1
 
 | Option | Effect |
 |--------|--------|
-| `music=0` | Start with the music off |
+| `music=0` | Start with the music off, whatever was remembered from last time |
 | `volume=0.25` | Music volume, 0 to 1 (default 0.4) |
 | `sensitivity=1.5` | Mouse sensitivity multiplier (default 1) |
 | `mobile=1` / `mobile=0` | Force the phone-and-tablet behaviour on or off, instead of detecting it |
