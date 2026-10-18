@@ -37,6 +37,7 @@ const TOUCH_CONTROLS = `
 <tr><td>Touch</td><td>The bat sits under your finger: put your finger down anywhere across the screen and the bat goes there. Where the ball lands on the bat sets its angle: the centre sends it straight up, the ends send it off sideways.</td></tr>
 <tr><td>Tap</td><td>Launches the ball when it's sitting on the bat (flick the bat sideways as you tap to aim it). Otherwise, speeds all the balls up a little.</td></tr>
 <tr><td>Two fingers</td><td>Tap with two fingers to pause and open the options: music, fullscreen, and back to this screen.</td></tr>
+<tr><td>Insane</td><td>Pick Insane on the intro and the bat is steered by rolling the phone like a steering wheel instead: roughly 45° either way takes it to the edge. However you're holding the phone when a level starts, or when you resume after a pause, counts as level. Otherwise it plays as Hard.</td></tr>
 `;
 
 function help(mobile) {

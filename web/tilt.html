@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <meta name="theme-color" content="#000000">
+  <link rel="icon" href="favicon.ico">
+  <title>Breakout: tilt steering PoC</title>
+  <style>
+    html, body {
+      margin: 0; height: 100%; background: #000; color: #ddd;
+      font: 14px/1.4 system-ui, sans-serif; overflow: hidden;
+      touch-action: none; overscroll-behavior: none; -webkit-user-select: none; user-select: none;
+    }
+    canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+    #hud {
+      position: fixed; top: env(safe-area-inset-top, 0); left: 0; padding: 8px 10px;
+      font: 12px/1.35 ui-monospace, Menlo, Consolas, monospace; white-space: pre; pointer-events: none;
+      text-shadow: 0 0 3px #000, 0 0 3px #000, 0 0 3px #000;
+    }
+    #buttons { position: fixed; top: calc(env(safe-area-inset-top, 0) + 8px); right: 8px; display: flex; gap: 6px; }
+    button {
+      background: #223; color: #eee; border: 1px solid #557; border-radius: 6px; padding: 8px 12px; font: inherit;
+    }
+    button:active, button.on { background: #446; }
+    #panel {
+      position: fixed; left: 0; right: 0; bottom: 0; max-height: 60%; overflow: auto;
+      background: rgba(10, 10, 20, 0.92); border-top: 1px solid #335; padding: 8px 12px 14px; display: none;
+      touch-action: pan-y;
+    }
+    #panel.open { display: block; }
+    .row { display: grid; grid-template-columns: 10em 1fr 4.5em; gap: 8px; align-items: center; margin: 4px 0; }
+    .row .val { text-align: right; font-family: ui-monospace, Menlo, Consolas, monospace; }
+    input[type=range] { width: 100%; }
+    .group { display: flex; gap: 6px; flex-wrap: wrap; }
+    #json {
+      font: 11px/1.4 ui-monospace, Menlo, Consolas, monospace; white-space: pre-wrap; word-break: break-all;
+      color: #9ab; margin-top: 8px;
+    }
+    #start {
+      position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 16px; text-align: center; padding: 24px; background: rgba(0, 0, 0, 0.8);
+    }
+    #start.hidden { display: none; }
+    #start p { max-width: 28em; margin: 0; }
+    #start button { font-size: 20px; padding: 14px 28px; }
+    #error { color: #f88; }
+  </style>
+</head>
+<body>
+  <canvas id="c"></canvas>
+  <div id="hud"></div>
+  <div id="buttons">
+    <button id="recentre" title="Take the phone's current angle as level">Recentre</button>
+    <button id="fullscreen">Full</button>
+    <button id="gear">Tune</button>
+  </div>
+
+  <!-- The tuning panel: everything that shapes the roll-to-position mapping lives here, and is saved between loads -->
+  <div id="panel">
+    <div class="row"><span>Sensor</span>
+      <span class="group">
+        <button data-source="motion">Motion (gravity)</button>
+        <button data-source="orientation">Orientation (β/γ)</button>
+      </span><span></span>
+    </div>
+    <div class="row"><span>Level is</span>
+      <span class="group">
+        <button data-snap="1">Nearest 90°</button>
+        <button data-snap="0">Exact start angle</button>
+      </span><span></span>
+    </div>
+    <div class="row"><label for="fullPortrait">Full deflection, portrait</label><input type="range" id="fullPortrait" min="10" max="90" step="1"><span class="val" data-for="fullPortrait"></span></div>
+    <div class="row"><label for="fullLandscape">Full deflection, landscape</label><input type="range" id="fullLandscape" min="10" max="90" step="1"><span class="val" data-for="fullLandscape"></span></div>
+    <div class="row"><label for="deadZone">Dead zone</label><input type="range" id="deadZone" min="0" max="15" step="0.5"><span class="val" data-for="deadZone"></span></div>
+    <div class="row"><label for="curve">Response curve</label><input type="range" id="curve" min="0.5" max="2.5" step="0.05"><span class="val" data-for="curve"></span></div>
+    <div class="row"><label for="smoothing">Smoothing</label><input type="range" id="smoothing" min="0" max="400" step="10"><span class="val" data-for="smoothing"></span></div>
+    <div class="row"><label for="maxSpeed">Max bat speed</label><input type="range" id="maxSpeed" min="0" max="20" step="0.5"><span class="val" data-for="maxSpeed"></span></div>
+    <div class="group" style="margin-top:8px">
+      <button id="defaults">Reset to defaults</button>
+    </div>
+    <div id="json"></div>
+  </div>
+
+  <div id="start">
+    <p><strong>Tilt steering proof of concept</strong></p>
+    <p>Hold the phone like a steering wheel, roughly upright, in portrait or landscape. However you're holding it when
+      you tap Start counts as level. Roll it anti-clockwise to steer the bat left and clockwise to steer it right.</p>
+    <button id="startBtn">Start</button>
+    <p id="error"></p>
+  </div>
+
+  <script type="module">
+    // ------------------------------------------------------------------------------------------------------------
+    // Settings: the tunables, saved in localStorage so that a tweak survives a reload
+    // ------------------------------------------------------------------------------------------------------------
+    const STORE_KEY = 'breakout-tilt-poc';
+    const DEFAULTS = {
+      source: 'motion',   // 'motion' reads gravity straight from the accelerometer; 'orientation' rebuilds it from β/γ
+      snap: true,         // Level is the nearest multiple of 90° to the start angle (false: the exact start angle)
+      fullPortrait: 45,   // Degrees of roll that put the bat against the edge, holding the phone in portrait...
+      fullLandscape: 37,  // ...and in landscape, where the wider screen wants a touch less lean to cross it
+      deadZone: 2,        // Degrees either side of level that do nothing at all
+      curve: 1,           // Response exponent: 1 is linear, above 1 is gentle near the centre and quick near the edges
+      smoothing: 60,      // Low-pass time constant on the gravity vector, in milliseconds (0: none)
+      maxSpeed: 0,        // Cap on how fast the bat may move, in bat widths per second (0: unlimited)
+    };
+    const settings = { ...DEFAULTS };
+    try { Object.assign(settings, JSON.parse(localStorage.getItem(STORE_KEY) || '{}')); } catch (e) { /* no storage */ }
+    function save() {
+      try { localStorage.setItem(STORE_KEY, JSON.stringify(settings)); } catch (e) { /* no storage */ }
+    }
+
+    // ------------------------------------------------------------------------------------------------------------
+    // The sensor: whichever source is chosen, it ends up as an "up" vector in the device's own frame (x towards the
+    // device's right-hand side, y towards its top, z out of the screen), low-pass filtered. Nothing here depends on
+    // which way round the screen is: the reference angle takes care of that.
+    // ------------------------------------------------------------------------------------------------------------
+    const DEG = 180 / Math.PI;
+    const up = { x: 0, y: 1, z: 0 };    // Filtered "up" vector
+    let haveReading = false;
+    let lastStamp = 0;
+    let refAngle = null;                // Device-frame angle of "up" that counts as level, in degrees
+    let rawText = '';
+    let rateCount = 0, rateStamp = 0, rateHz = 0;
+
+    /** Fold a fresh reading into the filtered vector. The first reading after a reset seeds the filter outright. */
+    function feed(x, y, z, stamp) {
+      const mag = Math.hypot(x, y, z);
+      if (!(mag > 0.5)) return;         // A vector with no length (or no reading at all) says nothing
+      x /= mag; y /= mag; z /= mag;
+      if (!haveReading) {
+        up.x = x; up.y = y; up.z = z;
+        haveReading = true;
+      } else {
+        const dt = Math.max(0, Math.min(100, stamp - lastStamp));
+        // Exponential smoothing with a time constant: the same feel whatever rate the events arrive at
+        const k = settings.smoothing > 0 ? 1 - Math.exp(-dt / settings.smoothing) : 1;
+        up.x += (x - up.x) * k;
+        up.y += (y - up.y) * k;
+        up.z += (z - up.z) * k;
+      }
+      lastStamp = stamp;
+      if (refAngle === null) setReference();
+      rateCount++;
+      if (stamp - rateStamp >= 1000) { rateHz = rateCount; rateCount = 0; rateStamp = stamp; }
+    }
+
+    function onMotion(e) {
+      if (settings.source !== 'motion') return;
+      const a = e.accelerationIncludingGravity;
+      if (!a || a.x === null) return;
+      rawText = `x ${fmt(a.x, 2)}  y ${fmt(a.y, 2)}  z ${fmt(a.z, 2)} m/s²`;
+      // Android reports the reaction (pointing up); iOS reports gravity (pointing down). Either way round works
+      // because everything is measured relative to the reference angle, and a flip is a 180° turn.
+      feed(a.x, a.y, a.z, e.timeStamp);
+    }
+
+    function onOrientation(e) {
+      if (settings.source !== 'orientation') return;
+      if (e.beta === null || e.gamma === null) return;
+      rawText = `α ${fmt(e.alpha, 0)}  β ${fmt(e.beta, 1)}  γ ${fmt(e.gamma, 1)}`;
+      // World "up" in the device frame is the third row of the W3C rotation matrix Rz(α)·Rx(β)·Ry(γ), and α (the
+      // compass heading) drops out of it, so yaw has no effect at all
+      const b = e.beta / DEG, g = e.gamma / DEG;
+      feed(-Math.cos(b) * Math.sin(g), Math.sin(b), Math.cos(b) * Math.cos(g), e.timeStamp);
+    }
+
+    /** Angle of "up" in the device frame: 0 when the device is upright in portrait, positive clockwise. */
+    function upAngle() {
+      return Math.atan2(-up.x, up.y) * DEG;
+    }
+
+    /** How far the screen is tipped back from vertical: 0 upright, 90 flat on its back (where roll means nothing). */
+    function pitch() {
+      return Math.atan2(up.z, Math.hypot(up.x, up.y)) * DEG;
+    }
+
+    /** Shortest signed difference between two angles, in degrees. */
+    function wrap(d) {
+      return ((d % 360) + 540) % 360 - 180;
+    }
+
+    /** Take the current angle (or the nearest right angle to it) as level. */
+    function setReference() {
+      if (!haveReading) { refAngle = null; return; }
+      const a = upAngle();
+      refAngle = settings.snap ? Math.round(a / 90) * 90 : a;
+    }
+
+    // ------------------------------------------------------------------------------------------------------------
+    // Roll to bat position
+    // ------------------------------------------------------------------------------------------------------------
+    let roll = 0;           // Current roll from level, degrees, clockwise positive
+    let heldRoll = 0;       // The last roll that was trustworthy (kept while the phone is too flat to tell)
+    let flat = false;
+
+    function updateRoll() {
+      if (!haveReading || refAngle === null) return;
+      flat = Math.abs(pitch()) > 80;
+      if (!flat) heldRoll = wrap(upAngle() - refAngle);
+      roll = heldRoll;
+    }
+
+    /** The roll that puts the bat against the edge, for the way round the screen is now. */
+    function fullAngle() {
+      return W >= H ? settings.fullLandscape : settings.fullPortrait;
+    }
+
+    /** Map a roll angle to a bat position from -1 (left edge) to 1 (right edge). */
+    function positionOf(angle) {
+      const a = Math.abs(angle);
+      if (a <= settings.deadZone) return 0;
+      const span = Math.max(1, fullAngle() - settings.deadZone);
+      const n = Math.min(1, (a - settings.deadZone) / span);
+      return Math.sign(angle) * Math.pow(n, settings.curve);
+    }
+
+    // ------------------------------------------------------------------------------------------------------------
+    // Drawing: the bat as in the game (6% of the height, 1.5× wider in landscape on a phone, lifted a bat height
+    // clear of where a fingertip would be), plus a horizon line and a scale to see the roll against
+    // ------------------------------------------------------------------------------------------------------------
+    const canvas = document.getElementById('c');
+    const ctx = canvas.getContext('2d');
+    const batImage = new Image();
+    batImage.src = 'sprites/bat.png';
+    let W = 0, H = 0, dpr = 1;
+    let bat = null;         // Scaled sprite
+    let batX = 0;
+    let lastFrame = 0;
+
+    function scaleImage(img, height) {
+      const c = document.createElement('canvas');
+      c.height = Math.max(1, height);
+      c.width = Math.max(1, Math.round(img.width * (c.height / img.height)));
+      const x = c.getContext('2d');
+      x.imageSmoothingEnabled = true;
+      x.imageSmoothingQuality = 'high';
+      x.drawImage(img, 0, 0, c.width, c.height);
+      return c;
+    }
+
+    /** As the game's widenImage: keep the rounded end caps and stretch only the middle. */
+    function widenImage(sprite, factor) {
+      if (factor === 1) return sprite;
+      const w = sprite.width, h = sprite.height;
+      const cap = Math.min(Math.floor(h / 2), Math.floor(w / 4));
+      const c = document.createElement('canvas');
+      c.width = Math.max(1, Math.round(w * factor));
+      c.height = h;
+      const x = c.getContext('2d');
+      x.imageSmoothingEnabled = true;
+      x.imageSmoothingQuality = 'high';
+      x.drawImage(sprite, 0, 0, cap, h, 0, 0, cap, h);
+      x.drawImage(sprite, cap, 0, w - 2 * cap, h, cap, 0, c.width - 2 * cap, h);
+      x.drawImage(sprite, w - cap, 0, cap, h, c.width - cap, 0, cap, h);
+      return c;
+    }
+
+    function resize() {
+      dpr = window.devicePixelRatio || 1;
+      W = canvas.width = Math.round(window.innerWidth * dpr);
+      H = canvas.height = Math.round(window.innerHeight * dpr);
+      if (batImage.complete && batImage.naturalWidth) {
+        bat = widenImage(scaleImage(batImage, Math.floor(H * 0.06)), W / H >= 1.5 ? 1.5 : 1);
+      }
+      batX = W / 2;
+      // The phone has been turned round: however it's held now is level again
+      setReference();
+    }
+
+    function frame(now) {
+      const dt = Math.min(0.1, (now - lastFrame) / 1000) || 0;
+      lastFrame = now;
+      updateRoll();
+      const pos = positionOf(roll);
+
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0, 0, W, H);
+      ctx.lineWidth = Math.max(1, dpr);
+
+      // Roll scale across the top: ticks at the dead zone and full deflection, and a marker at the current roll
+      const full = fullAngle();
+      const barY = H * 0.12, barL = W * 0.1, barR = W * 0.9;
+      const toBar = (deg) => W / 2 + (deg / full) * (barR - barL) / 2;
+      ctx.strokeStyle = '#345';
+      ctx.beginPath(); ctx.moveTo(barL, barY); ctx.lineTo(barR, barY); ctx.stroke();
+      ctx.strokeStyle = '#8ad';
+      for (const deg of [-full, -settings.deadZone, 0, settings.deadZone, full]) {
+        const x = toBar(deg);
+        ctx.beginPath(); ctx.moveTo(x, barY - 8 * dpr); ctx.lineTo(x, barY + 8 * dpr); ctx.stroke();
+      }
+      const mx = toBar(Math.max(-full, Math.min(full, roll)));
+      ctx.fillStyle = flat ? '#f66' : '#fd6';
+      ctx.beginPath(); ctx.arc(mx, barY, 6 * dpr, 0, Math.PI * 2); ctx.fill();
+
+      // A horizon through the middle of the screen, turned by the roll: it should stay level with the real world
+      // while the phone turns under it, which makes any pitch or yaw leakage obvious
+      ctx.save();
+      ctx.translate(W / 2, H / 2);
+      ctx.rotate(-roll / DEG);
+      ctx.strokeStyle = '#2a4';
+      ctx.beginPath(); ctx.moveTo(-W, 0); ctx.lineTo(W, 0); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0, -12 * dpr); ctx.lineTo(0, 12 * dpr); ctx.stroke();
+      ctx.restore();
+
+      // The bat: the target follows the roll directly, optionally rate-limited
+      if (bat) {
+        const w2 = bat.width / 2;
+        const target = W / 2 + pos * (W / 2 - w2);
+        if (settings.maxSpeed > 0) {
+          const step = settings.maxSpeed * bat.width * dt;
+          batX += Math.max(-step, Math.min(step, target - batX));
+        } else {
+          batX = target;
+        }
+        const y = H - Math.floor(bat.height * (1.3 + 1));   // 1.3 bat heights up, plus the mobile lift of 1
+        ctx.drawImage(bat, Math.round(batX - w2), y);
+        // Centre line and edge guides for the bat's travel
+        ctx.strokeStyle = '#333';
+        for (const x of [W / 2, w2, W - w2]) {
+          ctx.beginPath(); ctx.moveTo(x, y - 10 * dpr); ctx.lineTo(x, y + bat.height + 10 * dpr); ctx.stroke();
+        }
+      }
+
+      hud.textContent =
+        `sensor  ${settings.source}  ${rateHz} Hz\n` +
+        `raw     ${rawText}\n` +
+        `up      x ${fmt(up.x, 2)}  y ${fmt(up.y, 2)}  z ${fmt(up.z, 2)}\n` +
+        `level   ${refAngle === null ? '--' : fmt(refAngle, 1) + '°'}  (${settings.snap ? 'nearest 90°' : 'exact'})\n` +
+        `roll    ${fmt(roll, 1)}°  (edge at ${fullAngle()}°, ${W >= H ? 'landscape' : 'portrait'})${flat ? '  FLAT: held' : ''}\n` +
+        `pitch   ${fmt(pitch(), 0)}°\n` +
+        `pos     ${fmt(pos, 2)}`;
+      requestAnimationFrame(frame);
+    }
+
+    function fmt(v, dp) {
+      if (v === null || v === undefined || Number.isNaN(v)) return '--';
+      return (v < 0 ? '' : '+') + v.toFixed(dp);
+    }
+
+    // ------------------------------------------------------------------------------------------------------------
+    // The page
+    // ------------------------------------------------------------------------------------------------------------
+    const hud = document.getElementById('hud');
+    const panel = document.getElementById('panel');
+    const json = document.getElementById('json');
+
+    function renderPanel() {
+      for (const b of panel.querySelectorAll('[data-source]')) b.classList.toggle('on', b.dataset.source === settings.source);
+      for (const b of panel.querySelectorAll('[data-snap]')) b.classList.toggle('on', (b.dataset.snap === '1') === settings.snap);
+      for (const key of ['fullPortrait', 'fullLandscape', 'deadZone', 'curve', 'smoothing', 'maxSpeed']) {
+        const input = document.getElementById(key);
+        input.value = settings[key];
+        const unit = { fullPortrait: '°', fullLandscape: '°', deadZone: '°', curve: '', smoothing: ' ms', maxSpeed: ' bat/s' }[key];
+        panel.querySelector(`[data-for=${key}]`).textContent =
+          (key === 'maxSpeed' && settings.maxSpeed === 0 ? 'off' : settings[key] + unit);
+      }
+      json.textContent = JSON.stringify(settings);
+    }
+
+    panel.addEventListener('input', (e) => {
+      const key = e.target.id;
+      if (!(key in settings)) return;
+      settings[key] = parseFloat(e.target.value);
+      save();
+      renderPanel();
+    });
+    panel.addEventListener('click', (e) => {
+      const b = e.target.closest('button');
+      if (!b) return;
+      if (b.dataset.source) {
+        settings.source = b.dataset.source;
+        haveReading = false;     // Re-seed the filter from the new source
+        refAngle = null;         // ...and level from its first reading
+        rawText = '';
+      } else if (b.dataset.snap) {
+        settings.snap = b.dataset.snap === '1';
+        setReference();
+      } else if (b.id === 'defaults') {
+        Object.assign(settings, DEFAULTS);
+        setReference();
+      }
+      save();
+      renderPanel();
+    });
+
+    document.getElementById('gear').addEventListener('click', () => panel.classList.toggle('open'));
+    document.getElementById('recentre').addEventListener('click', () => setReference());
+    document.getElementById('fullscreen').addEventListener('click', () => {
+      if (document.fullscreenElement) document.exitFullscreen?.();
+      else document.documentElement.requestFullscreen?.({ navigationUI: 'hide' }).catch(() => {});
+    });
+
+    /** Start listening to the sensors: iOS needs a permission request from a user gesture, others just listen. */
+    async function startSensors() {
+      const error = document.getElementById('error');
+      try {
+        for (const cls of [window.DeviceMotionEvent, window.DeviceOrientationEvent]) {
+          if (cls && typeof cls.requestPermission === 'function') {
+            const result = await cls.requestPermission();
+            if (result !== 'granted') throw new Error('Permission to read the motion sensors was refused');
+          }
+        }
+      } catch (err) {
+        error.textContent = err.message;
+        return;
+      }
+      if (!window.isSecureContext) {
+        error.textContent = 'Not a secure context (https): the browser may withhold the sensors';
+      }
+      window.addEventListener('devicemotion', onMotion);
+      window.addEventListener('deviceorientation', onOrientation);
+      document.getElementById('start').classList.add('hidden');
+      setTimeout(() => {
+        if (!haveReading) hud.textContent += '\n\nNo sensor readings yet: is this a phone, on https?';
+      }, 2000);
+    }
+    document.getElementById('startBtn').addEventListener('click', startSensors);
+
+    window.addEventListener('resize', resize);
+    batImage.addEventListener('load', resize);
+    resize();
+    renderPanel();
+    requestAnimationFrame(frame);
+  </script>
+</body>
+</html>

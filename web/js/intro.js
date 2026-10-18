@@ -1,5 +1,6 @@
 // The intro: a rotating, perspective-projected card, a swarm of bouncing balls that the pointer can shove about,
-// and the difficulty menu, which is chosen by steering the hero ball into a label.
+// and the difficulty menu, which is chosen by steering the hero ball into a label. On a phone there's a fourth
+// label, Insane: Hard, with the bat steered by rolling the phone (see tilt.js).
 
 import {
   CARD_PITCH_RATE, CARD_ROLL_RATE, CARD_YAW_RATE, COLOURS, INTRO_BALLS, TRAIL_FADE_INTRO, TILT_ACCEL, TILT_DAMPING,
@@ -64,8 +65,9 @@ export class Intro {
     this.roll = 0;
     this.elapsed = 0;
     this.grid = 10;   // Card subdivision per side
-    this.difficulty = game.difficulty;
-    this.menuBoxes = [null, null, null];
+    this.labels = input.mobile ? ['Easy', 'Medium', 'Hard', 'Insane'] : ['Easy', 'Medium', 'Hard'];
+    this.choice = game.tiltBat ? 3 : game.difficulty;   // Index into `labels` of the selected menu item
+    this.menuBoxes = this.labels.map(() => null);
     this.linkBoxes = { help: null, credits: null };   // Hit boxes for the Help / Credits links
     this.idle = false;                                // Settling the card to face the viewer (see setIdle)
     this.tiltActive = false;                          // Hero ball rolled by the device's tilt (phones), not the pointer
@@ -222,10 +224,12 @@ export class Intro {
   selectAt(x, y) {
     let changed = false;
     this.menuBoxes.forEach((box, i) => {
-      if (!box || i === this.difficulty) return;
+      if (!box || i === this.choice) return;
       if (x >= box.x && x <= box.x + box.w && y >= box.y && y <= box.y + box.h) {
-        this.difficulty = i;
-        this.game.difficulty = i;
+        this.choice = i;
+        // Insane is Hard's rules with the bat steered by tilt
+        this.game.difficulty = Math.min(i, 2);
+        this.game.tiltBat = i === 3;
         this.sfx.play('click');
         changed = true;
       }
@@ -286,9 +290,10 @@ export class Intro {
     this.drawCard(ctx);
 
     // On a phone the title is toned down and the menu made bigger: the labels are tap targets there, and the
-    // whole screen is only a few inches across
+    // whole screen is only a few inches across. The phone's menu has a fourth item, so it's packed a little
+    // tighter, with the two-finger hint below it.
     const layout = this.input.mobile
-      ? { title: 280, menuSize: 150, menuTop: 0.57, menuStep: 0.11 }
+      ? { title: 280, menuSize: 130, menuTop: 0.54, menuStep: 0.1, hint: 0.94 }
       : { title: 400, menuSize: 100, menuTop: 0.6, menuStep: 0.08 };
 
     const wave = Math.round(64 * Math.sin((2 * Math.PI * this.elapsed) / 3));
@@ -299,8 +304,8 @@ export class Intro {
     const prompt = this.input.mobile ? 'Tap to continue' : 'Click or press any key to continue';
     gfx.text(ctx, prompt, { x, y: gfx.H * 0.46, size: 60, colour: COLOURS.presskey, alpha: 200 / 255 });
 
-    ['Easy', 'Medium', 'Hard'].forEach((label, i) => {
-      const selected = i === this.difficulty;
+    this.labels.forEach((label, i) => {
+      const selected = i === this.choice;
       this.menuBoxes[i] = gfx.text(ctx, label, {
         x, y: gfx.H * (layout.menuTop + layout.menuStep * i), size: layout.menuSize, alpha: 224 / 255,
         colour: selected ? COLOURS.selitem : COLOURS.item, bold: selected,
@@ -310,7 +315,7 @@ export class Intro {
     // On a phone the Help and Credits pages live on the two-finger-tap menu, so the links give way to a hint
     if (this.input.mobile) {
       this.linkBoxes = {};
-      gfx.text(ctx, 'Two-finger tap for the menu', { x, y: gfx.H * 0.88, size: 60, alpha: 0.8, colour: COLOURS.presskey });
+      gfx.text(ctx, 'Two-finger tap for the menu', { x, y: gfx.H * layout.hint, size: 60, alpha: 0.8, colour: COLOURS.presskey });
     }
 
     // Help and Credits links, underlined, lit up when the hero ball is over them. The hit boxes are padded a

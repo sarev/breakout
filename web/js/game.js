@@ -10,6 +10,7 @@ import {
 } from './config.js';
 import { Ball, Bat, Brick, Laser } from './entities.js';
 import { tintImage } from './graphics.js';
+import { TiltSteer } from './tilt.js';
 import { WipeDetector } from './wipe.js';
 
 // Where each bat sits relative to the hero bat (id 0), in hero-bat widths: the bonus bats alternate left and right
@@ -43,6 +44,8 @@ export class Game {
     this.debug = debug;
     this.batLift = mobile ? MOBILE_BAT_LIFT : 0;   // In bat heights; read by Bat when it lays itself out
     this.wipe = new WipeDetector(gfx);             // Anti-cheat: tires the bat if it's wiped back and forth
+    this.steer = mobile ? new TiltSteer() : null;  // Rolling the phone steers the bat on Insane (main.js feeds it)
+    this.tiltBat = false;                          // Insane: the bat follows the phone's roll, not the finger
 
     this.bats = [];
     this.extraBats = [];
@@ -133,6 +136,7 @@ export class Game {
     this.input.centre();
     this.bats[0].x = this.gfx.W / 2;
     this.wipe.reset(this.gfx.W / 2, this.time);
+    if (this.steer) this.steer.level();   // However the phone is held as the level starts is level
     this.boringDeadline = this.time + BORING_TIMEOUT;
     this.darkAlpha = null;
     this.inversionRemaining = 0;
@@ -188,6 +192,7 @@ export class Game {
   /** Re-scale everything after the viewport changed. */
   relayout(sx, sy) {
     this.buildSprites();
+    if (this.steer) this.steer.level();   // The phone has been turned round: however it's held now is level
     const allBats = this.bats.concat(this.extraBats);
     for (const bat of allBats) {
       bat.relayout(bat.id === 0 ? this.sprites.bat : this.sprites.bonusBat,
@@ -271,8 +276,18 @@ export class Game {
     this.sfx.play('bat-hit', this.heroBall.x / this.gfx.W, 0.5);
   }
 
-  /** Where the hero bat should be: the control position with the mouse gain applied. */
+  /**
+   * Where the hero bat should be: the control position with the mouse gain applied, or on Insane the phone's
+   * roll mapped across the bat's travel (the yellow brick reverses that too). Until the accelerometer has
+   * delivered a reading the finger steers as usual, so a phone without one still has a playable game.
+   */
   batTargetX() {
+    if (this.tiltBat && this.steer && this.steer.active) {
+      const gfx = this.gfx;
+      let pos = this.steer.position(gfx.W >= gfx.H);
+      if (this.inverted) pos = -pos;
+      return gfx.W / 2 + pos * (gfx.W / 2 - this.bats[0].w2);
+    }
     return this.input.playfield().x;
   }
 

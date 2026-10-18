@@ -159,10 +159,11 @@ async function boot() {
   }
 
   /**
-   * On a phone the intro's hero ball rolls with the device's tilt rather than following a finger. iOS wants
-   * permission for orientation readings, asked for from a user gesture (the gate's tap); Android just sends
-   * them (on a secure page). The ball stays finger-driven until the first reading arrives, so a device with no
-   * sensors or a refused permission loses nothing.
+   * On a phone the intro's hero ball rolls with the device's tilt rather than following a finger, and on Insane
+   * the bat is steered by rolling the phone (see tilt.js). iOS wants permission for motion and orientation
+   * readings, asked for from a user gesture (the gate's tap); Android just sends them (on a secure page). The
+   * ball stays finger-driven until the first reading arrives, and so does the bat, so a device with no sensors
+   * or a refused permission loses nothing.
    */
   function startTilt() {
     if (!MOBILE || !window.DeviceOrientationEvent) return;
@@ -171,12 +172,25 @@ async function boot() {
         : (typeof window.orientation === 'number' ? window.orientation : 0);
       return ((a % 360) + 360) % 360;
     };
-    const listen = () => window.addEventListener('deviceorientation', (e) => {
-      if (e.beta === null || e.gamma === null) return;
-      intro.onOrientation(e.beta, e.gamma, screenAngle());
-    });
-    if (typeof DeviceOrientationEvent.requestPermission === 'function') {
-      DeviceOrientationEvent.requestPermission().then((r) => { if (r === 'granted') listen(); }).catch(() => {});
+    const listen = () => {
+      window.addEventListener('deviceorientation', (e) => {
+        if (e.beta === null || e.gamma === null) return;
+        intro.onOrientation(e.beta, e.gamma, screenAngle());
+      });
+      // The accelerometer's reading is in the device's own frame; the steering sorts out which way round the
+      // screen is for itself
+      window.addEventListener('devicemotion', (e) => {
+        const a = e.accelerationIncludingGravity;
+        if (!a || a.x === null || !game.steer) return;
+        game.steer.feed(a.x, a.y, a.z, e.timeStamp);
+      });
+    };
+    // iOS: both permissions are asked for in the same gesture (in practice they're one prompt)
+    const asks = [window.DeviceOrientationEvent, window.DeviceMotionEvent]
+      .filter((cls) => cls && typeof cls.requestPermission === 'function')
+      .map((cls) => cls.requestPermission());
+    if (asks.length) {
+      Promise.all(asks).then((results) => { if (results.every((r) => r === 'granted')) listen(); }).catch(() => {});
     } else {
       listen();
     }
@@ -263,6 +277,8 @@ async function boot() {
     } else {
       audio.resume();
       if (input.wantLock) input.requestLock();
+      // On Insane, however the phone is held on resuming is level again (a pause is the way to re-level)
+      if (game.tiltBat && game.steer) game.steer.level();
     }
   }
 
@@ -506,6 +522,16 @@ async function boot() {
         x: gfx.W / 2, y: gfx.H / 2, size: 300, colour: splash.colour, bold: true, italic: true,
         alpha: Math.min(0.9, splash.elapsed / 1.2),
       });
+      if (MOBILE && splash.next === 'level') {
+        // A phone gets the gestures under the level banner, since there's nothing else on screen to say
+        // how to pause (and on Insane, that the finger no longer drives the bat)
+        const lines = ['Two-finger tap for pause/options'];
+        if (game.tiltBat) lines.push('Tilt device to move bat');
+        lines.forEach((line, i) => gfx.text(ctx, line, {
+          x: gfx.W / 2, y: gfx.H * (0.64 + 0.06 * i), size: 60, colour: COLOURS.presskey,
+          alpha: Math.min(0.8, splash.elapsed / 1.2),
+        }));
+      }
       game.drawBlackout(ctx);
       if (splash.elapsed >= 3) leaveSplash();
     } else if (scene === 'game') {
