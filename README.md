@@ -181,7 +181,7 @@ Options go on the URL, for example `http://localhost:8000/?music=0&sensitivity=1
 | `volume=0.25` | Music volume, 0 to 1 (default 0.4) |
 | `sensitivity=1.5` | Mouse sensitivity multiplier (default 1) |
 | `mobile=1` / `mobile=0` | Force the phone-and-tablet behaviour on or off, instead of detecting it |
-| `debug=1` | Developer cheats: 99 lives, **D** destroys every brick, a click destroys the brick under the pointer, and a digit key jumps straight to that level |
+| `debug=1` | Developer cheats: 99 lives (or `lives=6`, say, for a given number), **D** destroys every brick, a click destroys the brick under the pointer, a digit key jumps straight to that level, **P** saves a screenshot of the playfield as a PNG, and **X** on the intro sets up a busy level 5 on Hard (bricks gone and returning, every bat out, lasers, a crowd of balls) to take one of |
 
 ### Things worth knowing
 

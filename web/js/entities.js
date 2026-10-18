@@ -258,9 +258,15 @@ export class Brick {
       let radius = this.h2;
       if (this.lives !== 0) radius = Math.floor((radius / 20) * (20 + this.lives));
       if (radius > 0) {
-        ctx.fillStyle = rgba(this.colour);
+        // A translucent disc of the brick's colour with a much brighter core half its size, so the flash reads
+        // as a glow rather than a flat blob over the backdrop
+        ctx.fillStyle = rgba(this.colour, 0.67);
         ctx.beginPath();
         ctx.arc(this.x, this.y, radius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = rgba(this.colour.map((c) => Math.round(c + (255 - c) * 0.7)));
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, radius / 2, 0, Math.PI * 2);
         ctx.fill();
       }
       this.lives -= 1;

@@ -35,13 +35,15 @@ export class Game {
    * @param {object} gfx Graphics.
    * @param {object} sfx Sound effects.
    * @param {object} input Input (pointer and keys).
-   * @param {object} opts {debug, mobile}: mobile raises the bats clear of the fingertip (see Bat.setImage).
+   * @param {object} opts {debug, mobile, lives}: mobile raises the bats clear of the fingertip (see Bat.setImage);
+   *   lives, with debug, is the number to start each game with instead of DEBUG_LIVES.
    */
-  constructor(gfx, sfx, input, { debug = false, mobile = false } = {}) {
+  constructor(gfx, sfx, input, { debug = false, mobile = false, lives = null } = {}) {
     this.gfx = gfx;
     this.sfx = sfx;
     this.input = input;
     this.debug = debug;
+    this.debugLives = lives;    // Starting lives in debug mode, or null for DEBUG_LIVES
     this.batLift = mobile ? MOBILE_BAT_LIFT : 0;   // In bat heights; read by Bat when it lays itself out
     this.wipe = new WipeDetector(gfx);             // Anti-cheat: tires the bat if it's wiped back and forth
     this.steer = mobile ? new TiltSteer() : null;  // Rolling the phone steers the bat on Insane (main.js feeds it)
@@ -127,7 +129,7 @@ export class Game {
     this.level = level;
     this.paused = false;
     this.running = true;
-    this.lives = this.debug ? DEBUG_LIVES : STARTING_LIVES + (2 - this.difficulty);   // A cheat, for testing
+    this.lives = this.debug ? (this.debugLives || DEBUG_LIVES) : STARTING_LIVES + (2 - this.difficulty);   // A cheat, for testing
     this.playSeconds = 0;
     this.startedAt = null;
     this.balls = [this.heroBall];

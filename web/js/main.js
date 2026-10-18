@@ -11,14 +11,17 @@
 // doesn't hide them, and the Help page
 // describes the gestures rather than the keys. ?mobile=1 or ?mobile=0 overrides the detection, for testing.
 //
-// ?debug=1 enables the cheats (99 lives, D clears the level, left-click destroys the brick under the pointer, a
-// digit key jumps to that level). ?music=0 starts silent, ?sensitivity=1.5 scales mouse movement, ?volume=0.3
-// sets the music volume.
+// ?debug=1 enables the cheats (99 lives, or ?lives=N for a given number, D clears the level, left-click destroys
+// the brick under the pointer, a digit key jumps to that level, P saves a screenshot, X on the intro sets up a
+// busy level for one). ?music=0 starts silent, ?sensitivity=1.5 scales mouse movement, ?volume=0.3 sets the
+// music volume.
 
 import { AudioSystem, Music, Sfx } from './audio.js';
 import { loadAudioSet, loadImages } from './assets.js';
 import { Certificate } from './certificate.js';
-import { COLOURS, MAX_FRAME_DT, MUSIC_FILES, NUM_BRICK_TYPES, SOUND_NAMES } from './config.js';
+import {
+  COLOURS, MAX_BALLS, MAX_FRAME_DT, MUSIC_FILES, NUM_BRICK_TYPES, RANDOM_BRICK_TYPES, SOUND_NAMES,
+} from './config.js';
 import { Game } from './game.js';
 import { Graphics } from './graphics.js';
 import { Input } from './input.js';
@@ -27,6 +30,8 @@ import { closeModal, modalOpen, openCamera, openModal, openOptions, renderOption
 
 const params = new URLSearchParams(window.location.search);
 const DEBUG = params.get('debug') === '1';
+// ?lives=N, in debug mode only, starts each game with that many lives instead of the debug default
+const DEBUG_LIVES = DEBUG && /^[1-9]\d*$/.test(params.get('lives') || '') ? parseInt(params.get('lives'), 10) : null;
 const SENSITIVITY = parseFloat(params.get('sensitivity') || '1') || 1;
 // Music on or off is remembered between visits; ?music=0 still starts a visit with it off
 const MUSIC_KEY = 'breakout-music';
@@ -156,7 +161,7 @@ async function boot() {
 
   const gfx = new Graphics(canvas, images, SENSITIVITY, MOBILE);
   const input = new Input(canvas, gfx, MOBILE);
-  const game = new Game(gfx, audio.sfx, input, { debug: DEBUG, mobile: MOBILE });
+  const game = new Game(gfx, audio.sfx, input, { debug: DEBUG, mobile: MOBILE, lives: DEBUG_LIVES });
   const intro = new Intro(gfx, game, audio.sfx, input, images.intro);
   const certificate = new Certificate(gfx, MOBILE);
   const music = audio.music;
@@ -314,6 +319,73 @@ async function boot() {
       // On Insane, however the phone is held on resuming is level again (a pause is the way to re-level)
       if (game.tiltBat && game.steer) game.steer.level();
     }
+  }
+
+  /**
+   * X on the intro in debug mode: a showcase to take screenshots of (P). Hard, level 5, straight into play with
+   * the lower four rows mostly cleared (a few bricks still exploding), both regenerators fired so bricks pop
+   * back in, every bonus bat out, the lasers going and a full crowd of balls. The black hole and red lens
+   * bricks below the top two rows become ordinary bricks, since a ball setting one off would darken or blur
+   * the shot; the ones in the top two rows stay, out of harm's way.
+   */
+  function showcase() {
+    const level = 5;
+    game.difficulty = 2;
+    game.tiltBat = false;
+    intro.choice = 2;
+    game.reset(level);
+    startLevel();
+    const cols = Game.columns(level);
+    const rows = Game.levelDef(level).length;
+    const mix = RANDOM_BRICK_TYPES[game.difficulty];
+    for (const brick of game.bricks) {
+      const row = Math.floor(brick.id / cols);
+      if (brick.lives === 99 || row < 2) continue;
+      if (brick.type === 4 || brick.type === 9) {
+        brick.become(mix[Math.floor(Math.random() * mix.length)]);
+      } else if (row < rows - 4) {
+        continue;   // The upper rows keep their bricks
+      } else if (Math.random() < 0.6) {
+        brick.lives = -21;   // Long gone
+      } else if (Math.random() < 0.15) {
+        brick.lives = 0;     // Exploding right now
+      }
+    }
+    game.bricksRemaining = game.countLiveBricks();
+    game.serving = false;
+    Object.assign(game.heroBall, { x: gfx.W / 2, y: gfx.H / 2, vx: 300 * gfx.scale, vy: -500 * gfx.scale });
+    while (game.balls.length < MAX_BALLS) game.addBonusBall(99);   // Long-lived, so the crowd lasts the session
+    while (game.extraBats.length) game.killBrick({ type: 2, id: 0 });
+    game.killBrick({ type: 8, id: 0 });
+    game.startRegeneration();
+    game.startRegeneration();
+  }
+
+  /**
+   * P in debug mode: save the playfield (the canvas without its letterbox bars) as a PNG, named for the level
+   * and the moment, through a temporary download link as the certificate does. Silent when it works: a notice
+   * would sit in the next few shots.
+   */
+  function saveScreenshot() {
+    const shot = document.createElement('canvas');
+    shot.width = gfx.W;
+    shot.height = gfx.H;
+    shot.getContext('2d').drawImage(canvas, gfx.offX, gfx.offY, gfx.W, gfx.H, 0, 0, gfx.W, gfx.H);
+    const d = new Date();
+    const two = (n) => String(n).padStart(2, '0');
+    const stamp = `${d.getFullYear()}-${two(d.getMonth() + 1)}-${two(d.getDate())}-${two(d.getHours())}${two(d.getMinutes())}${two(d.getSeconds())}`;
+    const name = `breakout-level${game.level}-${stamp}.png`;
+    shot.toBlob((blob) => {
+      if (!blob) { showNotice('Screenshot failed'); return; }
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = name;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 30000);
+    }, 'image/png');
   }
 
   /**
@@ -491,6 +563,7 @@ async function boot() {
     } else if (scene === 'intro') {
       if (key === 'h') openModal('help');
       else if (key === 'c') openModal('credits');
+      else if (key === 'x' && DEBUG) showcase();
       else if (key !== 'escape' && key !== 'q' && !e.repeat) startGame();
     } else if (scene === 'splash') {
       if (key === 'q') quitToIntro(); else if (key !== 'l') splash.elapsed = 1e9;   // L was handled above
@@ -504,6 +577,8 @@ async function boot() {
         quitToIntro();
       } else if (key === 'd' && DEBUG) {
         for (const brick of game.bricks) brick.hit(0, null, true);
+      } else if (key === 'p' && DEBUG && !e.repeat) {
+        saveScreenshot();
       } else if (DEBUG && key >= '1' && key <= '9' && !e.repeat) {
         // Jump straight to that level, banner first, keeping the lives as they are
         const level = parseInt(key, 10);
@@ -639,7 +714,8 @@ async function boot() {
   }
 
   // Expose the live objects for poking at from the console (and for the automated smoke test)
-  window.breakout = { game, gfx, input, intro, certificate, audio, mobile: MOBILE, get scene() { return scene; }, get frames() { return frames; } };
+  window.breakout = {
+    screenshot: saveScreenshot, showcase, game, gfx, input, intro, certificate, audio, mobile: MOBILE, get scene() { return scene; }, get frames() { return frames; } };
 
   requestAnimationFrame(frame);
 
