@@ -509,10 +509,9 @@ export class Game {
 
   animateBats(dt) {
     let target = this.batTargetX();
-    // The anti-cheat watches where the bat is being sent (and only while the hero ball is on its way down),
-    // and while it's tired the bats can only crawl towards it (the hero bat's position stands for all of
-    // them: the others are at fixed offsets from it)
-    this.wipe.observe(target, this.time, this.heroBall.vy > 0);
+    // The anti-cheat watches where the bat is being sent, and while it's tired the bats can only crawl towards
+    // it (the hero bat's position stands for all of them: the others are at fixed offsets from it)
+    this.wipe.observe(target, this.time);
     if (this.wipe.tired(this.time)) {
       const maxStep = WIPE_TIRED_SPEED * this.gfx.W * dt;
       const hero = this.bats[0];

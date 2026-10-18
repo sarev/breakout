@@ -1,20 +1,20 @@
-// Anti-cheat for the "windscreen wiper": wiping the bat from side to side fast enough (trivial with a finger on
-// a phone) sweeps the whole playfield and nothing can ever get past. We watch the control position for that
-// pattern and, when it's found, tire the bat for a while so it can no longer keep up.
+// Anti-cheat for the "windscreen wiper": wobbling the bat from side to side fast enough (trivial with a finger on
+// a phone) guards a whole stretch of the bottom edge and nothing can get past. We watch the control position for
+// that pattern and, when it's found, tire the bat for a while so it can no longer keep up.
 //
-// The pattern, not the speed, is what's detected, so one desperate swipe right across the playfield to reach
-// a ball that was unexpectedly knocked the other way is never punished: it's a single "leg". A leg is a sweep in
-// one direction, and it only counts if it was long (WIPE_LEG_TRAVEL of the playfield width), quick
-// (WIPE_LEG_SECONDS), and made while the hero ball was heading down, since that's the only time a sweep can be
-// guarding the bottom of the screen; darting about with several balls in play while the hero ball is on its
-// way up is just playing. WIPE_LEGS counting legs inside WIPE_WINDOW seconds is wiping. Short, fast wiggles to
-// catch a ball bouncing about near the bat don't count either, since those legs are too short.
+// What's detected is how often the bat turns round. Play has the bat going one way for a while, then the other:
+// chasing a ball, meeting it, moving off to meet the next. Turning round more than WIPE_TURNS times inside
+// WIPE_WINDOW seconds is nothing a player does to meet balls; it's a wiper (a fast narrow wobble under the
+// ball's path does it as well as sweeps right across the playfield, so the width of the sweeps isn't the test).
+// A turn counts only at the end of a leg (a run in one direction) of at least WIPE_LEG_TRAVEL of the playfield
+// width, so that the jitter of an accelerometer-steered bat (Insane) and the twitches of a finger, which turn
+// round constantly but go almost nowhere, don't add up to a penalty; and the bat must come back WIPE_HYSTERESIS
+// of the width before a turn is seen at all. One desperate swipe right across the playfield is one leg and one
+// turn, never a penalty.
 //
 // All times are on the pausable game clock.
 
-import {
-  WIPE_HYSTERESIS, WIPE_LEG_SECONDS, WIPE_LEG_TRAVEL, WIPE_LEGS, WIPE_PENALTY, WIPE_WINDOW,
-} from './config.js';
+import { WIPE_HYSTERESIS, WIPE_LEG_TRAVEL, WIPE_PENALTY, WIPE_TURNS, WIPE_WINDOW } from './config.js';
 
 export class WipeDetector {
   /**
@@ -31,7 +31,7 @@ export class WipeDetector {
     this.dir = 0;               // Direction of the current leg: -1, +1, or 0 before it's known
     this.legStart = { x, t };   // Where and when the current leg began (the previous turning point)
     this.extreme = { x, t };    // The furthest the current leg has reached so far
-    this.legs = [];             // End times of the recent legs that counted
+    this.turns = [];            // Times of the recent turns that counted
     this.tiredUntil = -Infinity;
   }
 
@@ -45,9 +45,8 @@ export class WipeDetector {
    *
    * @param {number} x Target centre x in playfield pixels.
    * @param {number} t Game time.
-   * @param {boolean} guarding True if the hero ball is heading down right now (a sweep can only count then).
    */
-  observe(x, t, guarding = true) {
+  observe(x, t) {
     const W = this.gfx.W;
     const hysteresis = WIPE_HYSTERESIS * W;
     if (this.dir === 0) {
@@ -65,15 +64,15 @@ export class WipeDetector {
     }
     if ((this.extreme.x - x) * this.dir < hysteresis) return;   // A twitch, not a turn
 
-    // Turned round: the leg that just ended ran from legStart to extreme
+    // Turned round: the leg that just ended ran from legStart to extreme. It counts as a turn if it went
+    // somewhere; a leg shorter than that is jitter, which is forgotten rather than held against the player
     const travel = Math.abs(this.extreme.x - this.legStart.x);
-    const seconds = this.extreme.t - this.legStart.t;
-    if (guarding && travel >= WIPE_LEG_TRAVEL * W && seconds <= WIPE_LEG_SECONDS) {
-      this.legs.push(this.extreme.t);
-      this.legs = this.legs.filter((t0) => t - t0 <= WIPE_WINDOW);
-      if (this.legs.length >= WIPE_LEGS) {
+    if (travel >= WIPE_LEG_TRAVEL * W) {
+      this.turns.push(this.extreme.t);
+      this.turns = this.turns.filter((t0) => t - t0 <= WIPE_WINDOW);
+      if (this.turns.length >= WIPE_TURNS) {
         this.tiredUntil = t + WIPE_PENALTY;
-        this.legs = [];   // Carrying on wiping through the penalty will earn another one
+        this.turns = [];   // Carrying on wiping through the penalty will earn another one
         if (this.onTired) this.onTired();
       }
     }

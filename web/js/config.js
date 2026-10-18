@@ -209,15 +209,15 @@ export const BAT_LIFETIME = 10;         // Seconds a bonus bat stays in play
 export const BAT_FADE_SECONDS = 2;      // Warning fade before it goes
 export const BAT_VELOCITY_SMOOTHING = 0.06; // Time constant for the smoothed sideways speed
 
-// Anti-cheat (see wipe.js): wiping the bat from side to side fast enough sweeps the whole playfield and nothing
-// can get past. A leg is one sweep in one direction; enough long, quick legs in a short window tire the bat,
-// which then moves no faster than WIPE_TIRED_SPEED playfield widths per second for a while. One desperate
-// swipe to reach a ball is a single leg and never enough, and a leg only counts while the hero ball is on
-// its way down: darting about while it's heading up (chasing bonus balls, say) is just playing.
-export const WIPE_LEG_TRAVEL = 0.3;     // Playfield widths a sweep must cover to count...
-export const WIPE_LEG_SECONDS = 0.6;    // ...and be quicker than
-export const WIPE_LEGS = 5;             // Counting sweeps within the window that tire the bat
-export const WIPE_WINDOW = 2;           // Seconds
+// Anti-cheat (see wipe.js): wobbling the bat from side to side fast enough guards a whole stretch of the bottom
+// edge and nothing can get past. A bat that turns round more than WIPE_TURNS times in WIPE_WINDOW seconds is
+// tired, and then moves no faster than WIPE_TIRED_SPEED playfield widths per second for a while. A turn only
+// counts at the end of a leg of at least WIPE_LEG_TRAVEL, so the jitter of a tilt-steered bat, which turns
+// round constantly but goes nowhere, doesn't count; one desperate swipe to reach a ball is one turn.
+export const WIPE_TURNS = 8;            // Turns within the window that tire the bat
+export const WIPE_WINDOW = 1;           // Seconds
+export const WIPE_LEG_TRAVEL = 0.02;    // Playfield widths a leg must cover for its turn to count (about a
+                                        // quarter of the bat's width: jitter is far less, a wobble more)
 export const WIPE_PENALTY = 2.5;        // Seconds the bat stays tired
 export const WIPE_TIRED_SPEED = 0.25;   // Playfield widths per second the bat can manage while tired
 export const WIPE_HYSTERESIS = 0.01;    // Playfield widths of reverse travel before a sweep counts as turned round

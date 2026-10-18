@@ -376,9 +376,10 @@ async function boot() {
     } else if (scene === 'intro') {
       // A click or tap on one of the links opens its page instead of starting a game. Otherwise the label under
       // the pointer (if any) is selected first: a quick tap can land and lift between two frames, before the
-      // intro has had a chance to notice where the finger went. When the ball is rolled by tilt, the ball is
-      // what chooses, wherever the finger tapped
-      const p = intro.tiltActive ? { x: intro.hero.x, y: intro.hero.y } : input.playfield();
+      // intro has had a chance to notice where the finger went. That goes for a ball rolled by tilt too: a tap
+      // on a label means that label, and only a tap clear of them all starts whatever the ball is on (an
+      // earlier version let the ball choose whatever the finger tapped, which ignored a tap on a label)
+      const p = input.playfield();
       const link = intro.linkAt(p.x, p.y);
       if (link) {
         openModal(link);
