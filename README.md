@@ -139,7 +139,7 @@ then open http://localhost:8000/ in a browser.
 
 ### Publishing
 
-Copy the `web` folder to a static web server (SFTP, S3, GitHub Pages, whatever you have). Nothing needs building, and there are no other dependencies. The folder is about 16 MB, almost all of it the music and the large sprite images.
+Copy the `web` folder to a static web server (SFTP, S3, GitHub Pages, whatever you have). Nothing needs building, and there are no other dependencies. The folder also carries the favicon, a home-screen icon for phones, and a web app manifest, so a phone that adds the page to its home screen gets a proper icon and launches it fullscreen in landscape. That installed-app launch needs the page to be served over HTTPS (a plain `http://` test server gives a bookmark that opens in the browser instead), and Samsung Internet also wants the small service worker in `sw.js`, which caches nothing. In Samsung Internet, once the page has loaded over HTTPS a small download-style icon appears at the right-hand end of the address bar; tapping it offers "Add to apps", which installs it (the menu's "Add page to Home screen" only makes a bookmark). Android then shows a warning about the app being unsafe, because the wrapper isn't from an app store; that's Samsung's wrapper, not the page, and can be waded past. Opened in a browser on a phone, the first tap on the title card goes fullscreen and asks for landscape anyway. The folder is about 16 MB, almost all of it the music and the large sprite images.
 
 ### Controls
 

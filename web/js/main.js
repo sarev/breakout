@@ -143,6 +143,10 @@ async function boot() {
 
   function leaveGate() {
     audio.unlock();
+    // On a phone the first tap is also the moment to fill the screen and turn to landscape: when the page is
+    // opened in the browser rather than from an installed home-screen icon, nothing else will. Both requests
+    // need a user gesture, which this is.
+    if (MOBILE && !isFullscreen()) toggleFullscreen();
     music.play('intro');
     scene = 'intro';
   }
@@ -472,6 +476,12 @@ async function boot() {
   window.breakout = { game, gfx, input, intro, audio, mobile: MOBILE, get scene() { return scene; }, get frames() { return frames; } };
 
   requestAnimationFrame(frame);
+
+  // Register the (do-nothing) service worker so browsers that still require one will offer to install the page
+  // as an app from its manifest. Only possible on a secure page; a plain http:// test server skips this.
+  if (window.isSecureContext && 'serviceWorker' in navigator) {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  }
 }
 
 boot().catch((e) => {

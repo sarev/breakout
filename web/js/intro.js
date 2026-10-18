@@ -244,9 +244,15 @@ export class Intro {
     const x = gfx.W / 2;
     this.drawCard(ctx);
 
+    // On a phone the title is toned down and the menu made bigger: the labels are tap targets there, and the
+    // whole screen is only a few inches across
+    const layout = this.input.mobile
+      ? { title: 280, menuSize: 150, menuTop: 0.57, menuStep: 0.11 }
+      : { title: 400, menuSize: 100, menuTop: 0.6, menuStep: 0.08 };
+
     const wave = Math.round(64 * Math.sin((2 * Math.PI * this.elapsed) / 3));
     const title = COLOURS.title.map((c) => Math.max(0, Math.min(255, c + wave)));
-    gfx.text(ctx, 'Breakout', { x, y: gfx.H * 0.2, size: 400, colour: title, alpha: 224 / 255, bold: true, italic: true });
+    gfx.text(ctx, 'Breakout', { x, y: gfx.H * 0.2, size: layout.title, colour: title, alpha: 224 / 255, bold: true, italic: true });
     gfx.text(ctx, 'Copyright © 2025-26, 7th software Ltd.', { x, y: gfx.H * 0.35, size: 80, colour: COLOURS.copyright, alpha: 200 / 255 });
     gfx.text(ctx, 'All rights reserved.', { x, y: gfx.H * 0.41, size: 80, colour: COLOURS.rights, alpha: 200 / 255 });
     const prompt = this.input.mobile ? 'Tap to continue' : 'Click or press any key to continue';
@@ -255,8 +261,8 @@ export class Intro {
     ['Easy', 'Medium', 'Hard'].forEach((label, i) => {
       const selected = i === this.difficulty;
       this.menuBoxes[i] = gfx.text(ctx, label, {
-        x, y: gfx.H * (0.6 + 0.08 * i), size: 100, alpha: 224 / 255,
-        colour: selected ? COLOURS.selitem : COLOURS.item, bold: selected,
+        x, y: gfx.H * (layout.menuTop + layout.menuStep * i), size: layout.menuSize, alpha: 224 / 255,
+        colour: selected ? COLOURS.selitem : COLOURS.item, bold: selected, outline: [0, 0, 0],
       });
     });
 
@@ -267,6 +273,7 @@ export class Intro {
       const lit = hover === name;
       const box = gfx.text(ctx, label, {
         x: lx, y: gfx.H * 0.88, size: 60, alpha: lit ? 1 : 0.8, colour: lit ? COLOURS.white : COLOURS.presskey,
+        outline: [0, 0, 0],
       });
       ctx.strokeStyle = lit ? 'rgba(255,255,255,0.9)' : 'rgba(64,224,224,0.6)';
       ctx.lineWidth = Math.max(1, 2 * gfx.scale);

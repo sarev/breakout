@@ -287,11 +287,18 @@ export class Graphics {
    *        `size` is in the Python game's font units at the reference resolution (scaled here).
    * @returns {{x: number, y: number, w: number, h: number}} Bounding box, for hit tests.
    */
-  text(ctx, text, { x, y, size, colour, alpha = 0.8, bold = false, italic = false }) {
+  text(ctx, text, { x, y, size, colour, alpha = 0.8, bold = false, italic = false, outline = null }) {
     const px = Math.max(4, Math.round(size * 0.72 * this.scale));
     ctx.font = `${italic ? 'italic ' : ''}${bold ? 'bold ' : ''}${px}px Arial, Helvetica, sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
+    if (outline) {
+      // An outline (an [r, g, b] colour) drawn under the fill, so text stays legible over a busy background
+      ctx.strokeStyle = rgba(outline, alpha);
+      ctx.lineWidth = Math.max(1, px * 0.1);
+      ctx.lineJoin = 'round';
+      ctx.strokeText(text, x, y);
+    }
     ctx.fillStyle = rgba(colour, alpha);
     ctx.fillText(text, x, y);
     const m = ctx.measureText(text);
