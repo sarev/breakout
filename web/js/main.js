@@ -477,6 +477,15 @@ async function boot() {
     const ctx = gfx.begin();
     if (scene === 'gate') {
       gateElapsed += dt;
+      // The intro screenshot fills the playfield behind the title, scaled to cover it (cropped to the centre
+      // where the shapes differ) and darkened so the text stays the point
+      const img = images.intro;
+      const cover = Math.max(gfx.W / img.width, gfx.H / img.height);
+      const dw = img.width * cover;
+      const dh = img.height * cover;
+      ctx.drawImage(img, (gfx.W - dw) / 2, (gfx.H - dh) / 2, dw, dh);
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+      ctx.fillRect(0, 0, gfx.W, gfx.H);
       const wave = Math.round(64 * Math.sin((2 * Math.PI * gateElapsed) / 3));
       const title = COLOURS.title.map((c) => Math.max(0, Math.min(255, c + wave)));
       gfx.text(ctx, 'Breakout', { x: gfx.W / 2, y: gfx.H * 0.4, size: 400, colour: title, alpha: 224 / 255, bold: true, italic: true });
