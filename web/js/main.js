@@ -22,9 +22,11 @@ import { loadAudioSet, loadImages } from './assets.js';
 import { Certificate } from './certificate.js';
 import {
   COLOURS, LEVEL_DEFS, MAX_BALLS, MAX_FRAME_DT, MUSIC_FILES, NUM_BRICK_TYPES, RANDOM_BRICK_TYPES, SOUND_NAMES,
+  SPLASH_BRICK_TIME, SPLASH_MAX_TIME, SPLASH_TIME,
 } from './config.js';
 import { Game } from './game.js';
 import { Graphics } from './graphics.js';
+import { drawBallGuide, drawBrickIntros } from './guide.js';
 import { Input } from './input.js';
 import { Intro } from './intro.js';
 import { closeModal, modalOpen, openCamera, openModal, openOptions, renderOptions, setMobile } from './ui.js';
@@ -254,8 +256,14 @@ async function boot() {
     if (canvas.style.cursor !== style) canvas.style.cursor = style;
   }
 
+  /**
+   * Put up a banner. A level's banner introduces the kinds of brick new to this game (game.newBrickTypes()),
+   * and stays up a little longer for each.
+   */
   function showSplash(text, colour, next) {
-    splash = { text, colour, next, elapsed: 0 };
+    const bricks = next === 'level' ? game.newBrickTypes() : [];
+    const duration = Math.min(SPLASH_MAX_TIME, SPLASH_TIME + SPLASH_BRICK_TIME * bricks.length);
+    splash = { text, colour, next, elapsed: 0, bricks, duration };
     game.darkAlpha = 192;
     scene = 'splash';
   }
@@ -687,6 +695,8 @@ async function boot() {
       const pulse = 0.55 + 0.35 * Math.sin((2 * Math.PI * gateElapsed) / 1.5);
       const prompt = MOBILE ? 'Tap to begin' : 'Click, tap or press any key to begin';
       gfx.text(ctx, prompt, { x: gfx.W / 2, y: gfx.H * 0.62, size: 80, colour: COLOURS.presskey, alpha: pulse });
+      // The one rule a newcomer can't guess: which ball matters
+      drawBallGuide(gfx, ctx, images, gfx.H * 0.73, 0.9);
       gfx.text(ctx, 'Copyright © 2025-26, 7th software Ltd.', { x: gfx.W / 2, y: gfx.H * 0.92, size: 50, colour: COLOURS.copyright, alpha: 0.7 });
     } else if (scene === 'intro') {
       intro.update(dt);
@@ -695,16 +705,19 @@ async function boot() {
       splash.elapsed += dt;
       game.darkAlpha = Game.nextAlpha(game.darkAlpha, dt);
       ctx.drawImage(gfx.background, 0, 0);
-      // The banner fades in, like the Python version's repeated low-alpha blits
+      // The banner fades in, like the Python version's repeated low-alpha blits. With bricks to introduce it moves
+      // up to make room for them, and the hints below go to the foot of the screen.
+      const intros = splash.bricks.length > 0;
       gfx.text(ctx, splash.text, {
-        x: gfx.W / 2, y: gfx.H / 2, size: 300, colour: splash.colour, bold: true, italic: true,
+        x: gfx.W / 2, y: gfx.H * (intros ? 0.2 : 0.5), size: 300, colour: splash.colour, bold: true, italic: true,
         alpha: Math.min(0.9, splash.elapsed / 1.2),
       });
+      drawBrickIntros(gfx, ctx, images, splash.bricks, splash.elapsed, gfx.H * 0.35, gfx.H * (MOBILE ? 0.84 : 0.88));
       if (!MOBILE && splash.next === 'level' && !input.wantLock && !input.locked) {
         // Without the capture, the cursor can wander off the page (onto another monitor, say) mid-game, and
         // nothing else on screen says that L prevents it
         gfx.text(ctx, "Press L to capture the mouse, so it can't stray off the page (Esc releases it)", {
-          x: gfx.W / 2, y: gfx.H * 0.64, size: 60, colour: COLOURS.presskey, alpha: Math.min(0.8, splash.elapsed / 1.2),
+          x: gfx.W / 2, y: gfx.H * (intros ? 0.94 : 0.64), size: 60, colour: COLOURS.presskey, alpha: Math.min(0.8, splash.elapsed / 1.2),
         });
       }
       if (MOBILE && splash.next === 'level') {
@@ -713,12 +726,12 @@ async function boot() {
         const lines = ['Two-finger tap for pause/options'];
         if (game.tiltBat) lines.push('Tilt device to move bat');
         lines.forEach((line, i) => gfx.text(ctx, line, {
-          x: gfx.W / 2, y: gfx.H * (0.64 + 0.06 * i), size: 60, colour: COLOURS.presskey,
+          x: gfx.W / 2, y: gfx.H * ((intros ? 0.89 : 0.64) + 0.06 * i), size: 60, colour: COLOURS.presskey,
           alpha: Math.min(0.8, splash.elapsed / 1.2),
         }));
       }
       game.drawBlackout(ctx);
-      if (splash.elapsed >= 3) leaveSplash();
+      if (splash.elapsed >= splash.duration) leaveSplash();
     } else if (scene === 'over') {
       certificate.draw(ctx);
     } else if (scene === 'game') {

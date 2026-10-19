@@ -119,6 +119,7 @@ export class Graphics {
     this.brickSize = 0;
     this.background = null;
     this.trailMarks = [];       // Glow blobs as {img, x, y, t}: drawn each frame with alpha falling with age
+    this.icons = new Map();     // Image -> {px, canvas}: shrunk copies for icon() to reuse
     this.trailClock = 0;
     this.trailLifetime = 255 / 600;
     this.W = 0;
@@ -350,14 +351,16 @@ export class Graphics {
    *
    * @param {CanvasRenderingContext2D} ctx
    * @param {string} text
-   * @param {{x: number, y: number, size: number, colour: number[], alpha?: number, bold?: boolean, italic?: boolean}} style
-   *        `size` is in the Python game's font units at the reference resolution (scaled here).
+   * @param {{x: number, y: number, size: number, colour: number[], alpha?: number, bold?: boolean, italic?: boolean,
+   *          align?: string}} style
+   *        `size` is in the Python game's font units at the reference resolution (scaled here). `x` is the
+   *        centre of the text, or its left or right end with `align` 'left' or 'right'.
    * @returns {{x: number, y: number, w: number, h: number}} Bounding box, for hit tests.
    */
-  text(ctx, text, { x, y, size, colour, alpha = 0.8, bold = false, italic = false, outline = [0, 0, 0] }) {
-    const px = Math.max(4, Math.round(size * 0.72 * this.scale));
-    ctx.font = `${italic ? 'italic ' : ''}${bold ? 'bold ' : ''}${px}px Arial, Helvetica, sans-serif`;
-    ctx.textAlign = 'center';
+  text(ctx, text, { x, y, size, colour, alpha = 0.8, bold = false, italic = false, outline = [0, 0, 0], align = 'center' }) {
+    const px = this.fontPx(size);
+    ctx.font = this.font(size, bold, italic);
+    ctx.textAlign = align;
     ctx.textBaseline = 'middle';
     if (outline) {
       // An outline (an [r, g, b] colour, black unless a caller passes its own or null) drawn under the fill, so
@@ -371,7 +374,41 @@ export class Graphics {
     ctx.fillText(text, x, y);
     const m = ctx.measureText(text);
     const h = (m.actualBoundingBoxAscent || px * 0.7) + (m.actualBoundingBoxDescent || px * 0.2);
-    return { x: x - m.width / 2, y: y - h / 2, w: m.width, h };
+    const left = align === 'left' ? x : align === 'right' ? x - m.width : x - m.width / 2;
+    return { x: left, y: y - h / 2, w: m.width, h };
+  }
+
+  /** The width `text()` would give a string, in canvas pixels, without drawing it. */
+  textWidth(ctx, text, { size, bold = false, italic = false }) {
+    ctx.font = this.font(size, bold, italic);
+    return ctx.measureText(text).width;
+  }
+
+  /** The pixel size of a font `size` in the Python game's units. */
+  fontPx(size) {
+    return Math.max(4, Math.round(size * 0.72 * this.scale));
+  }
+
+  font(size, bold = false, italic = false) {
+    return `${italic ? 'italic ' : ''}${bold ? 'bold ' : ''}${this.fontPx(size)}px Arial, Helvetica, sans-serif`;
+  }
+
+  /**
+   * An image shrunk to a height, for drawing at that size frame after frame (the gate's balls, the bricks the
+   * level banner introduces). Kept, and made again only when the size changes: shrinking a full-size sprite on
+   * every frame is slow on a phone.
+   *
+   * @param {HTMLImageElement} img
+   * @param {number} px Height in canvas pixels.
+   * @returns {HTMLCanvasElement}
+   */
+  icon(img, px) {
+    const height = Math.max(1, Math.round(px));
+    const kept = this.icons.get(img);
+    if (kept && kept.px === height) return kept.canvas;
+    const canvas = scaleImage(img, height);
+    this.icons.set(img, { px: height, canvas });
+    return canvas;
   }
 
   // --- Glow trails ------------------------------------------------------------------------------------------

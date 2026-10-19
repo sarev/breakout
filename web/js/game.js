@@ -77,6 +77,7 @@ export class Game {
     this.difficulty = 0;
     this.playSeconds = 0;       // Time in play this game (the game clock: no banners, no pauses), for the certificate
     this.startedAt = null;      // Wall-clock Date the first level began, for the certificate
+    this.met = new Set();       // The kinds of brick this game has introduced (newBrickTypes())
     this.lowestBrick = 0;
     this.levelStart = 0;        // The game clock when the level began, which the swaying rows keep time from
 
@@ -156,6 +157,63 @@ export class Game {
     return this.inversionRemaining > 0;
   }
 
+  /**
+   * The brick a layout cell's type becomes on a difficulty, setting aside the random fill (0) and the red lens
+   * allowance, which createBricks() deals with: Easy has no metal or black hole bricks, Medium no black holes,
+   * and both get extra lives in place of the inversion bricks.
+   */
+  static substitute(type, difficulty) {
+    if (difficulty === 0 && (type === 7 || type === 4)) return 0;
+    if (difficulty === 1 && type === 4) return 0;
+    if (difficulty < 2 && type === 5) return 3;
+    return type;
+  }
+
+  /**
+   * How many red lens bricks a level keeps on a difficulty: the layouts carry Hard's full set (one on level 7,
+   * two on stage 5, three on stage 6); Medium keeps only the first on any level, and Easy has none. The rest become
+   * ordinary bricks.
+   */
+  static lensAllowance(difficulty) {
+    return difficulty >= 2 ? Infinity : (difficulty === 1 ? 1 : 0);
+  }
+
+  /**
+   * The kinds of brick a level holds on a difficulty, in type order, by the rules createBricks() follows (the
+   * random fill counts as every type in its mix).
+   *
+   * @returns {number[]}
+   */
+  static levelTypes(level, difficulty) {
+    const types = new Set();
+    let lensesLeft = Game.lensAllowance(difficulty);
+    for (const row of Game.rows(level)) {
+      for (const cell of Game.cells(row)) {
+        if (cell === 9 && lensesLeft > 0) {
+          lensesLeft -= 1;
+          types.add(9);
+        } else if (cell === 9 || cell === 0) {
+          for (const type of RANDOM_BRICK_TYPES[difficulty]) types.add(type);
+        } else if (cell !== null) {
+          types.add(Game.substitute(cell, difficulty));
+        }
+      }
+    }
+    return [...types].sort((a, b) => a - b);
+  }
+
+  /**
+   * The kinds of brick a level brings into this game for the first time, for its banner to introduce. They
+   * count as met from then on, so each is introduced once a game, on the first level that has it.
+   *
+   * @returns {number[]}
+   */
+  newBrickTypes(level = this.level) {
+    const fresh = Game.levelTypes(level, this.difficulty).filter((type) => !this.met.has(type));
+    for (const type of fresh) this.met.add(type);
+    return fresh;
+  }
+
   /** Reset for a new game. */
   reset(level = 1) {
     this.level = level;
@@ -165,6 +223,7 @@ export class Game {
     this.playSeconds = 0;
     this.startedAt = null;
     this.tiltSteered = false;
+    this.met = new Set();
     this.balls = [this.heroBall];
     this.gfx.buildBackground(Game.stage(this.level));
     this.input.centre();
@@ -204,9 +263,7 @@ export class Game {
     this.bottomEdge = size * rows.length;
     this.lowestBrick = this.bottomEdge + this.heroBall.height;
     const mix = RANDOM_BRICK_TYPES[this.difficulty];
-    // Red lens bricks: the layouts carry Hard's full set (one on stage 4, two on 5, three on 6); Medium keeps
-    // only the first on any level, and Easy has none. The rest become ordinary bricks.
-    let lensesLeft = this.difficulty >= 2 ? Infinity : (this.difficulty === 1 ? 1 : 0);
+    let lensesLeft = Game.lensAllowance(this.difficulty);
     let id = 0;
     rows.forEach((row, yn) => {
       const y = Math.floor(size / 2) + yn * size;
@@ -218,16 +275,10 @@ export class Game {
         let type = cell;
         if (type === 9 && lensesLeft > 0) {
           lensesLeft -= 1;
-        } else if (type === 9) {
-          type = mix[randInt(0, 9)];
-        } else if (type === 0) {
-          type = mix[randInt(0, 9)];
-        } else if (this.difficulty === 0 && (type === 7 || type === 4)) {
-          type = 0;   // Easy: no metal or black hole bricks
-        } else if (this.difficulty === 1 && type === 4) {
-          type = 0;   // Medium: no black hole bricks
-        } else if (this.difficulty < 2 && type === 5) {
-          type = 3;   // Easy and medium: extra lives instead of inversion
+        } else if (type === 9 || type === 0) {
+          type = mix[randInt(0, 9)];   // The random fill, and the red lenses beyond the difficulty's allowance
+        } else {
+          type = Game.substitute(type, this.difficulty);
         }
         const brick = new Brick(id++, this.gfx, this, x, y, type);
         brick.row = yn;

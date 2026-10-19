@@ -100,6 +100,27 @@ export const BRICK_COLOURS = [
 
 export const NUM_BRICK_TYPES = 12;
 
+// The "Level N..." banner introduces each kind of brick the first time a game meets it (which level that is
+// depends on the difficulty: Easy has no metal, for one), with its picture, its name and a few words
+export const BRICK_INTROS = [
+  ['Blue', 'Just a brick'],
+  ['Red', 'Sends out a red bonus ball'],
+  ['Green', 'An extra bat for a while'],
+  ['White star', 'An extra life'],
+  ['Black hole', 'Darkens the screen'],
+  ['Yellow arrows', 'Reverses the controls'],
+  ['Cracked fire', 'Blows up its neighbours'],
+  ['Metal', "Can't be broken"],
+  ['Warning triangle', 'Lasers for a while'],
+  ['Red lens', 'Blurs your view'],
+  ['Safety net', 'A net under the bat'],
+  ['Regenerator', 'Brings bricks back'],
+];
+// The banner stays up this long, plus a little for each brick it introduces, up to a limit (a click skips it)
+export const SPLASH_TIME = 3;
+export const SPLASH_BRICK_TIME = 1.5;
+export const SPLASH_MAX_TIME = 10;   // Only a debug jump to a late level meets more than four at once
+
 // A swaying row of bricks never comes closer to a side wall than this many cells, so a ball caught between them
 // always has room
 export const SWAY_WALL_GAP = 1;
@@ -109,9 +130,16 @@ export const SWAY_WALL_GAP = 1;
 // regenerator
 export const BRICK_LIVES = [1, 3, 2, 2, 4, 3, 2, 99, 3, 3, 2, 3];
 
-// Brick layouts. 0 is filled randomly with blue / red / green by difficulty; 7 is metal; see breakout.py. The
-// red lens bricks (9) sit in the top rows, out of the way early on, and these layouts carry Hard's full set:
-// one on the stage 4 level, two on stage 5, three on stage 6. Medium keeps one per level and Easy none (see
+// Brick layouts. 0 is filled randomly with blue / red / green by difficulty; 7 is metal; see breakout.py.
+//
+// The kinds of brick arrive gradually, so the level banner never has more than two to introduce after the
+// first level (see BRICK_INTROS), and the swaying levels bring something of their own: level 1 has only the
+// random fill and an extra life, then 2 brings fire and lasers, 3 (2a) metal, in its swaying row, 4 safety
+// nets and black holes, 5 (3a) the regenerator, 6 inversion and 7 (4a) the red lens. Easy and Medium, which
+// swap some kinds for others, meet the rest in the same order.
+//
+// The red lens bricks (9) sit in the top rows, out of the way early on, and these layouts carry Hard's full
+// set: one on level 7 (4a), two on stage 5, three on stage 6. Medium keeps one per level and Easy none (see
 // Game.createBricks). Safety nets (10) are scattered about as freely as the laser bricks (8), and the two
 // deepest stages have one in their bottom row, where the player starts. Bonus balls come in from the sides just
 // under the bricks on stage 6, so its bottom row keeps metal out of the corners, where it would bounce every one
@@ -128,38 +156,39 @@ const _ = null;
 
 export const LEVEL_DEFS = [
   { stage: 1, rows: [
-    [7, 0, 0, 0, 4, 0, 0, 0, 0, 7],
-    [0, 10, 0, 0, 0, 3, 0, 0, 8, 0],
+    [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0, 3, 0, 0, 0, 0],
   ] },
   { stage: 2, rows: [
     [0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0],
-    [0, 11, 0, 0, 0, 4, 0, 0, 6, 0, 0, 0],
-    [7, 0, 0, 0, 0, 7, 7, 0, 0, 3, 0, 7],
+    [0, 8, 0, 0, 0, 0, 0, 0, 6, 0, 0, 0],
+    [0, 0, 0, 0, 0, 6, 0, 0, 0, 3, 0, 0],
   ] },
   // 2a: level 2 with a swaying row of metal under its top row, and a second extra life up there behind it
   { stage: 2, rows: [
     [0, 0, 3, 0, 0, 0, 3, 0, 0, 0, 0, 0],
     { cells: [_, _, _, 7, 7, _, _, 7, 7, _, _, _], sway: 2, period: 6 },
-    [0, 11, 0, 0, 0, 4, 0, 0, 6, 0, 0, 0],
-    [7, 0, 0, 0, 0, 7, 7, 0, 0, 3, 0, 7],
+    [0, 8, 0, 0, 0, 0, 0, 0, 6, 0, 0, 0],
+    [0, 0, 0, 0, 0, 6, 0, 0, 0, 3, 0, 0],
   ] },
   { stage: 3, rows: [
-    [0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0],
-    [0, 7, 0, 6, 0, 8, 0, 3, 0, 0, 10, 0, 7, 5],
-    [0, 0, 7, 6, 0, 0, 4, 0, 11, 0, 6, 7, 0, 0],
+    [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    [0, 7, 0, 6, 0, 8, 0, 3, 0, 0, 10, 0, 7, 0],
+    [0, 0, 7, 6, 0, 0, 4, 0, 0, 0, 6, 7, 0, 0],
     [0, 0, 0, 0, 10, 0, 0, 7, 8, 0, 0, 0, 0, 3],
   ] },
-  // 3a: level 3 with a row swaying through the middle: two blocks of metal, each with a breakable brick in it
+  // 3a: level 3 with a row swaying through the middle: two blocks of metal, each with a breakable brick in it,
+  // and a regenerator below them
   { stage: 3, rows: [
-    [0, 0, 0, 3, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0],
-    [0, 7, 0, 6, 0, 8, 0, 3, 0, 0, 10, 0, 7, 5],
+    [0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    [0, 7, 0, 6, 0, 8, 0, 3, 0, 0, 10, 0, 7, 0],
     { cells: [_, _, _, 7, 0, 7, _, _, 7, 0, 7, _, _, _], sway: 2, period: 5 },
     [0, 0, 7, 6, 0, 0, 4, 0, 11, 0, 6, 7, 0, 0],
     [0, 0, 0, 0, 10, 0, 0, 7, 8, 0, 0, 0, 0, 3],
   ] },
   { stage: 4, rows: [
     [0, 6, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0],
-    [0, 0, 6, 0, 0, 11, 0, 0, 4, 0, 0, 0, 9, 0, 0, 0],
+    [0, 0, 6, 0, 0, 11, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0],
     [8, 0, 0, 4, 0, 5, 0, 0, 0, 0, 5, 0, 6, 0, 10, 0],
     [0, 0, 0, 0, 0, 7, 0, 3, 6, 0, 7, 0, 0, 0, 0, 0],
     [5, 0, 0, 0, 0, 0, 7, 7, 7, 7, 0, 11, 0, 4, 0, 0],
