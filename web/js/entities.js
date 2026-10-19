@@ -443,6 +443,19 @@ export class Ball {
     if (!this.game.paused) this.gfx.addGlow(this.glow, px, py);
   }
 
+  /**
+   * Spin from a bat moving along under the ball, which drags the ball's underside with it: a swipe to the right
+   * spins it anticlockwise, so its path bends to the left (curve()). On a bat hit, and on a serve off a moving
+   * bat.
+   *
+   * @param {Bat} bat
+   */
+  swipeSpin(bat) {
+    const swipe = bat.vxSmooth / this.gfx.W;   // Playfield widths a second
+    const limit = BALL_SPIN_MAX * 2 * Math.PI;
+    this.english = Math.max(-limit, Math.min(limit, this.english - swipe * BAT_SPIN_PER_SWIPE * 2 * Math.PI));
+  }
+
   /** Add `amount` px/s of speed without changing direction (the next move() clamps to the ceiling). */
   kick(amount) {
     const speed = Math.hypot(this.vx, this.vy);
@@ -619,12 +632,9 @@ export class Ball {
     this.game.sfx.play('bat-hit', this.x / this.gfx.W, this.game.velocityToVolume(this.vx, this.vy));
 
     // Any spin the ball arrives with tells on the bounce, as off any surface (spinBounce()). Then swiping the bat
-    // along under the ball adds spin of its own, the bat dragging the ball's underside with it: a swipe to the
-    // right spins it anticlockwise, so its path bends to the left (curve()).
+    // along under the ball adds spin of its own (swipeSpin()).
     this.spinBounce(normal[0], normal[1]);
-    const swipe = bat.vxSmooth / this.gfx.W;   // Playfield widths a second
-    const limit = BALL_SPIN_MAX * 2 * Math.PI;
-    this.english = Math.max(-limit, Math.min(limit, this.english - swipe * BAT_SPIN_PER_SWIPE * 2 * Math.PI));
+    this.swipeSpin(bat);
 
     // A flurry of contacts (the bat swept into the ball at an end cap) only adds speed once
     const now = this.game.time;

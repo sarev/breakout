@@ -387,7 +387,10 @@ export class Game {
     this.heroBall.y = bat.y - this.heroBall.h2 - 1;
   }
 
-  /** Launch the waiting ball, aimed by the bat's smoothed sideways speed. */
+  /**
+   * Launch the waiting ball, aimed by the bat's smoothed sideways speed, and spun by it as a bat hit would spin
+   * it: a flick to the right sends the ball off to the right, curving back to the left.
+   */
   serve() {
     if (!this.serving) return;
     this.serving = false;
@@ -398,6 +401,7 @@ export class Game {
     angle = Math.max(-limit, Math.min(limit, angle));
     this.heroBall.vx = speed * Math.sin(angle);
     this.heroBall.vy = -speed * Math.cos(angle);
+    this.heroBall.swipeSpin(this.bats[0]);
     this.sfx.play('bat-hit', this.heroBall.x / this.gfx.W, 0.5);
   }
 
