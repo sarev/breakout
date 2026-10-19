@@ -87,9 +87,17 @@ export class Certificate {
     return null;
   }
 
-  /** The time in play as the certificate shows it: seconds to the hundredth. */
+  /**
+   * The time in play as the certificate shows it: whole minutes, then the seconds to the hundredth ("3 minutes
+   * 7.25 seconds"), or just the seconds under a minute. Rounded to the hundredth first, so 59.999 s is "1 minute
+   * 0.00 seconds" rather than "60.00 seconds".
+   */
   timeText() {
-    return `${this.seconds.toFixed(2)} seconds`;
+    const hundredths = Math.round(this.seconds * 100);
+    const minutes = Math.floor(hundredths / 6000);
+    const seconds = `${((hundredths % 6000) / 100).toFixed(2)} seconds`;
+    if (minutes === 0) return seconds;
+    return `${minutes} minute${minutes === 1 ? '' : 's'} ${seconds}`;
   }
 
   /** When the first level began, in the player's own language and time zone. */
