@@ -1,0 +1,8 @@
+# Line endings: every text file is stored, and checked out, with LF endings on every machine, Windows included
+* text=auto eol=lf
+
+# Never text, whatever they happen to contain
+*.png binary
+*.ico binary
+*.wav binary
+*.ogg binary
