@@ -274,10 +274,10 @@ export class Graphics {
   /**
    * Build the tiled, darkened background for a level.
    *
-   * @param {number} level 1-based; clamped to the number of tile images.
+   * @param {number} stage The level's stage, 1-based; clamped to the number of tile images.
    */
-  buildBackground(level) {
-    const tileImg = this.images[`tile${Math.min(level, 6)}`];
+  buildBackground(stage) {
+    const tileImg = this.images[`tile${Math.min(stage, 6)}`];
     const tile = scaleImage(tileImg, this.H);
     const bg = document.createElement('canvas');
     bg.width = this.W;

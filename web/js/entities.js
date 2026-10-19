@@ -164,7 +164,7 @@ export class Bat {
 
 export class Brick {
   /**
-   * @param {number} id Index in the level's brick list (row-major).
+   * @param {number} id Index in the level's brick list (row-major, leaving out the empty cells).
    * @param {object} gfx
    * @param {object} game
    * @param {number} x Centre.
@@ -178,6 +178,9 @@ export class Brick {
     this.x = x;
     this.y = y;
     this.born = null;   // Game time a regenerated brick popped back in, for its growing-in animation
+    this.row = 0;       // Its cell in the layout (Game.createBricks sets these)
+    this.col = 0;
+    this.vx = 0;        // Its sideways speed, if its row sways (Game.swayRows)
     this.become(type);
     this.setSize(gfx.brickSize);
   }
@@ -631,6 +634,8 @@ export class Ball {
 
   /**
    * Collision with a brick: edges snap and reflect one component; corners reflect about the corner normal.
+   * The sides and corners of a swaying brick bounce the ball as seen from the brick, so one moving into the
+   * ball shoves it along (the speed limits in move() keep that in bounds).
    *
    * @returns {boolean} True if there was a contact (the brick has been hit).
    */
@@ -655,7 +660,7 @@ export class Ball {
         [cornerX, cornerY] = [left, bottom];
       } else {
         this.x = left - this.w2;
-        this.vx = -Math.abs(this.vx);
+        this.vx = brick.vx - Math.abs(this.vx - brick.vx);
         this.spinBounce(-1, 0);
         brick.hit(this.x, vol());
         return true;
@@ -667,7 +672,7 @@ export class Ball {
         [cornerX, cornerY] = [right, bottom];
       } else {
         this.x = right + this.w2;
-        this.vx = Math.abs(this.vx);
+        this.vx = brick.vx + Math.abs(this.vx - brick.vx);
         this.spinBounce(1, 0);
         brick.hit(this.x, vol());
         return true;
@@ -692,8 +697,8 @@ export class Ball {
       const normal = Math.atan2(this.y - cornerY, this.x - cornerX);
       this.x += Math.cos(normal) * overlap;
       this.y += Math.sin(normal) * overlap;
-      const speed = Math.hypot(this.vx, this.vy);
-      this.vx = speed * Math.cos(normal);
+      const speed = Math.hypot(this.vx - brick.vx, this.vy);
+      this.vx = brick.vx + speed * Math.cos(normal);
       this.vy = speed * Math.sin(normal);
       this.spinBounce(Math.cos(normal), Math.sin(normal));
       brick.hit(this.x, vol());

@@ -100,6 +100,10 @@ export const BRICK_COLOURS = [
 
 export const NUM_BRICK_TYPES = 12;
 
+// A swaying row of bricks never comes closer to a side wall than this many cells, so a ball caught between them
+// always has room
+export const SWAY_WALL_GAP = 1;
+
 // Hits to destroy each brick type: blue, red (extra ball), green (extra bat), white (extra life), black (blackout),
 // yellow (inversion), fire (cascade), metal (indestructible), dark blue (lasers), red lens (haze), safety net,
 // regenerator
@@ -107,35 +111,71 @@ export const BRICK_LIVES = [1, 3, 2, 2, 4, 3, 2, 99, 3, 3, 2, 3];
 
 // Brick layouts. 0 is filled randomly with blue / red / green by difficulty; 7 is metal; see breakout.py. The
 // red lens bricks (9) sit in the top rows, out of the way early on, and these layouts carry Hard's full set:
-// one on level 4, two on 5, three on 6. Medium keeps one per level and Easy none (see Game.createBricks).
-// Safety nets (10) are scattered about as freely as the laser bricks (8), and the two deepest levels have one in
-// their bottom row, where the player starts. Bonus balls come in from the sides just under the bricks on level
-// 6, so its bottom row keeps metal out of the corners, where it would bounce every one straight back down.
+// one on the stage 4 level, two on stage 5, three on stage 6. Medium keeps one per level and Easy none (see
+// Game.createBricks). Safety nets (10) are scattered about as freely as the laser bricks (8), and the two
+// deepest stages have one in their bottom row, where the player starts. Bonus balls come in from the sides just
+// under the bricks on stage 6, so its bottom row keeps metal out of the corners, where it would bounce every one
+// straight back down.
+//
+// Each level has a stage, 1 to 6, which sets its backdrop, its music and the ball's speed: a later level can go
+// back over an earlier stage with something added. A row is a list of cells, or { cells, sway, period } for a
+// row that swings from side to side, `sway` cells either way of where it's drawn (setting off to the right, or
+// the left if it's negative), taking `period` seconds over each swing there and back. _ is an empty cell, which a
+// swaying row needs at both ends to swing into. After each of levels 2 to 6 comes a version of it with swaying
+// rows of metal (with some breakable bricks among them, which open gaps as they go) and more extra lives; from
+// stage 4 on, these lose static rows to make room for them, as the space under the bricks is already tight.
+const _ = null;
+
 export const LEVEL_DEFS = [
-  [
+  { stage: 1, rows: [
     [7, 0, 0, 0, 4, 0, 0, 0, 0, 7],
     [0, 10, 0, 0, 0, 3, 0, 0, 8, 0],
-  ],
-  [
+  ] },
+  { stage: 2, rows: [
     [0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0],
     [0, 11, 0, 0, 0, 4, 0, 0, 6, 0, 0, 0],
     [7, 0, 0, 0, 0, 7, 7, 0, 0, 3, 0, 7],
-  ],
-  [
+  ] },
+  // 2a: level 2 with a swaying row of metal under its top row, and a second extra life up there behind it
+  { stage: 2, rows: [
+    [0, 0, 3, 0, 0, 0, 3, 0, 0, 0, 0, 0],
+    { cells: [_, _, _, 7, 7, _, _, 7, 7, _, _, _], sway: 2, period: 6 },
+    [0, 11, 0, 0, 0, 4, 0, 0, 6, 0, 0, 0],
+    [7, 0, 0, 0, 0, 7, 7, 0, 0, 3, 0, 7],
+  ] },
+  { stage: 3, rows: [
     [0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0],
     [0, 7, 0, 6, 0, 8, 0, 3, 0, 0, 10, 0, 7, 5],
     [0, 0, 7, 6, 0, 0, 4, 0, 11, 0, 6, 7, 0, 0],
     [0, 0, 0, 0, 10, 0, 0, 7, 8, 0, 0, 0, 0, 3],
-  ],
-  [
+  ] },
+  // 3a: level 3 with a row swaying through the middle: two blocks of metal, each with a breakable brick in it
+  { stage: 3, rows: [
+    [0, 0, 0, 3, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0],
+    [0, 7, 0, 6, 0, 8, 0, 3, 0, 0, 10, 0, 7, 5],
+    { cells: [_, _, _, 7, 0, 7, _, _, 7, 0, 7, _, _, _], sway: 2, period: 5 },
+    [0, 0, 7, 6, 0, 0, 4, 0, 11, 0, 6, 7, 0, 0],
+    [0, 0, 0, 0, 10, 0, 0, 7, 8, 0, 0, 0, 0, 3],
+  ] },
+  { stage: 4, rows: [
     [0, 6, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0],
     [0, 0, 6, 0, 0, 11, 0, 0, 4, 0, 0, 0, 9, 0, 0, 0],
     [8, 0, 0, 4, 0, 5, 0, 0, 0, 0, 5, 0, 6, 0, 10, 0],
     [0, 0, 0, 0, 0, 7, 0, 3, 6, 0, 7, 0, 0, 0, 0, 0],
     [5, 0, 0, 0, 0, 0, 7, 7, 7, 7, 0, 11, 0, 4, 0, 0],
     [0, 0, 10, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 8],
-  ],
-  [
+  ] },
+  // 4a: level 4 with two swaying rows going opposite ways, in place of its fourth and sixth rows (the net and
+  // the lasers from the bottom row move into the new one, and the lost extra life rides in the lower swaying row)
+  { stage: 4, rows: [
+    [0, 6, 0, 3, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0],
+    [0, 0, 6, 0, 0, 11, 0, 0, 4, 0, 0, 0, 9, 0, 0, 0],
+    { cells: [_, _, _, 7, 0, _, _, _, _, _, _, 0, 7, _, _, _], sway: 2, period: 7 },
+    [8, 0, 0, 4, 0, 5, 0, 0, 0, 0, 5, 0, 6, 0, 10, 0],
+    { cells: [_, _, _, _, _, 7, 7, 0, 3, 7, 7, _, _, _, _, _], sway: -3, period: 8 },
+    [5, 0, 10, 0, 0, 0, 7, 7, 7, 7, 0, 11, 0, 4, 0, 8],
+  ] },
+  { stage: 5, rows: [
     [0, 0, 0, 0, 0, 0, 0, 0, 0, 7, 3, 0, 0, 0, 0, 0, 9, 0, 0, 0],
     [0, 0, 0, 6, 0, 0, 0, 0, 0, 5, 7, 0, 0, 4, 0, 9, 0, 0, 6, 0],
     [0, 11, 0, 0, 6, 0, 0, 8, 0, 0, 4, 0, 0, 0, 10, 0, 0, 0, 0, 0],
@@ -144,8 +184,20 @@ export const LEVEL_DEFS = [
     [3, 0, 5, 7, 0, 0, 0, 0, 7, 7, 0, 6, 0, 0, 11, 0, 7, 4, 0, 0],
     [0, 7, 7, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 7, 7, 5],
     [0, 0, 0, 0, 0, 10, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-  ],
-  [
+  ] },
+  // 5a: level 5 with two swaying rows going opposite ways, in place of its fifth and seventh rows, and two more
+  // extra lives in the bottom row
+  { stage: 5, rows: [
+    [0, 0, 0, 0, 0, 0, 0, 0, 0, 7, 3, 0, 0, 0, 0, 0, 9, 0, 0, 0],
+    [0, 0, 0, 6, 0, 0, 0, 0, 0, 5, 7, 0, 0, 4, 0, 9, 0, 0, 6, 0],
+    { cells: [_, _, _, _, 7, 0, _, _, _, 7, 7, _, _, _, 0, 7, _, _, _, _], sway: 3, period: 7 },
+    [0, 11, 0, 0, 6, 0, 0, 8, 0, 0, 4, 0, 0, 0, 10, 0, 0, 0, 0, 0],
+    [0, 0, 4, 0, 0, 6, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 8, 0, 0],
+    { cells: [_, _, _, 7, 0, 0, 7, _, _, _, _, _, _, 7, 0, 0, 7, _, _, _], sway: -2, period: 5 },
+    [3, 0, 5, 7, 0, 0, 0, 0, 7, 7, 0, 6, 0, 0, 11, 0, 7, 4, 0, 0],
+    [0, 0, 0, 3, 0, 10, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 3, 0, 0, 0],
+  ] },
+  { stage: 6, rows: [
     [7, 0, 0, 9, 0, 0, 5, 0, 0, 4, 0, 0, 4, 0, 0, 5, 0, 0, 0, 0, 0, 7],
     [0, 10, 7, 0, 6, 0, 0, 0, 0, 0, 8, 3, 0, 0, 9, 0, 0, 6, 0, 7, 10, 0],
     [0, 4, 0, 0, 0, 6, 0, 0, 5, 0, 9, 0, 5, 0, 0, 6, 0, 0, 0, 4, 0, 0],
@@ -156,7 +208,20 @@ export const LEVEL_DEFS = [
     [0, 0, 0, 0, 0, 7, 0, 3, 6, 0, 7, 0, 6, 3, 0, 7, 0, 0, 0, 11, 0, 0],
     [0, 0, 0, 5, 0, 0, 0, 0, 4, 0, 0, 0, 4, 0, 0, 0, 0, 0, 5, 0, 0, 0],
     [0, 0, 10, 0, 7, 6, 0, 0, 0, 8, 0, 0, 0, 8, 0, 0, 6, 7, 0, 10, 0, 0],
-  ],
+  ] },
+  // 6a, the last: level 6 a row shallower, with two swaying rows going opposite ways, in place of its fifth and
+  // last two rows; a net comes up into the new bottom row, and two more extra lives sit at the ends of the fifth
+  { stage: 6, rows: [
+    [7, 0, 0, 9, 0, 0, 5, 0, 0, 4, 0, 0, 4, 0, 0, 5, 0, 0, 0, 0, 0, 7],
+    [0, 10, 7, 0, 6, 0, 0, 0, 0, 0, 8, 3, 0, 0, 9, 0, 0, 6, 0, 7, 10, 0],
+    [0, 4, 0, 0, 0, 6, 0, 0, 5, 0, 9, 0, 5, 0, 0, 6, 0, 0, 0, 4, 0, 0],
+    { cells: [_, _, _, _, 7, 0, 7, _, _, _, _, _, _, _, _, 7, 0, 7, _, _, _, _], sway: 3, period: 6 },
+    [0, 0, 11, 0, 0, 0, 7, 7, 7, 6, 0, 0, 6, 7, 7, 7, 0, 0, 0, 0, 0, 0],
+    [3, 6, 0, 0, 7, 0, 0, 0, 6, 0, 7, 0, 0, 6, 0, 0, 7, 0, 0, 0, 6, 3],
+    [5, 10, 0, 7, 0, 0, 0, 8, 0, 0, 6, 0, 0, 0, 8, 0, 0, 7, 0, 0, 10, 5],
+    { cells: [_, _, _, 7, _, _, 0, _, _, 7, _, _, 0, _, _, 7, _, _, 0, _, _, _], sway: -2, period: 4 },
+    [0, 10, 0, 0, 0, 7, 0, 3, 6, 0, 7, 0, 6, 3, 0, 7, 0, 0, 0, 11, 10, 0],
+  ] },
 ];
 
 // Mix of blue / red / green used to fill the 0 cells, per difficulty (ten entries, picked at random)
@@ -219,7 +284,7 @@ export const HAZE_VIGNETTE_MAX = 0.85;
 // Ball speed model (see DEVNOTES "Speed model")
 // ---------------------------------------------------------------------------------------------------------------
 export const BASE_BALL_SPEED = [480, 560, 640];     // Target speed on level 1 for easy, medium, hard
-export const LEVEL_SPEED_RAMP = 1.08;               // Target multiplier per level above the first
+export const LEVEL_SPEED_RAMP = 1.08;               // Target multiplier per stage above the first
 export const MIN_SPEED_FRACTION = 0.75;             // Floor, as a fraction of the target
 export const MAX_SPEED_FRACTION = 1.6;              // Ceiling, as a fraction of the target
 export const BAT_HIT_SPEED_GAIN = [0.01, 0.02, 0.03]; // Speed added per bat hit, fraction of target
@@ -298,7 +363,7 @@ export const MUSIC_VOLUME = 0.4;
 export const MUSIC_FADE_SECONDS = 0.8;
 export const MUSIC_FILES = { intro: 'intro.ogg', stage1: 'stage1.ogg', stage2: 'stage2.ogg', boss: 'boss.ogg' };
 
-// What each level plays, as [track, tempo]. Levels past the end cycle. Tempo changes pitch too, old-school style.
+// What each stage plays, as [track, tempo]. Tempo changes pitch too, old-school style.
 export const MUSIC_LEVEL_PLAN = [
   ['stage1', 1.0], ['stage2', 1.0], ['boss', 1.0],
   ['stage1', 1.2], ['stage2', 1.1], ['boss', 1.2],

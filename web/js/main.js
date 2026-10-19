@@ -12,15 +12,15 @@
 // describes the gestures rather than the keys. ?mobile=1 or ?mobile=0 overrides the detection, for testing.
 //
 // ?debug=1 enables the cheats (99 lives, or ?lives=N for a given number, D clears the level, left-click destroys
-// the brick under the pointer, a digit key jumps to that level, P saves a screenshot, X on the intro sets up a
-// busy level for one). ?music=0 starts silent, ?sensitivity=1.5 scales mouse movement, ?volume=0.3 sets the
-// music volume.
+// the brick under the pointer, a digit key jumps to that level (0 and - go on to 10 and 11), P saves a
+// screenshot, X on the intro sets up a busy level for one). ?music=0 starts silent, ?sensitivity=1.5 scales
+// mouse movement, ?volume=0.3 sets the music volume.
 
 import { AudioSystem, Music, Sfx } from './audio.js';
 import { loadAudioSet, loadImages } from './assets.js';
 import { Certificate } from './certificate.js';
 import {
-  COLOURS, MAX_BALLS, MAX_FRAME_DT, MUSIC_FILES, NUM_BRICK_TYPES, RANDOM_BRICK_TYPES, SOUND_NAMES,
+  COLOURS, LEVEL_DEFS, MAX_BALLS, MAX_FRAME_DT, MUSIC_FILES, NUM_BRICK_TYPES, RANDOM_BRICK_TYPES, SOUND_NAMES,
 } from './config.js';
 import { Game } from './game.js';
 import { Graphics } from './graphics.js';
@@ -254,7 +254,7 @@ async function boot() {
 
   function startLevel() {
     game.initialiseLevel();
-    music.play(...Music.levelTrack(game.level));
+    music.play(...Music.levelTrack(Game.stage(game.level)));
     game.running = true;
     scene = 'game';
     if (input.wantLock) input.requestLock();   // Only if the player opted in with L earlier
@@ -299,7 +299,7 @@ async function boot() {
     game.level += 1;
     if (game.level <= Game.maxLevel) {
       game.lives += 1;
-      gfx.buildBackground(game.level);
+      gfx.buildBackground(Game.stage(game.level));
       showSplash(`Level ${game.level}...`, COLOURS.advance, 'level');
     } else {
       game.level = Game.maxLevel;   // Not past the last level: a resize on the certificate re-lays its bricks out
@@ -322,24 +322,23 @@ async function boot() {
   }
 
   /**
-   * X on the intro in debug mode: a showcase to take screenshots of (P). Hard, level 5, straight into play with
+   * X on the intro in debug mode: a showcase to take screenshots of (P). Hard, stage 5, straight into play with
    * the lower four rows mostly cleared (a few bricks still exploding), both regenerators fired so bricks pop
    * back in, every bonus bat out, the lasers going and a full crowd of balls. The black hole and red lens
    * bricks below the top two rows become ordinary bricks, since a ball setting one off would darken or blur
    * the shot; the ones in the top two rows stay, out of harm's way.
    */
   function showcase() {
-    const level = 5;
+    const level = LEVEL_DEFS.findIndex((def) => def.stage === 5) + 1;
     game.difficulty = 2;
     game.tiltBat = false;
     intro.choice = 2;
     game.reset(level);
     startLevel();
-    const cols = Game.columns(level);
-    const rows = Game.levelDef(level).length;
+    const rows = Game.rows(level).length;
     const mix = RANDOM_BRICK_TYPES[game.difficulty];
     for (const brick of game.bricks) {
-      const row = Math.floor(brick.id / cols);
+      const row = brick.row;
       if (brick.lives === 99 || row < 2) continue;
       if (brick.type === 4 || brick.type === 9) {
         brick.become(mix[Math.floor(Math.random() * mix.length)]);
@@ -580,12 +579,13 @@ async function boot() {
         for (const brick of game.bricks) brick.hit(0, null, true);
       } else if (key === 'p' && DEBUG && !e.repeat) {
         saveScreenshot();
-      } else if (DEBUG && key >= '1' && key <= '9' && !e.repeat) {
-        // Jump straight to that level, banner first, keeping the lives as they are
-        const level = parseInt(key, 10);
+      } else if (DEBUG && '1234567890-'.includes(key) && !e.repeat) {
+        // Jump straight to that level, banner first, keeping the lives as they are: the digits are levels 1 to 9,
+        // and 0 and - on along the top row of the keyboard are 10 and 11
+        const level = '1234567890-'.indexOf(key) + 1;
         if (level <= Game.maxLevel) {
           game.level = level;
-          gfx.buildBackground(level);
+          gfx.buildBackground(Game.stage(level));
           showSplash(`Level ${level}...`, COLOURS.advance, 'level');
         }
       }

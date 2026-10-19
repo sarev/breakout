@@ -58,13 +58,13 @@ export class Music {
   }
 
   /**
-   * What a level plays.
+   * What a level plays: the music of its stage, so a level going back over a stage carries on with its tune.
    *
-   * @param {number} level 1-based.
+   * @param {number} stage The level's stage, 1-based.
    * @returns {[string, number]} [track name, tempo], cycling past the end of the plan.
    */
-  static levelTrack(level) {
-    return MUSIC_LEVEL_PLAN[(level - 1) % MUSIC_LEVEL_PLAN.length];
+  static levelTrack(stage) {
+    return MUSIC_LEVEL_PLAN[(stage - 1) % MUSIC_LEVEL_PLAN.length];
   }
 
   /** Whether the current track is still sounding. */

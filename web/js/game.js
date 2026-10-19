@@ -7,7 +7,7 @@ import {
   MAX_SPEED_FRACTION, MIN_SPEED_FRACTION, MOBILE_BAT_LIFT, NET_GAP, NET_HOLD, NET_PULSE, NET_THICKNESS,
   NET_TRAVEL, NET_WARNING, NET_WARNING_FAINTEST, NET_WARNING_PULSE, PHYSICS_HZ, RANDOM_BRICK_TYPES,
   REGEN_FRACTION, REGEN_INTERVAL, REGEN_PATIENCE, SERVE_FLICK_GAIN, SERVE_JITTER, SERVE_MAX_ANGLE,
-  SERVE_TIMEOUT, STARTING_LIVES, TRAIL_FADE_GAME, WIPE_TIRED_SPEED,
+  SERVE_TIMEOUT, STARTING_LIVES, SWAY_WALL_GAP, TRAIL_FADE_GAME, WIPE_TIRED_SPEED,
 } from './config.js';
 import { Ball, Bat, Brick, Laser } from './entities.js';
 import { tintImage } from './graphics.js';
@@ -54,6 +54,7 @@ export class Game {
     this.extraBats = [];
     this.balls = [];
     this.bricks = [];
+    this.swaying = [];          // The level's swaying rows: {sway (cells), period (seconds), bricks}
     this.lasers = [];
     this.bricksTotal = 0;
     this.bricksRemaining = 0;
@@ -76,6 +77,7 @@ export class Game {
     this.playSeconds = 0;       // Time in play this game (the game clock: no banners, no pauses), for the certificate
     this.startedAt = null;      // Wall-clock Date the first level began, for the certificate
     this.lowestBrick = 0;
+    this.levelStart = 0;        // The game clock when the level began, which the swaying rows keep time from
 
     this.buildSprites();
     this.heroBall = new Ball(this.sprites.ball, this.sprites.blueGlow, gfx, this, 0, 0, { serveOnDrop: true });
@@ -110,8 +112,35 @@ export class Game {
     return LEVEL_DEFS[level - 1];
   }
 
+  /** A level's rows, top first: each a list of cells, or a swaying row's {cells, sway, period}. */
+  static rows(level) {
+    return Game.levelDef(level).rows;
+  }
+
+  /** A level's stage, 1 to 6: its backdrop, music and ball speed. */
+  static stage(level) {
+    return Game.levelDef(level).stage;
+  }
+
+  /** A row's cells, whether or not it sways. */
+  static cells(row) {
+    return Array.isArray(row) ? row : row.cells;
+  }
+
   static columns(level) {
-    return LEVEL_DEFS[level - 1][0].length;
+    return Game.cells(Game.rows(level)[0]).length;
+  }
+
+  /**
+   * How many cells a swaying row swings either way (negative to set off to the left): as its layout says, but
+   * never nearer a side wall than `SWAY_WALL_GAP` cells, where a ball could be caught.
+   */
+  static swayLimit(row) {
+    const cells = row.cells;
+    const first = cells.findIndex((c) => c !== null);
+    const last = cells.length - 1 - [...cells].reverse().findIndex((c) => c !== null);
+    const room = Math.min(first, cells.length - 1 - last) - SWAY_WALL_GAP;
+    return Math.sign(row.sway) * Math.max(0, Math.min(Math.abs(row.sway), room));
   }
 
   get lives() {
@@ -135,7 +164,7 @@ export class Game {
     this.playSeconds = 0;
     this.startedAt = null;
     this.balls = [this.heroBall];
-    this.gfx.buildBackground(this.level);
+    this.gfx.buildBackground(Game.stage(this.level));
     this.input.centre();
     this.bats[0].x = this.gfx.W / 2;
   }
@@ -143,6 +172,7 @@ export class Game {
   /** Lay out a level's bricks and put the hero ball on the bat ready to serve. */
   initialiseLevel() {
     this.gfx.buildBricks(Game.columns(this.level));
+    this.levelStart = this.time;
     this.createBricks();
     this.haze = 0;   // A haze never outlasts its level
     this.lenses = [];
@@ -166,18 +196,22 @@ export class Game {
 
   createBricks() {
     this.bricks = [];
-    const rows = Game.levelDef(this.level);
+    this.swaying = [];
+    const rows = Game.rows(this.level);
     const size = this.gfx.brickSize;
     this.bottomEdge = size * rows.length;
     this.lowestBrick = this.bottomEdge + this.heroBall.height;
     const mix = RANDOM_BRICK_TYPES[this.difficulty];
-    // Red lens bricks: the layouts carry Hard's full set (one on level 4, two on 5, three on 6); Medium keeps
+    // Red lens bricks: the layouts carry Hard's full set (one on stage 4, two on 5, three on 6); Medium keeps
     // only the first on any level, and Easy has none. The rest become ordinary bricks.
     let lensesLeft = this.difficulty >= 2 ? Infinity : (this.difficulty === 1 ? 1 : 0);
     let id = 0;
     rows.forEach((row, yn) => {
       const y = Math.floor(size / 2) + yn * size;
-      row.forEach((cell, xn) => {
+      const swaying = Array.isArray(row) ? null : { sway: Game.swayLimit(row), period: row.period, bricks: [] };
+      if (swaying) this.swaying.push(swaying);
+      Game.cells(row).forEach((cell, xn) => {
+        if (cell === null) return;   // An empty cell
         const x = Math.floor(size / 2) + xn * size;
         let type = cell;
         if (type === 9 && lensesLeft > 0) {
@@ -193,9 +227,14 @@ export class Game {
         } else if (this.difficulty < 2 && type === 5) {
           type = 3;   // Easy and medium: extra lives instead of inversion
         }
-        this.bricks.push(new Brick(id++, this.gfx, this, x, y, type));
+        const brick = new Brick(id++, this.gfx, this, x, y, type);
+        brick.row = yn;
+        brick.col = xn;
+        this.bricks.push(brick);
+        if (swaying) swaying.bricks.push(brick);
       });
     });
+    this.swayRows(this.time);
     this.bricksTotal = this.countLiveBricks();
     this.bricksRemaining = this.bricksTotal;
   }
@@ -239,19 +278,17 @@ export class Game {
         ball === this.heroBall ? this.sprites.blueGlow : this.sprites.redGlow);
       ball.x *= sx; ball.y *= sy; ball.vx *= sx; ball.vy *= sy;
     }
-    this.gfx.buildBackground(this.level);
+    this.gfx.buildBackground(Game.stage(this.level));
     if (this.bricks.length) {
       this.gfx.buildBricks(Game.columns(this.level));
       const size = this.gfx.brickSize;
-      const cols = Game.columns(this.level);
       for (const brick of this.bricks) {
-        const row = Math.floor(brick.id / cols);
-        const col = brick.id % cols;
         brick.setSize(size);
-        brick.x = Math.floor(size / 2) + col * size;
-        brick.y = Math.floor(size / 2) + row * size;
+        brick.x = Math.floor(size / 2) + brick.col * size;
+        brick.y = Math.floor(size / 2) + brick.row * size;
       }
-      this.bottomEdge = size * Game.levelDef(this.level).length;
+      this.swayRows(this.time);
+      this.bottomEdge = size * Game.rows(this.level).length;
       this.lowestBrick = this.bottomEdge + this.heroBall.height;
     }
     for (const laser of this.lasers) { laser.x *= sx; laser.y *= sy; laser.vy = -this.laserSpeed; }
@@ -262,7 +299,9 @@ export class Game {
 
   targetBallSpeed(level) {
     const boost = 1 + ENDGAME_SPEED_BOOST * this.clearedFraction();
-    return BASE_BALL_SPEED[this.difficulty] * Math.pow(LEVEL_SPEED_RAMP, level - 1) * boost * this.gfx.scale;
+    // By stage, not level: a level going back over a stage keeps its pace
+    const ramp = Math.pow(LEVEL_SPEED_RAMP, Game.stage(level) - 1);
+    return BASE_BALL_SPEED[this.difficulty] * ramp * boost * this.gfx.scale;
   }
 
   minBallSpeed(level) {
@@ -401,16 +440,10 @@ export class Game {
         for (const bat of this.bats.concat(this.extraBats)) bat.invert(true);
         break;
       case 6: {
-        const cols = Game.columns(this.level);
-        const row = Math.floor(brick.id / cols);
-        const col = brick.id % cols;
-        const ids = [];
-        for (const r of [row - 1, row, row + 1]) {
-          for (const c of [col - 1, col, col + 1]) {
-            if (r >= 0 && c >= 0 && c < cols) ids.push(r * cols + c);
-          }
-        }
-        this.brickCascade(ids);
+        // Its neighbours are whatever bricks are next to it now, so a swaying row's are caught as they pass
+        const reach = 1.5 * this.gfx.brickSize;
+        const near = this.bricks.filter((b) => Math.abs(b.x - brick.x) < reach && Math.abs(b.y - brick.y) < reach);
+        this.brickCascade(near.map((b) => b.id));
         break;
       }
       case 7:
@@ -462,11 +495,31 @@ export class Game {
 
     const [n, h] = substeps(dt);
     for (let i = 0; i < n; i++) {
+      this.swayRows(this.time - dt + (i + 1) * h);
       this.moveLasers(h);
       this.animateBalls(h);
     }
 
     this.checkBoring();
+  }
+
+  /**
+   * Move the swaying rows' bricks to where they are at game time `t`: a sine wave from the start of the level,
+   * `sway` cells either way of their places in the layout, there and back once every `period` seconds. Each
+   * brick carries the row's speed, for a ball to bounce off.
+   */
+  swayRows(t) {
+    const size = this.gfx.brickSize;
+    for (const row of this.swaying) {
+      const w = (2 * Math.PI) / row.period;
+      const phase = w * (t - this.levelStart);
+      const offset = row.sway * size * Math.sin(phase);
+      const vx = row.sway * size * w * Math.cos(phase);
+      for (const brick of row.bricks) {
+        brick.x = Math.floor(size / 2) + brick.col * size + offset;
+        brick.vx = vx;
+      }
+    }
   }
 
   /**

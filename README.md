@@ -6,7 +6,7 @@ A modern take on the classic brick-breaker. Clear all destroyable bricks while k
 
 ## Features
 
-- Six handcrafted levels with per-level brick layouts
+- Six handcrafted levels with per-level brick layouts (eleven in the browser version, where rows of bricks can sway from side to side)
 - Multiple brick types with unique effects and hit points
 - Bonus balls, extra bats, control inversion, laser mode, and blackout mode
 - Stereo-panned sound effects and chiptune background music (toggle with **M**)
@@ -107,7 +107,7 @@ If this parameter isn't passed and there are multiple monitors detected, you wil
 
 ### Music
 
-The intro and each level have their own chiptune track, played at a volume that leaves room for the sound effects. Levels 4 to 6 bring the first three tunes back faster (and higher), old-school style. Start with it off using `--no-music`, or set the level with `--music-volume 0.25` (0 to 1). The tracks live in `web/music`; see `web/music/CREDITS.txt`.
+The intro and each level have their own chiptune track, played at a volume that leaves room for the sound effects. Levels 4 to 6 bring the first three tunes back faster (and higher), old-school style. In the browser version a level that goes back over an earlier one carries on with its tune, so levels 6 to 11 have the faster ones. Start with it off using `--no-music`, or set the level with `--music-volume 0.25` (0 to 1). The tracks live in `web/music`; see `web/music/CREDITS.txt`.
 
 - **Intro screen**: Move the mouse over the menu to select a difficulty, then click or press any key
 
@@ -124,15 +124,15 @@ The intro and each level have their own chiptune track, played at a volume that 
 | ![Cracked fire](./web/sprites/sm-brick6.png)     | **Cracked fire**     | Destroys neighbouring bricks (cascade)                                                                                                                                                                                                                                    |
 | ![Metal](./web/sprites/sm-brick7.png)            | **Metal**            | Indestructible                                                                                                                                                                                                                                                            |
 | ![Warning triangle](./web/sprites/sm-brick8.png) | **Warning triangle** | Enables laser mode for a duration                                                                                                                                                                                                                                         |
-| ![Red lens](./web/sprites/sm-brick9.png)         | **Red lens**         | Blurs your view and reddens its edges for 15 seconds, fading over the last five, and every one makes it worse while they overlap (web version only; Hard and Insane have one, two and three of them on levels 4 to 6, Medium at most one a level, Easy none)              |
+| ![Red lens](./web/sprites/sm-brick9.png)         | **Red lens**         | Blurs your view and reddens its edges for 15 seconds, fading over the last five, and every one makes it worse while they overlap (web version only; Hard and Insane get one on levels 6 and 7, two on 8 and 9, three on 10 and 11, Medium at most one a level, Easy none) |
 | ![Safety net](./web/sprites/sm-brick10.png)      | **Safety net**       | A glowing bar floats up from below to just under the bat and stays for a few seconds, then pulses for four more as a warning before it goes; any ball that reaches it bounces back up, a little slower. Another one while it's up keeps it longer (web version only)      |
-| ![Regenerator](./web/sprites/sm-brick11.png)     | **Regenerator**      | Brings back a tenth of the level's bricks, one at a time over a few seconds, each popping into the place of a brick you'd already broken (never one the ball is in). They come back as ordinary bricks. One on levels 2 and 3, two on each level after (web version only) |
+| ![Regenerator](./web/sprites/sm-brick11.png)     | **Regenerator**      | Brings back a tenth of the level's bricks, one at a time over a few seconds, each popping into the place of a brick you'd already broken (never one the ball is in). They come back as ordinary bricks. One on levels 2 to 5, two on each level after (web version only)   |
 
 Different brick types require different numbers of hits to destroy. If no brick is destroyed for a while, an extra bonus ball is introduced.
 
 ## Web version
 
-The `web` folder holds a browser version of the game: a port to plain JavaScript on the HTML canvas, with no build step. It plays the same levels with the same physics, speed model and power-ups, fills the browser tab, and works with touch as well as a mouse. The folder is self-contained — the page, the scripts, and the sprites, sounds and music (which the desktop game loads from there too) — so it can be copied as it is to any static web server.
+The `web` folder holds a browser version of the game: a port to plain JavaScript on the HTML canvas, with no build step. It plays the same levels with the same physics, speed model and power-ups, fills the browser tab, and works with touch as well as a mouse. It also has five extra levels, eleven in all: after each of levels 2 to 6 comes a version of it, at the same pace and to the same music, with one or two rows of metal bricks swaying from side to side (with some breakable bricks among them, and all of them breakable on Easy, which has no metal), and more extra lives. The later ones lose a row or two of the original to make room, so they reach no lower down the screen. The folder is self-contained — the page, the scripts, and the sprites, sounds and music (which the desktop game loads from there too) — so it can be copied as it is to any static web server.
 
 ### Running it locally
 
