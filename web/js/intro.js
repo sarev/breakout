@@ -1,6 +1,8 @@
 // The intro: a rotating, perspective-projected card, a swarm of bouncing balls that the pointer can shove about,
-// and the difficulty menu, which is chosen by steering the hero ball into a label. On a phone there's a fourth
-// label, Insane: Hard, with the bat steered by rolling the phone (see tilt.js).
+// and the difficulty menu. A game only starts from the menu: a click or tap on a label, or (with a keyboard) the
+// arrow keys and Enter. On a desktop the hero ball is the mouse pointer, so it lights up the label it's over; on
+// a phone it's only a toy. There the menu has a fourth label, Insane: Hard, with the bat steered by rolling the
+// phone (see tilt.js).
 
 import {
   CARD_PITCH_RATE, CARD_ROLL_RATE, CARD_YAW_RATE, COLOURS, INTRO_BALLS, TRAIL_FADE_INTRO, TILT_ACCEL, TILT_DAMPING,
@@ -67,6 +69,7 @@ export class Intro {
     this.grid = 10;   // Card subdivision per side
     this.labels = input.mobile ? ['Easy', 'Medium', 'Hard', 'Insane'] : ['Easy', 'Medium', 'Hard'];
     this.choice = game.tiltBat ? 3 : game.difficulty;   // Index into `labels` of the selected menu item
+    this.hovered = -1;          // The label the hero ball was over last frame (desktop), or -1
     this.menuBoxes = this.labels.map(() => null);
     this.linkBoxes = { help: null, credits: null };   // Hit boxes for the Help / Credits links
     this.idle = false;                                // Settling the card to face the viewer (see setIdle)
@@ -209,34 +212,53 @@ export class Intro {
       this.roll += (CARD_ROLL_RATE * Math.PI / 180) * dt;
     }
 
-    // Menu: steering the hero ball over a label selects it
-    this.selectAt(this.hero.x, this.hero.y);
+    // Menu: on a desktop the hero ball is the mouse pointer, so moving it onto a label selects that label, as a
+    // cursor would; only moving onto one, so a pointer resting on a label doesn't undo the arrow keys. On a phone
+    // the ball is a toy, rolled by the finger or the tilt, and selects nothing: tapping a label is the choice.
+    if (!this.input.mobile) {
+      const over = this.labelAt(this.hero.x, this.hero.y);
+      if (over >= 0 && over !== this.hovered) this.select(over);
+      this.hovered = over;
+    }
 
     gfx.fadeTrails(dt, TRAIL_FADE_INTRO);
   }
 
+  /** The index into `labels` of the menu label under a playfield point, or -1. */
+  labelAt(x, y) {
+    return this.menuBoxes.findIndex(
+      (box) => box && x >= box.x && x <= box.x + box.w && y >= box.y && y <= box.y + box.h);
+  }
+
   /**
-   * Select the difficulty whose label is under a playfield point, if any. Called every frame with the hero ball's
-   * position, and by the tap / click handler with the pointer's position just before a game starts: a tap on a
-   * phone is over in less time than a frame takes (and the idle intro runs at a low rate), so without that the
-   * game would start with whatever was selected before the finger landed.
+   * Select a menu item, clicking if that's a change.
    *
-   * @returns {boolean} True if the selection changed.
+   * @param {number} i Index into `labels`.
+   */
+  select(i) {
+    if (i !== this.choice) this.sfx.play('click');
+    this.choice = i;
+    // Insane is Hard's rules with the bat steered by tilt
+    this.game.difficulty = Math.min(i, 2);
+    this.game.tiltBat = i === 3;
+  }
+
+  /** The up and down arrow keys: move the selection one item, stopping at the ends. */
+  moveChoice(step) {
+    this.select(Math.max(0, Math.min(this.labels.length - 1, this.choice + step)));
+  }
+
+  /**
+   * A click or tap at a playfield point: select the label there, if there is one. It's the point itself that
+   * counts, not where the hero ball has got to: a tap on a phone is over in less time than a frame takes (and
+   * the idle intro runs at a low rate), and a tilt-rolled ball can be anywhere.
+   *
+   * @returns {boolean} True if it landed on a label, which starts that game.
    */
   selectAt(x, y) {
-    let changed = false;
-    this.menuBoxes.forEach((box, i) => {
-      if (!box || i === this.choice) return;
-      if (x >= box.x && x <= box.x + box.w && y >= box.y && y <= box.y + box.h) {
-        this.choice = i;
-        // Insane is Hard's rules with the bat steered by tilt
-        this.game.difficulty = Math.min(i, 2);
-        this.game.tiltBat = i === 3;
-        this.sfx.play('click');
-        changed = true;
-      }
-    });
-    return changed;
+    const i = this.labelAt(x, y);
+    if (i >= 0) this.select(i);
+    return i >= 0;
   }
 
   /** Rotate a card-space point and project it to the playfield. Returns null if the card is edge-on. */
@@ -303,7 +325,9 @@ export class Intro {
     gfx.text(ctx, 'Breakout', { x, y: gfx.H * 0.2, size: layout.title, colour: title, alpha: 224 / 255, bold: true, italic: true });
     gfx.text(ctx, 'Copyright © 2025-26, 7th software Ltd.', { x, y: gfx.H * 0.35, size: 80, colour: COLOURS.copyright, alpha: 200 / 255 });
     gfx.text(ctx, 'All rights reserved.', { x, y: gfx.H * 0.41, size: 80, colour: COLOURS.rights, alpha: 200 / 255 });
-    const prompt = this.input.mobile ? 'Tap to continue' : 'Click or press any key to continue';
+    const prompt = this.input.mobile
+      ? 'Tap a difficulty to play'
+      : 'Click a difficulty to play, or use the arrow keys and Enter';
     gfx.text(ctx, prompt, { x, y: gfx.H * 0.46, size: 60, colour: COLOURS.presskey, alpha: 200 / 255 });
 
     this.labels.forEach((label, i) => {

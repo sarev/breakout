@@ -446,19 +446,14 @@ async function boot() {
     if (scene === 'gate') {
       leaveGate();
     } else if (scene === 'intro') {
-      // A click or tap on one of the links opens its page instead of starting a game. Otherwise the label under
-      // the pointer (if any) is selected first: a quick tap can land and lift between two frames, before the
-      // intro has had a chance to notice where the finger went. That goes for a ball rolled by tilt too: a tap
-      // on a label means that label, and only a tap clear of them all starts whatever the ball is on (an
-      // earlier version let the ball choose whatever the finger tapped, which ignored a tap on a label)
+      // A click or tap on one of the links opens its page, and one on a difficulty starts that game; anywhere
+      // else does nothing (it used to start whatever was selected, which made the menu feel optional). It's
+      // the pointer that's hit-tested, not the hero ball: a quick tap can land and lift between two frames,
+      // and on a phone the ball may be rolling by tilt
       const p = input.playfield();
       const link = intro.linkAt(p.x, p.y);
-      if (link) {
-        openModal(link);
-      } else {
-        intro.selectAt(p.x, p.y);
-        startGame();
-      }
+      if (link) openModal(link);
+      else if (intro.selectAt(p.x, p.y)) startGame();
     } else if (scene === 'splash') {
       splash.elapsed = 1e9;
     } else if (scene === 'over') {
@@ -564,7 +559,13 @@ async function boot() {
       if (key === 'h') openModal('help');
       else if (key === 'c') openModal('credits');
       else if (key === 'x' && DEBUG) showcase();
-      else if (key !== 'escape' && key !== 'q' && !e.repeat) startGame();
+      else if (key === 'arrowup' || key === 'arrowdown') {
+        e.preventDefault();
+        intro.moveChoice(key === 'arrowup' ? -1 : 1);
+      } else if ((key === 'enter' || key === ' ') && !e.repeat) {
+        e.preventDefault();
+        startGame();   // The highlighted difficulty; any other key does nothing here
+      }
     } else if (scene === 'splash') {
       if (key === 'q') quitToIntro(); else if (key !== 'l') splash.elapsed = 1e9;   // L was handled above
     } else if (scene === 'over') {
