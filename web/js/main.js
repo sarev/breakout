@@ -40,6 +40,8 @@ const MUSIC_ON = params.has('music') ? params.get('music') !== '0' : readSetting
 const MUSIC_VOLUME = params.has('volume') ? parseFloat(params.get('volume')) : null;
 // Whether each game starts with the mouse captured (the Options page, desktop only), remembered between visits
 const CAPTURE_KEY = 'breakout-capture';
+// Whether the bat is steered by rolling the phone (the Options page, phones only), remembered likewise
+const TILT_KEY = 'breakout-tilt';
 let captureMouse = readSetting(CAPTURE_KEY) === 'on';
 
 /**
@@ -173,6 +175,7 @@ async function boot() {
   const gfx = new Graphics(canvas, images, SENSITIVITY, MOBILE);
   const input = new Input(canvas, gfx, MOBILE);
   const game = new Game(gfx, audio.sfx, input, { debug: DEBUG, mobile: MOBILE, lives: DEBUG_LIVES });
+  game.tiltBat = MOBILE && readSetting(TILT_KEY) === 'on';   // Kept in step with the setting (toggleTilt())
   const intro = new Intro(gfx, game, audio.sfx, input, images.intro);
   const certificate = new Certificate(gfx, MOBILE);
   const music = audio.music;
@@ -196,8 +199,8 @@ async function boot() {
   }
 
   /**
-   * On a phone the intro's hero ball rolls with the device's tilt rather than following a finger, and on Insane
-   * the bat is steered by rolling the phone (see tilt.js). iOS wants permission for motion and orientation
+   * On a phone the intro's hero ball rolls with the device's tilt rather than following a finger, and with tilt
+   * steering on the bat is steered by rolling the phone (see tilt.js). iOS wants permission for motion and orientation
    * readings, asked for from a user gesture (the gate's tap); Android just sends them (on a secure page). The
    * ball stays finger-driven until the first reading arrives, and so does the bat, so a device with no sensors
    * or a refused permission loses nothing.
@@ -330,7 +333,7 @@ async function boot() {
     } else {
       audio.resume();
       if (input.wantLock) input.requestLock();
-      // On Insane, however the phone is held on resuming is level again (a pause is the way to re-level)
+      // With tilt steering, however the phone is held on resuming is level again (a pause is the way to re-level)
       if (game.tiltBat && game.steer) game.steer.level();
     }
   }
@@ -345,7 +348,6 @@ async function boot() {
   function showcase() {
     const level = LEVEL_DEFS.findIndex((def) => def.stage === 5) + 1;
     game.difficulty = 2;
-    game.tiltBat = false;
     intro.choice = 2;
     game.reset(level);
     startLevel();
@@ -443,6 +445,16 @@ async function boot() {
   }
 
   /**
+   * The Options page's tilt steering button (phones only, and only on the intro, so a game is played one way
+   * from start to finish): whether the bat is steered by rolling the phone, at any difficulty, remembered for
+   * next time.
+   */
+  function toggleTilt() {
+    game.tiltBat = !game.tiltBat;
+    writeSetting(TILT_KEY, game.tiltBat ? 'on' : 'off');
+  }
+
+  /**
    * The Options page: the keyboard's jobs for a touch screen (a two-finger tap), and the settings in one place on
    * a desktop (the intro's Options link, or O). In play it pauses first and closing it (Resume, a tap outside the
    * buttons, or Escape) resumes; on the intro it offers the toggles and the Help and Credits pages.
@@ -452,12 +464,13 @@ async function boot() {
     const inGame = scene === 'game';
     if (inGame) setPaused(true);
     const state = () => ({ inGame, music: music.enabled, fullscreen: isFullscreen(), fullscreenAvailable: fullscreenAvailable(),
-      capture: captureMouse, captureAvailable: !MOBILE });
+      capture: captureMouse, captureAvailable: !MOBILE, tilt: game.tiltBat, tiltAvailable: MOBILE && !inGame });
     const actions = {
       resume: () => closeModal(),
       music: () => toggleMusic(),
       fullscreen: () => toggleFullscreen(),
       capture: () => toggleCapture(),
+      tilt: () => toggleTilt(),
       // Help and Credits open over the top; closing them comes back here (still paused, in play)
       help: () => openModal('help', () => showOptions()),
       credits: () => openModal('credits', () => showOptions()),
@@ -696,7 +709,7 @@ async function boot() {
       }
       if (MOBILE && splash.next === 'level') {
         // A phone gets the gestures under the level banner, since there's nothing else on screen to say
-        // how to pause (and on Insane, that the finger no longer drives the bat)
+        // how to pause (and with tilt steering, that the finger no longer drives the bat)
         const lines = ['Two-finger tap for pause/options'];
         if (game.tiltBat) lines.push('Tilt device to move bat');
         lines.forEach((line, i) => gfx.text(ctx, line, {

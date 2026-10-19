@@ -47,8 +47,9 @@ export class Game {
     this.debugLives = lives;    // Starting lives in debug mode, or null for DEBUG_LIVES
     this.batLift = mobile ? MOBILE_BAT_LIFT : 0;   // In bat heights; read by Bat when it lays itself out
     this.wipe = new WipeDetector(gfx);             // Anti-cheat: tires the bat if it's wiped back and forth
-    this.steer = mobile ? new TiltSteer() : null;  // Rolling the phone steers the bat on Insane (main.js feeds it)
-    this.tiltBat = false;                          // Insane: the bat follows the phone's roll, not the finger
+    this.steer = mobile ? new TiltSteer() : null;  // The phone's roll, for tilt steering (main.js feeds it)
+    this.tiltBat = false;                          // Tilt steering: the bat follows the phone's roll, not the finger
+    this.tiltSteered = false;                      // The roll has steered the bat this game (certificate)
 
     this.bats = [];
     this.extraBats = [];
@@ -163,6 +164,7 @@ export class Game {
     this.lives = this.debug ? (this.debugLives || DEBUG_LIVES) : STARTING_LIVES + (2 - this.difficulty);   // A cheat, for testing
     this.playSeconds = 0;
     this.startedAt = null;
+    this.tiltSteered = false;
     this.balls = [this.heroBall];
     this.gfx.buildBackground(Game.stage(this.level));
     this.input.centre();
@@ -349,12 +351,14 @@ export class Game {
   }
 
   /**
-   * Where the hero bat should be: the control position with the mouse gain applied, or on Insane the phone's
-   * roll mapped across the bat's travel (the yellow brick reverses that too). Until the accelerometer has
-   * delivered a reading the finger steers as usual, so a phone without one still has a playable game.
+   * Where the hero bat should be: the control position with the mouse gain applied, or with tilt steering the
+   * phone's roll mapped across the bat's travel (the yellow brick reverses that too). Until the accelerometer
+   * has delivered a reading the finger steers as usual, so a phone without one still has a playable game (and
+   * its certificate says it was played by touch).
    */
   batTargetX() {
     if (this.tiltBat && this.steer && this.steer.active) {
+      this.tiltSteered = true;
       const gfx = this.gfx;
       let pos = this.steer.position(gfx.W >= gfx.H);
       if (this.inverted) pos = -pos;

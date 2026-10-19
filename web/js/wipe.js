@@ -7,7 +7,7 @@
 // WIPE_WINDOW seconds is nothing a player does to meet balls; it's a wiper (a fast narrow wobble under the
 // ball's path does it as well as sweeps right across the playfield, so the width of the sweeps isn't the test).
 // A turn counts only at the end of a leg (a run in one direction) of at least WIPE_LEG_TRAVEL of the playfield
-// width, so that the jitter of an accelerometer-steered bat (Insane) and the twitches of a finger, which turn
+// width, so that the jitter of an accelerometer-steered bat (tilt steering) and the twitches of a finger, which turn
 // round constantly but go almost nowhere, don't add up to a penalty; and the bat must come back WIPE_HYSTERESIS
 // of the width before a turn is seen at all. One desperate swipe right across the playfield is one leg and one
 // turn, never a penalty.

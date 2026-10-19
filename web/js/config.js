@@ -330,8 +330,8 @@ export const MOBILE_WIDE_ASPECT = 1.5;  // ...when the playfield is at least thi
 export const TILT_ACCEL = 4500;         // Acceleration (px/s^2 at the reference scale) at a full 90 degrees of tilt
 export const TILT_DAMPING = 0.3;        // Fraction of the hero ball's speed kept after one second (rolling friction)
 
-// Insane (phones only): the bat is steered by rolling the phone like a steering wheel (see tilt.js); the game
-// otherwise plays as Hard. These were dialled in on a Galaxy S23 with web/tilt.html.
+// Tilt steering (a phone-only option, at any difficulty): the bat is steered by rolling the phone like a steering
+// wheel (see tilt.js). These were dialled in on a Galaxy S23 with web/tilt.html.
 export const TILT_BAT_FULL_PORTRAIT = 45;   // Degrees of roll that put the bat against the edge, in portrait...
 export const TILT_BAT_FULL_LANDSCAPE = 37;  // ...and in landscape, where the wider screen wants a touch less lean
 export const TILT_BAT_DEAD_ZONE = 2;        // Degrees either side of level that leave the bat centred

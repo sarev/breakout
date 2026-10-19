@@ -1,8 +1,8 @@
 // The intro: a rotating, perspective-projected card, a swarm of bouncing balls that the pointer can shove about,
 // and the difficulty menu. A game only starts from the menu: a click or tap on a label, or (with a keyboard) the
 // arrow keys and Enter. On a desktop the hero ball is the mouse pointer, so it lights up the label it's over; on
-// a phone it's only a toy. There the menu has a fourth label, Insane: Hard, with the bat steered by rolling the
-// phone (see tilt.js).
+// a phone it's only a toy. Steering the bat by rolling the phone (see tilt.js) isn't a difficulty but a phone-only
+// setting on the Options page, and while it's on the intro says so above the two-finger hint.
 
 import {
   CARD_PITCH_RATE, CARD_ROLL_RATE, CARD_YAW_RATE, COLOURS, INTRO_BALLS, TRAIL_FADE_INTRO, TILT_ACCEL, TILT_DAMPING,
@@ -67,8 +67,8 @@ export class Intro {
     this.roll = 0;
     this.elapsed = 0;
     this.grid = 10;   // Card subdivision per side
-    this.labels = input.mobile ? ['Easy', 'Medium', 'Hard', 'Insane'] : ['Easy', 'Medium', 'Hard'];
-    this.choice = game.tiltBat ? 3 : game.difficulty;   // Index into `labels` of the selected menu item
+    this.labels = ['Easy', 'Medium', 'Hard'];
+    this.choice = game.difficulty;   // Index into `labels` of the selected menu item
     this.hovered = -1;          // The label the hero ball was over last frame (desktop), or -1
     this.menuBoxes = this.labels.map(() => null);
     this.linkBoxes = { options: null };   // Hit box for the Options link (desktop only)
@@ -238,9 +238,7 @@ export class Intro {
   select(i) {
     if (i !== this.choice) this.sfx.play('click');
     this.choice = i;
-    // Insane is Hard's rules with the bat steered by tilt
-    this.game.difficulty = Math.min(i, 2);
-    this.game.tiltBat = i === 3;
+    this.game.difficulty = i;
   }
 
   /** The up and down arrow keys: move the selection one item, stopping at the ends. */
@@ -314,10 +312,10 @@ export class Intro {
     this.drawCard(ctx);
 
     // On a phone the title is toned down and the menu made bigger: the labels are tap targets there, and the
-    // whole screen is only a few inches across. The phone's menu has a fourth item, so it's packed a little
-    // tighter, with the two-finger hint below it.
+    // whole screen is only a few inches across. It's packed a little tighter, to leave room below it for the
+    // two-finger hint and, with tilt steering on, a reminder of that.
     const layout = this.input.mobile
-      ? { title: 280, menuSize: 130, menuTop: 0.54, menuStep: 0.1, hint: 0.94 }
+      ? { title: 280, menuSize: 130, menuTop: 0.54, menuStep: 0.1, tilt: 0.88, hint: 0.94 }
       : { title: 400, menuSize: 100, menuTop: 0.6, menuStep: 0.08 };
 
     const wave = Math.round(64 * Math.sin((2 * Math.PI * this.elapsed) / 3));
@@ -342,6 +340,9 @@ export class Intro {
     if (this.input.mobile) {
       this.linkBoxes = {};
       gfx.text(ctx, 'Two-finger tap for the menu', { x, y: gfx.H * layout.hint, size: 60, alpha: 0.8, colour: COLOURS.presskey });
+      if (this.game.tiltBat) {
+        gfx.text(ctx, 'Steering the bat by tilting', { x, y: gfx.H * layout.tilt, size: 60, alpha: 0.8, colour: COLOURS.copyright });
+      }
     }
 
     // The Options link (music, fullscreen, mouse capture, Help and Credits are all on that page), underlined, lit

@@ -1,4 +1,4 @@
-// Steering the bat by rolling the phone, for the Insane difficulty (phones only).
+// Steering the bat by rolling the phone: a phone-only option on the Options page, at any difficulty.
 //
 // The phone is held like a steering wheel, roughly upright, in portrait or landscape. Rolling it anticlockwise
 // sends the bat left and clockwise sends it right, and a modest lean (TILT_BAT_FULL_*) is enough to reach the
