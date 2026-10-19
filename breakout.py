@@ -2399,10 +2399,11 @@ class Game():
     base_path = sys._MEIPASS if hasattr(sys, '_MEIPASS') else os.path.abspath(".")
 
     # Relative file system paths to various game resources
-    # The assets live under web/ so that folder alone is a complete, static-servable copy of the browser version;
-    # this program loads the very same files from there
+    # The sounds and music live under web/ so that folder alone is a complete, static-servable copy of the browser
+    # version, and this program loads the very same files from there. The sprites are the PNG masters in images/;
+    # the browser version has WebP copies of them in web/sprites (made by tools/make_webp.py)
     assets_path = os.path.join(base_path, "web")
-    sprites_path = os.path.join(assets_path, "sprites")
+    sprites_path = os.path.join(base_path, "images")
     sounds_path = os.path.join(assets_path, "sounds")
     music_path = os.path.join(assets_path, "music")
 

@@ -4,5 +4,6 @@
 # Never text, whatever they happen to contain
 *.png binary
 *.ico binary
+*.webp binary
 *.wav binary
 *.ogg binary

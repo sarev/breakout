@@ -149,11 +149,11 @@ function message(text) {
 
 async function boot() {
   const imageNames = {
-    ball: 'ball.png', bonusBall: 'extra-ball.png', blueGlow: 'blue-glow.png', redGlow: 'red-glow.png',
-    bat: 'bat.png', bonusBat: 'extra-bat.png', blueLaser: 'blue.png', greenLaser: 'green.png', intro: 'intro.png',
+    ball: 'ball.webp', bonusBall: 'extra-ball.webp', blueGlow: 'blue-glow.webp', redGlow: 'red-glow.webp',
+    bat: 'bat.webp', bonusBat: 'extra-bat.webp', blueLaser: 'blue.webp', greenLaser: 'green.webp', intro: 'intro.webp',
   };
-  for (let i = 0; i < NUM_BRICK_TYPES; i++) imageNames[`brick${i}`] = `brick${i}.png`;
-  for (let i = 1; i <= 6; i++) imageNames[`tile${i}`] = `tile${i}.png`;
+  for (let i = 0; i < NUM_BRICK_TYPES; i++) imageNames[`brick${i}`] = `brick${i}.webp`;
+  for (let i = 1; i <= 6; i++) imageNames[`tile${i}`] = `tile${i}.webp`;
 
   const audio = new AudioSystem();
   const soundNames = Object.fromEntries(SOUND_NAMES.map((n) => [n, `${n}.wav`]));

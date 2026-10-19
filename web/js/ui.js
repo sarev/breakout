@@ -12,18 +12,18 @@
 // Its buttons call back into main.js, which owns the music, fullscreen, mouse and scene state.
 
 const BRICKS = [
-  ['sm-brick0.png', 'Blue', 'Standard; no effect'],
-  ['sm-brick1.png', 'Red', 'Spawns a temporary red bonus ball'],
-  ['sm-brick2.png', 'Green', 'Adds a temporary extra bat'],
-  ['sm-brick3.png', 'White star', 'Grants an extra life'],
-  ['sm-brick4.png', 'Black hole', 'Temporarily darkens the screen'],
-  ['sm-brick5.png', 'Yellow arrows', 'Temporarily reverses the controls'],
-  ['sm-brick6.png', 'Cracked fire', 'Destroys neighbouring bricks (cascade)'],
-  ['sm-brick7.png', 'Metal', 'Indestructible'],
-  ['sm-brick8.png', 'Warning triangle', 'Lasers for a while'],
-  ['sm-brick9.png', 'Red lens', 'Blurs your view and reddens its edges for 15 seconds; each one makes it worse'],
-  ['sm-brick10.png', 'Safety net', 'A glowing bar floats up under the bat for a few seconds and bounces any ball back, a little slower; it pulses when it is about to go'],
-  ['sm-brick11.png', 'Regenerator', 'Brings back some of the bricks you have already broken, one by one over a few seconds'],
+  ['sm-brick0.webp', 'Blue', 'Standard; no effect'],
+  ['sm-brick1.webp', 'Red', 'Spawns a temporary red bonus ball'],
+  ['sm-brick2.webp', 'Green', 'Adds a temporary extra bat'],
+  ['sm-brick3.webp', 'White star', 'Grants an extra life'],
+  ['sm-brick4.webp', 'Black hole', 'Temporarily darkens the screen'],
+  ['sm-brick5.webp', 'Yellow arrows', 'Temporarily reverses the controls'],
+  ['sm-brick6.webp', 'Cracked fire', 'Destroys neighbouring bricks (cascade)'],
+  ['sm-brick7.webp', 'Metal', 'Indestructible'],
+  ['sm-brick8.webp', 'Warning triangle', 'Lasers for a while'],
+  ['sm-brick9.webp', 'Red lens', 'Blurs your view and reddens its edges for 15 seconds; each one makes it worse'],
+  ['sm-brick10.webp', 'Safety net', 'A glowing bar floats up under the bat for a few seconds and bounces any ball back, a little slower; it pulses when it is about to go'],
+  ['sm-brick11.webp', 'Regenerator', 'Brings back some of the bricks you have already broken, one by one over a few seconds'],
 ];
 
 // The controls table differs by device: a phone or tablet has no keyboard, so it gets the touch gestures only
