@@ -66,6 +66,13 @@ and quicker still on later levels; losing a ball resets the pace. If nothing has
 bonus ball is thrown in.</p>
 <p>Don't just wipe the bat from side to side to catch everything: a bat that's swept back and forth too
 often gets worn out, and for a few seconds it can't keep up.</p>
+
+<h3>Privacy</h3>
+<p>Breakout uses no cookies, adverts or trackers, and it doesn't collect anything about you or how you play,
+or send it anywhere. All it keeps is your settings (such as whether the music is on), which your browser
+stores on this device so they're remembered next time.</p>
+<p>The selfie on the end-of-game certificate is taken and shown entirely on your device. It is never uploaded
+or sent anywhere, and it's only kept if you save the certificate as a picture yourself.</p>
 `;
 }
 
@@ -224,7 +231,7 @@ export function openCamera(onPhoto) {
     }
     camera.stream = stream;
     video.srcObject = stream;
-    note.textContent = '';
+    note.textContent = 'The photo stays on this device';
     return video.play().catch(() => {});
   }).catch((err) => fail(`The camera couldn't be started (${err && err.name ? err.name : err})`));
 }

@@ -7,7 +7,8 @@
 // corners: a selfie box, which opens the front camera (ui.js openCamera) and then shows the photo, and a save
 // box that renders the certificate to a PNG and downloads it, which on a phone lands in the gallery's Downloads
 // album. The same `draw()` renders the on-screen page and the export; the export leaves out the save box, the
-// camera prompt and the "continue" hint, which aren't part of the record.
+// camera prompt, the "continue" hint and the footnote saying the photo stays on the device, which aren't part
+// of the record.
 
 import { COLOURS } from './config.js';
 
@@ -138,6 +139,12 @@ export class Certificate {
     }
     gfx.text(ctx, 'Breakout, by 7th software Ltd.', { x, y: H * 0.8, size: 50, colour: COLOURS.copyright, alpha: 0.7 });
     gfx.text(ctx, `Started ${this.startedText()}`, { x, y: H * 0.93, size: 50, colour: COLOURS.copyright, alpha: 0.8 });
+    if (!forExport) {
+      // A camera in a web page invites the question, so the answer is on the page that asks for one
+      gfx.text(ctx, 'Your photo never leaves this device: it is not uploaded or sent anywhere', {
+        x, y: H * 0.978, size: 30, colour: COLOURS.copyright, alpha: 0.6,
+      });
+    }
 
     const boxes = this.boxes();
     this.drawSelfieBox(ctx, boxes.selfie, forExport);
