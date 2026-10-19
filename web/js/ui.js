@@ -26,7 +26,7 @@ const BRICKS = [
 
 // The controls table differs by device: a phone or tablet has no keyboard, so it gets the touch gestures only
 const KEYBOARD_CONTROLS = `
-<tr><td>Mouse</td><td>Moves the bat. Where the ball lands on the bat sets its angle: the centre sends it straight up, the ends send it off sideways.</td></tr>
+<tr><td>Mouse</td><td>Moves the bat. Where the ball lands on the bat sets its angle: the centre sends it straight up, the ends send it off sideways. Swipe the bat under the ball as it bounces to give it spin, which curves its path the other way for a while and kicks it sideways when it bounces.</td></tr>
 <tr><td>Click</td><td>Launches the ball when it's sitting on the bat (flick the bat sideways as you click to aim it). Otherwise, speeds all the balls up a little.</td></tr>
 <tr><td>Touch</td><td>The ball on this screen, and the bat in play, sit under your finger. Tap to launch or speed up; a two-finger tap pauses and opens the options.</td></tr>
 <tr><td>Space</td><td>Pause and resume</td></tr>
@@ -37,7 +37,7 @@ const KEYBOARD_CONTROLS = `
 `;
 
 const TOUCH_CONTROLS = `
-<tr><td>Touch</td><td>The bat sits under your finger: put your finger down anywhere across the screen and the bat goes there. Where the ball lands on the bat sets its angle: the centre sends it straight up, the ends send it off sideways.</td></tr>
+<tr><td>Touch</td><td>The bat sits under your finger: put your finger down anywhere across the screen and the bat goes there. Where the ball lands on the bat sets its angle: the centre sends it straight up, the ends send it off sideways. Swipe the bat under the ball as it bounces to give it spin, which curves its path the other way for a while and kicks it sideways when it bounces.</td></tr>
 <tr><td>Tap</td><td>Launches the ball when it's sitting on the bat (flick the bat sideways as you tap to aim it). Otherwise, speeds all the balls up a little.</td></tr>
 <tr><td>Two fingers</td><td>Tap with two fingers to pause and open the options: music, fullscreen, and back to this screen.</td></tr>
 <tr><td>Insane</td><td>Pick Insane on the intro and the bat is steered by rolling the phone like a steering wheel instead: roughly 45° either way takes it to the edge. However you're holding the phone when a level starts, or when you resume after a pause, counts as level. Otherwise it plays as Hard.</td></tr>

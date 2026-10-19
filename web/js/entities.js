@@ -5,9 +5,10 @@
 // game (for the clock, the speed model and sounds).
 
 import {
-  BALL_SPIN_MAX_TURNS, BALL_SPIN_RATE, BAT_ANGLE_JITTER, BAT_FADE_SECONDS, BAT_HIT_COOLDOWN,
-  BAT_HIT_SPEED_GAIN, BAT_LIFETIME, BAT_VELOCITY_SMOOTHING, BRICK_COLOURS, BRICK_LIVES, INTRO_DAMPING,
-  MAX_BAT_ANGLE, NET_SLOW, REGEN_POP,
+  BALL_CURVE_EASE, BALL_CURVE_FLATTEST, BALL_CURVE_PER_TURN, BALL_SPIN_BOUNCE_KEEP, BALL_SPIN_FADE,
+  BALL_SPIN_GRIP, BALL_SPIN_MAX, BALL_SPIN_MAX_TURNS, BALL_SPIN_RATE, BAT_ANGLE_JITTER, BAT_FADE_SECONDS,
+  BAT_HIT_COOLDOWN, BAT_HIT_SPEED_GAIN, BAT_LIFETIME, BAT_SPIN_PER_SWIPE, BAT_VELOCITY_SMOOTHING,
+  BRICK_COLOURS, BRICK_LIVES, INTRO_DAMPING, MAX_BAT_ANGLE, NET_SLOW, REGEN_POP,
 } from './config.js';
 import { rgba } from './graphics.js';
 
@@ -322,23 +323,88 @@ export class Ball {
     this.lastBatHit = -1e9;     // Game time of the most recent bat contact (speed-gain cool-off)
     this.angle = 0;             // The sprite's rotation, radians clockwise: it spins as it travels (spin())
     this.spinSense = 1;         // +1 clockwise, -1 anticlockwise: the last clear direction of travel
+    this.english = 0;           // Spin from the bat, radians a second clockwise: it bends the path (curve())
   }
 
   /**
    * Turn the sprite for a step of travel: at `BALL_SPIN_RATE` of a rolling ball's rate (the distance over the
    * radius), capped at `BALL_SPIN_MAX_TURNS` a second. The sense is clockwise when heading right and
-   * anticlockwise when heading left, held through a vertical stretch rather than flickering about zero.
+   * anticlockwise when heading left, held through a vertical stretch rather than flickering about zero. Spin
+   * from the bat takes over from that rolling look: entirely while it's above a turn a second, and blending back
+   * into the roll as it dies away, so the change is never a jump.
    *
    * @param {number} dx Distance moved this step, px.
    * @param {number} dy
    * @param {number} dt Seconds the step took (for the cap).
    */
   spin(dx, dy, dt) {
+    if (dt <= 0) return;
     const distance = Math.hypot(dx, dy);
-    if (distance === 0 || dt <= 0) return;
-    if (Math.abs(dx) > distance * 0.2) this.spinSense = dx > 0 ? 1 : -1;
-    const turn = Math.min((distance / this.h2) * BALL_SPIN_RATE, BALL_SPIN_MAX_TURNS * 2 * Math.PI * dt);
-    this.angle = (this.angle + turn * this.spinSense) % (2 * Math.PI);
+    let rolling = 0;
+    if (distance > 0) {
+      if (Math.abs(dx) > distance * 0.2) this.spinSense = dx > 0 ? 1 : -1;
+      const cap = BALL_SPIN_MAX_TURNS * 2 * Math.PI * dt;
+      rolling = Math.min((distance / this.h2) * BALL_SPIN_RATE, cap) * this.spinSense;
+    }
+    const own = Math.min(1, Math.abs(this.english) / (2 * Math.PI));
+    const turn = this.english * dt + rolling * (1 - own);
+    if (turn !== 0) this.angle = (this.angle + turn) % (2 * Math.PI);
+  }
+
+  /**
+   * Bend the path by the spin from the bat, and let the spin die away. The path turns the way the ball does
+   * (the Magnus effect), at `BALL_CURVE_PER_TURN` degrees a second per turn a second, with the speed unchanged.
+   * A bend towards the horizontal eases off over the last `BALL_CURVE_EASE` degrees before
+   * `BALL_CURVE_FLATTEST`, and stops there (bends back towards the vertical always go ahead), so however much
+   * spin a ball has it can't be curled round to come back the way it went, or left skating along a row, and
+   * the curve dies down on the way rather than stopping dead.
+   *
+   * @param {number} dt
+   */
+  curve(dt) {
+    // Radians clockwise: the spin is in turns a second and the rate of bend per turn in degrees, hence the 360
+    let bend = ((this.english * BALL_CURVE_PER_TURN) / 360) * dt;
+    const speed = Math.hypot(this.vx, this.vy);
+    // A clockwise bend flattens the path when it's heading up and right or down and left
+    if (speed > 0 && Math.sign(bend) === Math.sign(this.vx * this.vy) * -1) {
+      const fromFlat = (Math.asin(Math.min(1, Math.abs(this.vy) / speed)) * 180) / Math.PI;
+      bend *= Math.max(0, Math.min(1, (fromFlat - BALL_CURVE_FLATTEST) / BALL_CURVE_EASE));
+    }
+    const c = Math.cos(bend);
+    const s = Math.sin(bend);
+    [this.vx, this.vy] = [this.vx * c - this.vy * s, this.vx * s + this.vy * c];
+    this.english *= Math.exp(-dt / BALL_SPIN_FADE);
+    if (Math.abs(this.english) < 0.05) this.english = 0;
+  }
+
+  /**
+   * A bounce off a surface with the ball spinning: the surface grips it, kicking it sideways against the way its
+   * surface is turning at the contact (`BALL_SPIN_GRIP` of that speed; topspin kicks a ball on along the
+   * floor), with the speed kept and `BALL_SPIN_BOUNCE_KEEP` of the spin left over. Call it once the plain
+   * bounce has been made. The kick is left out if it would turn a rising ball into a falling one (or the other
+   * way about), or take the path flatter than `BALL_CURVE_FLATTEST` and flatter than the plain bounce.
+   *
+   * @param {number} nx The surface's normal, a unit vector pointing out from the surface towards the ball.
+   * @param {number} ny
+   */
+  spinBounce(nx, ny) {
+    if (this.english === 0) return;
+    // The contact is a radius out towards the surface; spinning clockwise at w, a point (px, py) from the centre
+    // moves at w(-py, px), which there is w r (ny, -nx). The grip pushes the ball the other way.
+    const kick = -BALL_SPIN_GRIP * this.english * this.h2;
+    const speed = Math.hypot(this.vx, this.vy);
+    let vx = this.vx + kick * ny;
+    let vy = this.vy - kick * nx;
+    const f = speed / (Math.hypot(vx, vy) || 1);
+    vx *= f;
+    vy *= f;
+    const flattest = Math.sin((BALL_CURVE_FLATTEST * Math.PI) / 180) * speed;
+    const sameWay = Math.sign(vy) === Math.sign(this.vy) || this.vy === 0;
+    if (sameWay && (Math.abs(vy) >= flattest || Math.abs(vy) >= Math.abs(this.vy))) {
+      this.vx = vx;
+      this.vy = vy;
+    }
+    this.english *= BALL_SPIN_BOUNCE_KEEP;
   }
 
   setImage(image, glow) {
@@ -409,6 +475,8 @@ export class Ball {
       }
     }
 
+    if (this.english !== 0) this.curve(dt);
+
     // The safety net, if it's up and the ball is above it, is the floor for this step
     const netY = this.intro ? null : this.game.netFloor(this);
 
@@ -437,12 +505,14 @@ export class Ball {
       this.x = this.w2;
       this.vx = -this.vx * damp;
       if (this.vy === 0) this.vy = minVertical;
+      this.spinBounce(1, 0);
       adjustDirection();
       wallSound();
     } else if (this.x > gfx.W - this.w2) {
       this.x = gfx.W - this.w2;
       this.vx = -this.vx * damp;
       if (this.vy === 0) this.vy = minVertical;
+      this.spinBounce(-1, 0);
       adjustDirection();
       wallSound();
     }
@@ -450,12 +520,14 @@ export class Ball {
     if (this.y < this.h2) {
       this.y = this.h2;
       this.vy = -this.vy * damp;
+      this.spinBounce(0, 1);
       wallSound();
     } else if (netY !== null && this.y > netY - this.h2) {
       // Caught by the net: back up, a little slower than it came down
       this.y = netY - this.h2;
       this.vx *= NET_SLOW;
       this.vy = -Math.abs(this.vy) * NET_SLOW;
+      this.spinBounce(0, -1);
       this.game.sfx.play('bat-hit', this.x / gfx.W, 0.5 * this.game.velocityToVolume(this.vx, this.vy));
     } else if (this.y > gfx.H - this.h2) {
       if (this.intro) {
@@ -467,6 +539,7 @@ export class Ball {
         if (this.lives !== null && this.lives > 0) this.lives -= 1;
         this.game.sfx.play('drop', this.x / gfx.W);
         this.dropped = true;
+        this.english = 0;
         if (this.serveOnDrop) {
           // The hero ball stops dead; the game puts it back on the bat to be served
           this.vx = 0;
@@ -506,16 +579,18 @@ export class Ball {
     const batRight = bat.x + bat.w2;
     const capRadius = bat.h2;
 
+    let normal = [0, -1];   // The surface the ball bounced off, for the spin (the flat top unless a cap)
     const resolveCap = (cx, cy) => {
       const distance = Math.hypot(this.x - cx, this.y - cy);
       if (distance >= capRadius + this.h2) return false;
       const overlap = capRadius + this.h2 - distance;
-      const normal = Math.atan2(this.y - cy, this.x - cx);
-      this.x += Math.cos(normal) * overlap;
-      this.y += Math.sin(normal) * overlap;
+      const along = Math.atan2(this.y - cy, this.x - cx);
+      this.x += Math.cos(along) * overlap;
+      this.y += Math.sin(along) * overlap;
       const speed = Math.hypot(this.vx, this.vy);
-      this.vx = speed * Math.cos(normal);
-      this.vy = speed * Math.sin(normal);
+      this.vx = speed * Math.cos(along);
+      this.vy = speed * Math.sin(along);
+      normal = [Math.cos(along), Math.sin(along)];
       return true;
     };
 
@@ -535,6 +610,14 @@ export class Ball {
     }
 
     this.game.sfx.play('bat-hit', this.x / this.gfx.W, this.game.velocityToVolume(this.vx, this.vy));
+
+    // Any spin the ball arrives with tells on the bounce, as off any surface (spinBounce()). Then swiping the bat
+    // along under the ball adds spin of its own, the bat dragging the ball's underside with it: a swipe to the
+    // right spins it anticlockwise, so its path bends to the left (curve()).
+    this.spinBounce(normal[0], normal[1]);
+    const swipe = bat.vxSmooth / this.gfx.W;   // Playfield widths a second
+    const limit = BALL_SPIN_MAX * 2 * Math.PI;
+    this.english = Math.max(-limit, Math.min(limit, this.english - swipe * BAT_SPIN_PER_SWIPE * 2 * Math.PI));
 
     // A flurry of contacts (the bat swept into the ball at an end cap) only adds speed once
     const now = this.game.time;
@@ -573,6 +656,7 @@ export class Ball {
       } else {
         this.x = left - this.w2;
         this.vx = -Math.abs(this.vx);
+        this.spinBounce(-1, 0);
         brick.hit(this.x, vol());
         return true;
       }
@@ -584,17 +668,20 @@ export class Ball {
       } else {
         this.x = right + this.w2;
         this.vx = Math.abs(this.vx);
+        this.spinBounce(1, 0);
         brick.hit(this.x, vol());
         return true;
       }
     } else if (this.y < top) {
       this.y = top - this.h2;
       this.vy = -Math.abs(this.vy);
+      this.spinBounce(0, -1);
       brick.hit(this.x, vol());
       return true;
     } else {
       this.y = bottom + this.h2;
       this.vy = Math.abs(this.vy);
+      this.spinBounce(0, 1);
       brick.hit(this.x, vol());
       return true;
     }
@@ -608,6 +695,7 @@ export class Ball {
       const speed = Math.hypot(this.vx, this.vy);
       this.vx = speed * Math.cos(normal);
       this.vy = speed * Math.sin(normal);
+      this.spinBounce(Math.cos(normal), Math.sin(normal));
       brick.hit(this.x, vol());
       return true;
     }

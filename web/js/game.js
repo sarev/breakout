@@ -285,6 +285,7 @@ export class Game {
     this.serveDeadline = this.time + SERVE_TIMEOUT;
     this.heroBall.vx = 0;
     this.heroBall.vy = 0;
+    this.heroBall.english = 0;   // Served clean, whatever it was doing at the end of the last level
     this.holdHeroBall();
   }
 

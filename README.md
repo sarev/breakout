@@ -149,7 +149,7 @@ Copy the `web` folder to a static web server (SFTP, S3, GitHub Pages, whatever y
 | Input | Action |
 |-------|--------|
 | **Click, tap or any key** | Dismiss the title card (browsers only allow sound after you've interacted with the page) |
-| **Mouse** | Moves the ball on the intro (it lights up the difficulty it's over) and the bat in play |
+| **Mouse** | Moves the ball on the intro (it lights up the difficulty it's over) and the bat in play. Swipe the bat under a ball as it bounces and it spins away, its path curving the other way from the swipe until the spin dies down, and its bounces kicked sideways by the spin (web version only) |
 | **Touch** | The ball on the intro, and the bat in play, sit under your finger: put it down anywhere across the screen and the bat goes there. On a phone the intro's ball rolls with the tilt of the phone instead, like a ball on a tray. It's just for fun there: tap Easy, Medium, Hard or Insane to start |
 | **Tilt (Insane)** | On a phone, Insane plays as Hard but the bat is steered by rolling the phone like a steering wheel: about 45° either way (37° in landscape) takes it to the edge. However you're holding the phone when a level starts, or when you resume after a pause, counts as level |
 | **Click / tap** | On the intro, a click or tap on a difficulty starts the game (anywhere else does nothing); launches the ball when it's sitting on the bat; otherwise speeds all the balls up a little |

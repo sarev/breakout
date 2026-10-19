@@ -35,6 +35,27 @@ export const BALL_HEIGHT_PCT = 4.5;
 // fast ball is a blur. The sense follows the direction of travel: clockwise heading right, anticlockwise left.
 export const BALL_SPIN_RATE = 1;
 export const BALL_SPIN_MAX_TURNS = 3;
+// Spin from the bat: swiping the bat along under a ball as it bounces sets it spinning, the bat dragging its
+// underside along (a swipe to the right spins it anticlockwise): BAT_SPIN_PER_SWIPE turns a second for each
+// playfield width a second the bat is moving, up to BALL_SPIN_MAX. The spin bends the path the way the ball turns,
+// by BALL_CURVE_PER_TURN degrees a second for each turn a second, and dies away with a time constant of
+// BALL_SPIN_FADE seconds, less as each bounce uses some up. Left alone, the whole bend would come to the starting
+// rate times BALL_SPIN_FADE: 150 degrees for a brisk swipe of a width a second, and more for a whip. What keeps
+// that in hand is that no bend takes a path within BALL_CURVE_FLATTEST degrees of horizontal, so a ball sent up can
+// never curl round and come back down, however hard the bat was whipped (the bend
+// eases off over the BALL_CURVE_EASE degrees before that, so it dies down rather than stopping dead).
+// Spin also tells on a bounce: the surface grips the spinning ball and kicks it sideways, by BALL_SPIN_GRIP of
+// the speed its surface is turning at (against that surface's motion, as topspin kicks a ball on along the
+// floor), and BALL_SPIN_BOUNCE_KEEP of the spin is left afterwards. A kick that would take a path flatter than
+// BALL_CURVE_FLATTEST (and flatter than the plain bounce), or turn a rising ball into a falling one, is left out.
+export const BAT_SPIN_PER_SWIPE = 4;
+export const BALL_SPIN_MAX = 5;
+export const BALL_CURVE_PER_TURN = 15;
+export const BALL_SPIN_FADE = 2.5;
+export const BALL_CURVE_FLATTEST = 25;
+export const BALL_CURVE_EASE = 15;
+export const BALL_SPIN_GRIP = 0.3;
+export const BALL_SPIN_BOUNCE_KEEP = 0.7;
 export const INTRO_HERO_SCALE = 2;      // The intro's hero ball is drawn this many times the size of a ball in play
 export const BAT_HEIGHT_PCT = 6;
 export const LASER_HEIGHT_PCT = 6;
