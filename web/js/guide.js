@@ -5,7 +5,39 @@
 // to fit a narrow (portrait) screen. The pictures come from the full-size sprites through Graphics.icon(), which
 // shrinks each one once and keeps it, as scaling a 1024 px sprite down on every frame is slow on a phone.
 
-import { BRICK_INTROS, COLOURS } from './config.js';
+import { BRICK_INTROS, COLOURS, GLOW_BLUE, GLOW_RED } from './config.js';
+
+/**
+ * A ball's glowing tail, as the game draws its trails: glow blobs fading along a path. This one trails off to the
+ * left of the ball, away from the line of text beside it, curving up (`turn` -1) or down (1).
+ *
+ * @param {HTMLCanvasElement} glow The glow, already sized and tinted.
+ * @param {number} cx Centre of the ball.
+ * @param {number} cy
+ * @param {number} length Along the path, in canvas pixels.
+ * @param {number} turn -1 to curve up, 1 to curve down.
+ * @param {number} alpha
+ */
+function drawTail(ctx, glow, cx, cy, length, turn, alpha) {
+  const blobs = 36;
+  const step = length / blobs;
+  let x = cx;
+  let y = cy;
+  // Furthest (faintest) first, so the brighter blobs near the ball go on top, as the newest trail marks do
+  const points = [];
+  for (let i = 0; i < blobs; i++) {
+    const s = i / blobs;
+    const heading = turn * (0.35 + 0.95 * s);   // Radians from due left, turning up or down as it goes
+    x -= step * Math.cos(heading);
+    y += step * Math.sin(heading);
+    points.push([x, y, 1 - s]);
+  }
+  for (const [px, py, strength] of points.reverse()) {
+    ctx.globalAlpha = alpha * strength;
+    ctx.drawImage(glow, px - glow.width / 2, py - glow.height / 2);
+  }
+  ctx.globalAlpha = 1;
+}
 
 /**
  * The gate's guide to the balls: the blue hero ball, which costs a life when it falls, and the red bonus balls,
@@ -19,19 +51,21 @@ import { BRICK_INTROS, COLOURS } from './config.js';
  */
 export function drawBallGuide(gfx, ctx, images, y, alpha) {
   const lines = [
-    [images.ball, 'Keep the blue ball up: if it drops, you lose a life!'],
-    [images.bonusBall, 'Red bonus balls are free: drop as many as you like'],
+    [images.ball, images.blueGlow, GLOW_BLUE, -1, 'Keep the blue ball up: if it drops, you lose a life!'],
+    [images.bonusBall, images.redGlow, GLOW_RED, 1, 'Red bonus balls are free: drop as many as you like'],
   ];
   // Full size, in playfield pixels: the ball, the space after it, and from one line to the next. The text is the
-  // prompt's size; the whole block shrinks to fit the playfield's width, with a margin either side.
+  // prompt's size; the whole block shrinks to fit the playfield's width, with a margin either side (the tails
+  // reach out to the left of it).
   const icon = 70 * gfx.scale;
   const gap = 28 * gfx.scale;
   const step = 95 * gfx.scale;
-  const width = icon + gap + Math.max(...lines.map(([, text]) => gfx.textWidth(ctx, text, { size: 60 })));
+  const width = icon + gap + Math.max(...lines.map((line) => gfx.textWidth(ctx, line[4], { size: 60 })));
   const k = Math.min(1, (gfx.W * 0.92) / width);
   const left = (gfx.W - width * k) / 2;
-  lines.forEach(([ball, text], i) => {
+  lines.forEach(([ball, glow, tint, turn, text], i) => {
     const cy = y + i * step * k;
+    drawTail(ctx, gfx.icon(glow, icon * k, tint), left + (icon * k) / 2, cy, 150 * gfx.scale * k, turn, alpha * 0.5);
     ctx.globalAlpha = alpha;
     ctx.drawImage(gfx.icon(ball, icon * k), left, cy - (icon * k) / 2);
     ctx.globalAlpha = 1;

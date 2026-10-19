@@ -119,7 +119,7 @@ export class Graphics {
     this.brickSize = 0;
     this.background = null;
     this.trailMarks = [];       // Glow blobs as {img, x, y, t}: drawn each frame with alpha falling with age
-    this.icons = new Map();     // Image -> {px, canvas}: shrunk copies for icon() to reuse
+    this.icons = new Map();     // Image -> {px, tint, canvas}: shrunk (and tinted) copies for icon() to reuse
     this.trailClock = 0;
     this.trailLifetime = 255 / 600;
     this.W = 0;
@@ -401,14 +401,16 @@ export class Graphics {
    *
    * @param {HTMLImageElement} img
    * @param {number} px Height in canvas pixels.
+   * @param {number[]} [tint] An [r, g, b] colour to multiply it by (tintImage()), as the glows are.
    * @returns {HTMLCanvasElement}
    */
-  icon(img, px) {
+  icon(img, px, tint = null) {
     const height = Math.max(1, Math.round(px));
     const kept = this.icons.get(img);
-    if (kept && kept.px === height) return kept.canvas;
-    const canvas = scaleImage(img, height);
-    this.icons.set(img, { px: height, canvas });
+    if (kept && kept.px === height && kept.tint === tint) return kept.canvas;
+    const scaled = scaleImage(img, height);
+    const canvas = tint ? tintImage(scaled, tint) : scaled;
+    this.icons.set(img, { px: height, tint, canvas });
     return canvas;
   }
 
