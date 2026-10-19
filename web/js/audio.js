@@ -56,7 +56,7 @@ export class Music {
     this.gain.gain.value = this.volume;
     this.gain.connect(ctx.destination);
     this.source = null;             // The looping source, while something is playing
-    this.current = null;            // [name, tempo] of the track that is (or was last) playing
+    this.current = null;            // [name, tempo] of the track the scene wants, playing or (music off) not
   }
 
   /**
@@ -75,13 +75,19 @@ export class Music {
   }
 
   /**
-   * Start a track looping. Does nothing if music is off, the track is missing, or it's already playing.
+   * Start a track looping. Does nothing if the track is missing or already playing. With the music off it
+   * just remembers the track, so switching the music on plays it straight away rather than waiting for the next
+   * scene to ask for one (which, with the music off from the start, meant the intro stayed silent).
    *
    * @param {string} name
    * @param {number} tempo Speed (and pitch) multiplier.
    */
   play(name, tempo = 1) {
-    if (!this.enabled || !this.buffers[name]) return;
+    if (!this.enabled) {
+      this.current = [name, tempo];
+      return;
+    }
+    if (!this.buffers[name]) return;
     if (this.current && this.current[0] === name && this.current[1] === tempo && this.playing()) return;
     this.stop(false);
     const source = this.ctx.createBufferSource();
@@ -97,11 +103,13 @@ export class Music {
   }
 
   /**
-   * Stop the music, with a short fade by default.
+   * Stop the music, with a short fade by default. Nothing is wanted after this, so switching the music on (the
+   * certificate stops it) stays silent until the next scene asks for a track.
    *
    * @param {boolean} fade
    */
   stop(fade = true) {
+    this.current = null;
     const source = this.source;
     if (!source) return;
     this.source = null;
@@ -130,7 +138,9 @@ export class Music {
         this.play(name, tempo);
       }
     } else {
+      const wanted = this.current;
       this.stop(false);
+      this.current = wanted;    // Still what the scene wants, for when the music comes back on
     }
     return this.enabled;
   }
