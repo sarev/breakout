@@ -371,3 +371,8 @@ export const MUSIC_LEVEL_PLAN = [
 
 // Full volume for speed-scaled effects is reached at this speed (px/s at the reference resolution)
 export const FULL_VOLUME_SPEED = 3000;
+
+// The metal brick's clang, which the later levels (and lasers) hammer: played quieter than the other effects,
+// and each time at a slightly different pitch, so a run of them doesn't grate
+export const METAL_HIT_VOLUME = 0.2;   // Times the volume it would otherwise have
+export const METAL_HIT_PITCH = 0.06;   // Playback rate varies by up to this either way (0.06 is about a semitone)

@@ -8,7 +8,7 @@ import {
   BALL_CURVE_EASE, BALL_CURVE_FLATTEST, BALL_CURVE_PER_TURN, BALL_SPIN_BOUNCE_KEEP, BALL_SPIN_FADE,
   BALL_SPIN_GRIP, BALL_SPIN_MAX, BALL_SPIN_MAX_TURNS, BALL_SPIN_RATE, BAT_ANGLE_JITTER, BAT_FADE_SECONDS,
   BAT_HIT_COOLDOWN, BAT_HIT_SPEED_GAIN, BAT_LIFETIME, BAT_SPIN_PER_SWIPE, BAT_VELOCITY_SMOOTHING,
-  BRICK_COLOURS, BRICK_LIVES, INTRO_DAMPING, MAX_BAT_ANGLE, NET_SLOW, REGEN_POP,
+  BRICK_COLOURS, BRICK_LIVES, INTRO_DAMPING, MAX_BAT_ANGLE, METAL_HIT_PITCH, METAL_HIT_VOLUME, NET_SLOW, REGEN_POP,
 } from './config.js';
 import { rgba } from './graphics.js';
 
@@ -289,7 +289,9 @@ export class Brick {
     if (this.lives < 0) return;
     const pan = x / this.gfx.W;
     if (this.lives === 99) {
-      this.game.sfx.play(`explode${this.type}`, pan, volume === null ? 1 : volume);
+      // Metal: quieter than the rest, and never quite the same twice, as it's hit so often
+      this.game.sfx.play(`explode${this.type}`, pan, (volume === null ? 1 : volume) * METAL_HIT_VOLUME,
+        1 + rand(-METAL_HIT_PITCH, METAL_HIT_PITCH));
       return;
     }
     if (this.lives > 0) this.lives = kill ? 0 : this.lives - 1;

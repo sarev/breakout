@@ -23,12 +23,14 @@ export class Sfx {
    * @param {string} name
    * @param {number} pan 0 (left) .. 1 (right); 0.5 is centred.
    * @param {number} volume 0 .. 1.
+   * @param {number} rate Playback rate, which shifts the pitch too: 1 as recorded.
    */
-  play(name, pan = 0.5, volume = 1) {
+  play(name, pan = 0.5, volume = 1, rate = 1) {
     const buffer = this.buffers[name];
     if (!buffer || this.ctx.state !== 'running') return;
     const source = this.ctx.createBufferSource();
     source.buffer = buffer;
+    source.playbackRate.value = rate;
     const panner = this.ctx.createStereoPanner();
     panner.pan.value = Math.max(-1, Math.min(1, pan * 2 - 1));
     const gain = this.ctx.createGain();
