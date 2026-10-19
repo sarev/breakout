@@ -641,7 +641,7 @@ export class Game {
     } else {
       this.net = { y: this.gfx.H + this.netThickness(), holdUntil: this.time + NET_TRAVEL + NET_HOLD, leaving: false };
     }
-    this.sfx.play('bonus', this.bats[0].x / this.gfx.W);
+    this.sfx.play('net', this.bats[0].x / this.gfx.W);
   }
 
   /** Float the net in, hold it, then float it out and forget it. */

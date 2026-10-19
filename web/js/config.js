@@ -260,9 +260,10 @@ export const TRAIL_FADE_INTRO = 1200;
 // Audio
 // ---------------------------------------------------------------------------------------------------------------
 export const SOUND_NAMES = [
-  'ball-hit', 'bat-hit', 'bonus', 'brick-hit', 'click', 'die', 'drop', 'respawn', 'restore', 'tick', 'wall-hit',
-  'win',
+  'ball-hit', 'bat-hit', 'bonus', 'brick-hit', 'click', 'die', 'drop', 'net', 'respawn', 'restore', 'tick',
+  'wall-hit', 'win',
   'explode0', 'explode1', 'explode2', 'explode3', 'explode4', 'explode5', 'explode6', 'explode7', 'explode8',
+  'explode9', 'explode11',   // No explode10: the safety net's sound is 'net', as it rises
   'laser0', 'laser1', 'laser2',
 ];
 export const MUSIC_VOLUME = 0.4;
