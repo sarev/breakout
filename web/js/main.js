@@ -1,10 +1,11 @@
 // Entry point: loads the assets, wires up input, and runs the scenes (intro, splash, game) on requestAnimationFrame.
 //
 // Controls: mouse moves the bat, left click serves or kicks, Space pauses, M toggles music, F toggles fullscreen,
-// L captures the mouse (pointer lock; Esc releases it and pauses), Q returns to the intro, and on the intro H and
-// C (or the on-screen links) open the Help and Credits pages. On a touch screen the ball (intro) or the bat
-// (play) sits under the finger, a tap serves or kicks, and a two-finger tap pauses and opens the Options page (music,
-// fullscreen, help, quit), which stands in for the keys.
+// L captures the mouse (pointer lock; Esc releases it and pauses), Q returns to the intro, and on the intro O (or
+// the Options link) opens the Options page (music, fullscreen, mouse capture, help, credits), and H and C go
+// straight to Help and Credits. On a touch screen the ball (intro) or the bat (play) sits under the finger, a tap
+// serves or kicks, and a two-finger tap pauses and opens the Options page (music, fullscreen, help, quit), which
+// stands in for the keys.
 //
 // A mobile device (a phone or tablet: touch, no mouse, one screen) is detected at start-up, and there the prompts
 // say "tap", the mouse is never captured, the bats sit higher and (in landscape) wider so a fingertip
@@ -37,6 +38,9 @@ const SENSITIVITY = parseFloat(params.get('sensitivity') || '1') || 1;
 const MUSIC_KEY = 'breakout-music';
 const MUSIC_ON = params.has('music') ? params.get('music') !== '0' : readSetting(MUSIC_KEY) !== 'off';
 const MUSIC_VOLUME = params.has('volume') ? parseFloat(params.get('volume')) : null;
+// Whether each game starts with the mouse captured (the Options page, desktop only), remembered between visits
+const CAPTURE_KEY = 'breakout-capture';
+let captureMouse = readSetting(CAPTURE_KEY) === 'on';
 
 /**
  * Is this a mobile device: a phone or tablet whose only pointer is a finger?
@@ -254,6 +258,9 @@ async function boot() {
   }
 
   function startGame() {
+    // The click or key that starts the game is the user gesture a pointer lock request needs, so a player who
+    // asked for it on the Options page has the mouse captured from the first banner on (never on a phone)
+    if (captureMouse) input.requestLock();
     game.reset();
     music.play('intro');   // keeps playing under the first splash, as in the Python version
     showSplash('Level 1...', COLOURS.advance, 'level');
@@ -419,24 +426,38 @@ async function boot() {
     scene = 'intro';
   }
 
-  /**
-   * The Options page (two-finger tap): the keyboard's jobs for a touch screen. In play it pauses first and
-   * closing it (Resume, a tap outside the buttons, or Escape) resumes; on the intro it just offers the toggles.
-   */
   /** M, or the Options page's Music button: switch the music and remember the choice for next time. */
   function toggleMusic() {
     writeSetting(MUSIC_KEY, music.toggle() ? 'on' : 'off');
   }
 
+  /**
+   * The Options page's mouse capture button (not offered on a phone): whether each game starts with the mouse
+   * captured, remembered for next time. L still captures or releases it for the game in hand. Switched in play
+   * (a two-finger tap on a touch laptop), it applies when the game resumes, as the pause has let the mouse go.
+   */
+  function toggleCapture() {
+    captureMouse = !captureMouse;
+    writeSetting(CAPTURE_KEY, captureMouse ? 'on' : 'off');
+    if (scene === 'game') input.wantLock = captureMouse;
+  }
+
+  /**
+   * The Options page: the keyboard's jobs for a touch screen (a two-finger tap), and the settings in one place on
+   * a desktop (the intro's Options link, or O). In play it pauses first and closing it (Resume, a tap outside the
+   * buttons, or Escape) resumes; on the intro it offers the toggles and the Help and Credits pages.
+   */
   function showOptions() {
     if (modalOpen()) return;
     const inGame = scene === 'game';
     if (inGame) setPaused(true);
-    const state = () => ({ inGame, music: music.enabled, fullscreen: isFullscreen(), fullscreenAvailable: fullscreenAvailable() });
+    const state = () => ({ inGame, music: music.enabled, fullscreen: isFullscreen(), fullscreenAvailable: fullscreenAvailable(),
+      capture: captureMouse, captureAvailable: !MOBILE });
     const actions = {
       resume: () => closeModal(),
       music: () => toggleMusic(),
       fullscreen: () => toggleFullscreen(),
+      capture: () => toggleCapture(),
       // Help and Credits open over the top; closing them comes back here (still paused, in play)
       help: () => openModal('help', () => showOptions()),
       credits: () => openModal('credits', () => showOptions()),
@@ -452,13 +473,12 @@ async function boot() {
     if (scene === 'gate') {
       leaveGate();
     } else if (scene === 'intro') {
-      // A click or tap on one of the links opens its page, and one on a difficulty starts that game; anywhere
+      // A click or tap on the Options link opens that page, and one on a difficulty starts that game; anywhere
       // else does nothing (it used to start whatever was selected, which made the menu feel optional). It's
       // the pointer that's hit-tested, not the hero ball: a quick tap can land and lift between two frames,
       // and on a phone the ball may be rolling by tilt
       const p = input.playfield();
-      const link = intro.linkAt(p.x, p.y);
-      if (link) openModal(link);
+      if (intro.linkAt(p.x, p.y)) showOptions();
       else if (intro.selectAt(p.x, p.y)) startGame();
     } else if (scene === 'splash') {
       splash.elapsed = 1e9;
@@ -562,7 +582,8 @@ async function boot() {
     if (scene === 'gate') {
       if (!e.repeat) leaveGate();
     } else if (scene === 'intro') {
-      if (key === 'h') openModal('help');
+      if (key === 'o') showOptions();
+      else if (key === 'h') openModal('help');
       else if (key === 'c') openModal('credits');
       else if (key === 'x' && DEBUG) showcase();
       else if (key === 'arrowup' || key === 'arrowdown') {

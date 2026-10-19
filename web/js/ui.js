@@ -5,9 +5,11 @@
 // events, and main.js ignores keys other than Escape. A click anywhere (or Escape) closes it, except on a link
 // or an options button, which do their own jobs.
 //
-// The Options page exists for touch screens, where there are no keys to toggle the music or go fullscreen and no
+// The Options page began for touch screens, where there are no keys to toggle the music or go fullscreen and no
 // Q to quit: a two-finger tap opens it (pausing the game first). It works just as well with a mouse on a touch
-// laptop. Its buttons call back into main.js, which owns the music, fullscreen and scene state.
+// laptop. On a desktop the intro's Options link (or O) opens it too, which keeps the intro down to one link, and
+// there it has a setting of its own: whether games start with the mouse captured (never offered on a phone).
+// Its buttons call back into main.js, which owns the music, fullscreen, mouse and scene state.
 
 const BRICKS = [
   ['sm-brick0.png', 'Blue', 'Standard; no effect'],
@@ -32,8 +34,9 @@ const KEYBOARD_CONTROLS = `
 <tr><td>Space</td><td>Pause and resume</td></tr>
 <tr><td>M</td><td>Music on or off</td></tr>
 <tr><td>F</td><td>Fullscreen</td></tr>
-<tr><td>L</td><td>Capture the mouse so it can't leave the page (Esc or L releases it)</td></tr>
+<tr><td>L</td><td>Capture the mouse so it can't leave the page (Esc or L releases it). To have every game start that way, turn it on in the options.</td></tr>
 <tr><td>Q</td><td>Back to this screen</td></tr>
+<tr><td>O</td><td>On this screen, the options: music, fullscreen, capturing the mouse, help and credits</td></tr>
 `;
 
 const TOUCH_CONTROLS = `
@@ -134,9 +137,10 @@ export function openModal(kind, closed = null) {
 /**
  * Open the Options page.
  *
- * @param {Function} getState Returns {inGame, music, fullscreen, fullscreenAvailable}; read afresh on each render
- *                            so the buttons always show the current state.
- * @param {Object<string, Function>} actions Handlers keyed by button: resume, music, fullscreen, help, credits, quit.
+ * @param {Function} getState Returns {inGame, music, fullscreen, fullscreenAvailable, capture, captureAvailable};
+ *                            read afresh on each render so the buttons always show the current state.
+ * @param {Object<string, Function>} actions Handlers keyed by button: resume, music, fullscreen, capture, help,
+ *                                          credits, quit.
  * @param {Function} [closed] Called when it's dismissed (by any means).
  */
 export function openOptions(getState, actions, closed = null) {
@@ -154,9 +158,10 @@ export function renderOptions() {
   rows.push(button('resume', s.inGame ? 'Resume' : 'Close'));
   rows.push(button('music', `Music: ${s.music ? 'on' : 'off'}`));
   if (s.fullscreenAvailable) rows.push(button('fullscreen', `Fullscreen: ${s.fullscreen ? 'on' : 'off'}`));
+  if (s.captureAvailable) rows.push(button('capture', `Capture the mouse in play: ${s.capture ? 'on' : 'off'}`));
   rows.push(button('help', 'Help'));
   if (s.inGame) rows.push(button('quit', 'Quit to the menu'));
-  else rows.push(button('credits', 'Credits'));   // On the intro the page is also how a phone reaches Credits
+  else rows.push(button('credits', 'Credits'));   // On the intro the page is the way to Credits (short of C)
   body.innerHTML = `<h2>${s.inGame ? 'Paused' : 'Options'}</h2><div class="options">${rows.join('')}</div>`;
 }
 

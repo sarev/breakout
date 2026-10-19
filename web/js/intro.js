@@ -71,7 +71,7 @@ export class Intro {
     this.choice = game.tiltBat ? 3 : game.difficulty;   // Index into `labels` of the selected menu item
     this.hovered = -1;          // The label the hero ball was over last frame (desktop), or -1
     this.menuBoxes = this.labels.map(() => null);
-    this.linkBoxes = { help: null, credits: null };   // Hit boxes for the Help / Credits links
+    this.linkBoxes = { options: null };   // Hit box for the Options link (desktop only)
     this.idle = false;                                // Settling the card to face the viewer (see setIdle)
     this.tiltActive = false;                          // Hero ball rolled by the device's tilt (phones), not the pointer
     this.tilt = { x: 0, y: 0 };                       // Current tilt as a roll vector in screen terms, -1..1 each way
@@ -123,7 +123,7 @@ export class Intro {
   /**
    * Which link, if any, is under a playfield point.
    *
-   * @returns {'help'|'credits'|null}
+   * @returns {'options'|null}
    */
   linkAt(x, y) {
     for (const [name, box] of Object.entries(this.linkBoxes)) {
@@ -338,16 +338,17 @@ export class Intro {
       });
     });
 
-    // On a phone the Help and Credits pages live on the two-finger-tap menu, so the links give way to a hint
+    // On a phone the Options page is a two-finger tap away, so the link gives way to a hint
     if (this.input.mobile) {
       this.linkBoxes = {};
       gfx.text(ctx, 'Two-finger tap for the menu', { x, y: gfx.H * layout.hint, size: 60, alpha: 0.8, colour: COLOURS.presskey });
     }
 
-    // Help and Credits links, underlined, lit up when the hero ball is over them. The hit boxes are padded a
-    // little so a ball or a finger doesn't have to land exactly on the letters.
+    // The Options link (music, fullscreen, mouse capture, Help and Credits are all on that page), underlined, lit
+    // up when the hero ball is over it. The hit box is padded a little so a ball or a finger doesn't have to land
+    // exactly on the letters.
     const hover = this.linkAt(this.hero.x, this.hero.y);
-    const links = this.input.mobile ? [] : [['help', 'Help', gfx.W * 0.42], ['credits', 'Credits', gfx.W * 0.58]];
+    const links = this.input.mobile ? [] : [['options', 'Options', gfx.W / 2]];
     links.forEach(([name, label, lx]) => {
       const lit = hover === name;
       const box = gfx.text(ctx, label, {
