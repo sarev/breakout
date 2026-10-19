@@ -123,11 +123,17 @@ function fullscreenOnTap() {
 const ASSET_BASE = './';    // The sprites, sounds and music folders sit beside this page, so web/ is self-contained
 
 // Idle throttling. A page sitting on the title card or the intro shouldn't burn CPU and GPU redrawing at the
-// display rate: the gate always renders at IDLE_FPS, and the intro drops to it once there has been no input for
-// IDLE_AFTER seconds and the balls have all but stopped (or while a Help / Credits page is open). Any input, or
-// the balls being set moving again, brings the full rate straight back. The splash and the game always run at
-// full rate, and the browser stops the loop altogether while the tab is hidden.
+// display rate: the gate always renders at IDLE_FPS (its prompt pulses and its title's colour waves, gently
+// enough for that rate), and the intro drops to it once there has been no input for IDLE_AFTER seconds and the
+// balls have all but stopped (or while a Help / Credits page is open). Pages with nothing moving at all, the
+// certificate and a paused game once its trails have faded and any notice has gone, drop to STILL_FPS, a
+// heartbeat (a paused game was a costly picture to redraw, under the red lens's blur or the Options page's
+// blurred backdrop). A click, tap or key brings the next frame forward at once (wake()), so a slow tick never
+// delays an answer, and input or the balls being set moving again brings the full rate straight back. The
+// splash and the game in play always run at full rate, and the browser stops the loop altogether while the
+// tab is hidden.
 const IDLE_FPS = 12;
+const STILL_FPS = 1;
 const IDLE_AFTER = 5;
 const IDLE_SPEED = 60;      // Total ball speed (px/s at the reference scale) below which the intro counts as settled
 
@@ -657,7 +663,9 @@ async function boot() {
 
   /** The frame rate to throttle to right now, or 0 for the display's full rate. */
   function idleRate(now) {
-    if (scene === 'gate' || scene === 'over') return IDLE_FPS;   // Both are still pages that only wait for input
+    const paused = scene === 'game' && game.paused && gfx.trailMarks.length === 0;
+    if (!notice && (scene === 'over' || paused)) return STILL_FPS;   // Nothing moving: only input changes them
+    if (scene === 'gate') return IDLE_FPS;
     if (scene === 'intro') {
       const settled = intro.totalSpeed() < IDLE_SPEED * gfx.scale;
       const wantIdle = modalOpen() || (settled && now - lastInput > IDLE_AFTER * 1000);
@@ -669,9 +677,24 @@ async function boot() {
     return 0;
   }
 
+  // The pending slow tick while idling, and wake(), which brings the next frame forward to now. Bound to the
+  // discrete inputs (and resizes), not to mouse movement: nothing on a still page answers that.
+  let idleTimer = null;
+  function wake() {
+    if (idleTimer === null) return;   // A frame is already on its way
+    clearTimeout(idleTimer);
+    idleTimer = null;
+    requestAnimationFrame(frame);
+  }
+  for (const type of ['pointerdown', 'pointerup', 'click', 'keydown', 'touchstart', 'resize']) {
+    window.addEventListener(type, wake, { passive: true, capture: true });
+  }
+  for (const type of ['fullscreenchange', 'webkitfullscreenchange']) document.addEventListener(type, wake);
+
   let frames = 0;   // Rendered frames, for the smoke test to measure the rate
   let last = performance.now();
   function frame(now) {
+    const sceneAtStart = scene;
     const dt = Math.min((now - last) / 1000, MAX_FRAME_DT);
     last = now;
     frames++;
@@ -759,10 +782,11 @@ async function boot() {
 
     // Schedule the next frame: straight away at full rate, or after a wait when idling. requestAnimationFrame
     // still does the actual scheduling, so the browser can hold the loop while the tab is hidden.
-    const rate = idleRate(now);
+    // A scene that changed during this frame (the game ending in the certificate, say) gets its first frame at once
+    const rate = scene === sceneAtStart ? idleRate(now) : 0;
     if (rate) {
       const spent = performance.now() - now;
-      setTimeout(() => requestAnimationFrame(frame), Math.max(0, 1000 / rate - spent));
+      idleTimer = setTimeout(() => { idleTimer = null; requestAnimationFrame(frame); }, Math.max(0, 1000 / rate - spent));
     } else {
       requestAnimationFrame(frame);
     }

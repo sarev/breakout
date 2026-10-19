@@ -438,7 +438,9 @@ export class Ball {
       ctx.drawImage(this.image, -this.w2, -this.h2);
       ctx.restore();
     }
-    this.gfx.addGlow(this.glow, px, py);
+    // No new glow while paused: the trails fade away and the frozen picture can be redrawn at the idle rate
+    // (main.js idleRate())
+    if (!this.game.paused) this.gfx.addGlow(this.glow, px, py);
   }
 
   /** Add `amount` px/s of speed without changing direction (the next move() clamps to the ceiling). */
