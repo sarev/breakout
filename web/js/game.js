@@ -5,9 +5,9 @@ import {
   FULL_VOLUME_SPEED, HAZE_FADE_SECONDS, HAZE_SECONDS, INVERSION_SECONDS, KICK_SPEED_GAIN, LASER_DURATION,
   LASER_PERIOD, LASER_SPEED_FACTOR, LASER_STAGGER, LEVEL_DEFS, LEVEL_SPEED_RAMP, MAX_BALLS,
   MAX_SPEED_FRACTION, MIN_SPEED_FRACTION, MOBILE_BAT_LIFT, NET_GAP, NET_HOLD, NET_PULSE, NET_THICKNESS,
-  NET_TRAVEL, PHYSICS_HZ, RANDOM_BRICK_TYPES, REGEN_FRACTION, REGEN_INTERVAL, REGEN_PATIENCE,
-  SERVE_FLICK_GAIN, SERVE_JITTER, SERVE_MAX_ANGLE, SERVE_TIMEOUT, STARTING_LIVES, TRAIL_FADE_GAME,
-  WIPE_TIRED_SPEED,
+  NET_TRAVEL, NET_WARNING, NET_WARNING_FAINTEST, NET_WARNING_PULSE, PHYSICS_HZ, RANDOM_BRICK_TYPES,
+  REGEN_FRACTION, REGEN_INTERVAL, REGEN_PATIENCE, SERVE_FLICK_GAIN, SERVE_JITTER, SERVE_MAX_ANGLE,
+  SERVE_TIMEOUT, STARTING_LIVES, TRAIL_FADE_GAME, WIPE_TIRED_SPEED,
 } from './config.js';
 import { Ball, Bat, Brick, Laser } from './entities.js';
 import { tintImage } from './graphics.js';
@@ -661,13 +661,16 @@ export class Game {
     this.sfx.play('net', this.bats[0].x / this.gfx.W);
   }
 
-  /** Float the net in, hold it, then float it out and forget it. */
+  /**
+   * Float the net in, hold it, then after `NET_WARNING` seconds of pulsing (drawNet()) float it out and forget it.
+   * Another net brick during the warning pushes `holdUntil` on again from now, which ends the warning.
+   */
   animateNet(dt) {
     const net = this.net;
     if (!net) return;
     const rest = this.netRestY();
     const gone = this.gfx.H + this.netThickness();
-    if (!net.leaving && this.time >= net.holdUntil) net.leaving = true;
+    if (!net.leaving && this.time >= net.holdUntil + NET_WARNING) net.leaving = true;
     const target = net.leaving ? gone : rest;
     const step = ((gone - rest) / NET_TRAVEL) * dt;
     net.y += Math.max(-step, Math.min(step, target - net.y));
@@ -694,6 +697,14 @@ export class Game {
   drawNet(ctx) {
     const net = this.net;
     if (!net) return;
+    ctx.save();
+    // Its time nearly up: the whole net pulses between full and faint, which catches the corner of the eye. Each
+    // pulse starts and ends at full, so it floats away without a jump.
+    const warning = this.time - net.holdUntil;
+    if (warning > 0 && !net.leaving) {
+      const mid = (1 + NET_WARNING_FAINTEST) / 2;
+      ctx.globalAlpha = mid + (1 - mid) * Math.cos((2 * Math.PI * warning) / NET_WARNING_PULSE);
+    }
     const W = this.gfx.W;
     const thick = this.netThickness();
     const pulse = 0.6 + 0.4 * Math.sin((2 * Math.PI * this.time) / NET_PULSE);
@@ -721,6 +732,7 @@ export class Game {
     shimmer.addColorStop(1, 'rgba(255, 255, 255, 0)');
     ctx.fillStyle = shimmer;
     ctx.fillRect(Math.max(0, sweep), net.y, Math.min(band, W - sweep), thick);
+    ctx.restore();
   }
 
   // --- Blackout ---------------------------------------------------------------------------------------------

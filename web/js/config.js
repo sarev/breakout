@@ -182,8 +182,12 @@ export const LASER_STAGGER = 4 / 60;    // Offset between successive bats' beams
 export const LASER_SPEED_FACTOR = 1.875; // Beam speed = playfield height * this, px/s
 
 // Safety net (brick 10): a glowing bar floats up from below the screen to just under the bat, stays a while,
-// then floats away. Balls that reach it bounce back up a little slower than they arrived.
+// pulses in and out as a warning, then floats away. Balls that reach it bounce back up a little slower than
+// they arrived, warning or not.
 export const NET_HOLD = 5;              // Seconds the net stays up (another net brick adds the same again)
+export const NET_WARNING = 4;           // Seconds of pulsing after that, before it floats away
+export const NET_WARNING_PULSE = 0.5;   // Seconds per pulse of the warning (NET_WARNING is a whole number of them)
+export const NET_WARNING_FAINTEST = 0.2;   // The opacity at the bottom of each warning pulse
 export const NET_TRAVEL = 0.6;          // Seconds to float in or out
 export const NET_GAP = 0.2;             // Bat heights between the bottom of the bat and the top of the net
 export const NET_THICKNESS = 0.5;       // Bat heights thick
