@@ -12,7 +12,19 @@
     html, body { margin: 0; padding: 0; background: #000; overflow: hidden; height: 100%;
                  font-family: Arial, Helvetica, sans-serif; }
     /* The cursor is hidden from script only while a game is actually being played; see main.js updateCursor() */
-    canvas { display: block; touch-action: none; -webkit-user-select: none; user-select: none; }
+    canvas { display: block; position: relative; z-index: 1; touch-action: none; -webkit-user-select: none;
+             user-select: none; }
+
+    /* Loading: part of the page, so it's up straight away, while the scripts and then the assets (some 50 MB)
+       come in. main.js fills the bar a file at a time and hides it all once the game is ready to draw. It sits
+       under the canvas, which stays see-through until the first frame paints it black from edge to edge, so
+       the game covers it even if it's never hidden (a stale cached main.js from before it existed, say) */
+    #loading { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center;
+               justify-content: center; gap: 2.5vh; color: #8aa8ff; font-size: 3.3vh; cursor: default; z-index: 0; }
+    #loading[hidden] { display: none; }
+    #loading .bar { width: min(60vw, 400px); height: 6px; border-radius: 3px; overflow: hidden;
+                    background: rgba(128, 168, 255, 0.2); }
+    #loading .fill { width: 0; height: 100%; background: #8aa8ff; transition: width 0.2s; }
 
     /* Help / Credits: an overlay that blurs the game behind it, with a scrolling panel in the middle */
     #modal { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
@@ -62,6 +74,10 @@
 </head>
 <body>
   <canvas id="game"></canvas>
+  <div id="loading">
+    <span>Loading…</span>
+    <div class="bar"><div class="fill" id="loading-fill"></div></div>
+  </div>
   <div id="modal" hidden>
     <div class="panel">
       <button class="close" type="button" aria-label="Close">&times;</button>

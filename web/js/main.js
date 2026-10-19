@@ -124,9 +124,11 @@ const IDLE_AFTER = 5;
 const IDLE_SPEED = 60;      // Total ball speed (px/s at the reference scale) below which the intro counts as settled
 
 const canvas = document.getElementById('game');
+const loading = document.getElementById('loading');   // The page's own loading screen, up until the first frame
 
-/** Show a line of text on an otherwise black canvas (loading and error messages). */
+/** Show a line of text on an otherwise black canvas, in place of the loading screen (error messages). */
 function message(text) {
+  loading.hidden = true;
   const ctx = canvas.getContext('2d');
   canvas.width = window.innerWidth * (window.devicePixelRatio || 1);
   canvas.height = window.innerHeight * (window.devicePixelRatio || 1);
@@ -140,8 +142,6 @@ function message(text) {
 }
 
 async function boot() {
-  message('Loading…');
-
   const imageNames = {
     ball: 'ball.png', bonusBall: 'extra-ball.png', blueGlow: 'blue-glow.png', redGlow: 'red-glow.png',
     bat: 'bat.png', bonusBat: 'extra-bat.png', blueLaser: 'blue.png', greenLaser: 'green.png', intro: 'intro.png',
@@ -151,10 +151,17 @@ async function boot() {
 
   const audio = new AudioSystem();
   const soundNames = Object.fromEntries(SOUND_NAMES.map((n) => [n, `${n}.wav`]));
+
+  // The loading screen's bar fills a file at a time. The files differ a lot in size, but it shows things moving
+  const total = Object.keys(imageNames).length + SOUND_NAMES.length + Object.keys(MUSIC_FILES).length;
+  let loaded = 0;
+  const fill = document.getElementById('loading-fill');
+  const progress = () => { fill.style.width = `${(100 * ++loaded) / total}%`; };
+
   const [images, sounds, tracks] = await Promise.all([
-    loadImages(`${ASSET_BASE}sprites/`, imageNames),
-    loadAudioSet(audio.ctx, `${ASSET_BASE}sounds/`, soundNames),
-    loadAudioSet(audio.ctx, `${ASSET_BASE}music/`, MUSIC_FILES),
+    loadImages(`${ASSET_BASE}sprites/`, imageNames, progress),
+    loadAudioSet(audio.ctx, `${ASSET_BASE}sounds/`, soundNames, progress),
+    loadAudioSet(audio.ctx, `${ASSET_BASE}music/`, MUSIC_FILES, progress),
   ]);
   audio.sfx = new Sfx(audio.ctx, sounds);
   audio.music = new Music(audio.ctx, tracks, MUSIC_ON, MUSIC_VOLUME);
@@ -718,6 +725,8 @@ async function boot() {
   window.breakout = {
     screenshot: saveScreenshot, showcase, game, gfx, input, intro, certificate, audio, mobile: MOBILE, get scene() { return scene; }, get frames() { return frames; } };
 
+  // Away with the loading screen: the first frame (the gate) is drawn before the page is next shown
+  loading.hidden = true;
   requestAnimationFrame(frame);
 
   // Register the (do-nothing) service worker so browsers that still require one will offer to install the page

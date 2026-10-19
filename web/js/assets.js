@@ -20,11 +20,12 @@ export function loadImage(url) {
  *
  * @param {string} base Folder URL, with trailing slash.
  * @param {Object<string, string>} names Map of key -> file name.
+ * @param {function} [onLoad] Called as each one arrives (for a progress bar).
  * @returns {Promise<Object<string, HTMLImageElement>>} Map of key -> image.
  */
-export async function loadImages(base, names) {
+export async function loadImages(base, names, onLoad = () => {}) {
   const entries = Object.entries(names);
-  const images = await Promise.all(entries.map(([, file]) => loadImage(base + file)));
+  const images = await Promise.all(entries.map(([, file]) => loadImage(base + file).then((img) => { onLoad(); return img; })));
   const out = {};
   entries.forEach(([key], i) => { out[key] = images[i]; });
   return out;
@@ -56,11 +57,12 @@ export async function loadAudio(ctx, url) {
  * @param {AudioContext} ctx
  * @param {string} base Folder URL, with trailing slash.
  * @param {Object<string, string>} names Map of key -> file name.
+ * @param {function} [onLoad] Called as each one is done with, loaded or not (for a progress bar).
  * @returns {Promise<Object<string, AudioBuffer|null>>}
  */
-export async function loadAudioSet(ctx, base, names) {
+export async function loadAudioSet(ctx, base, names, onLoad = () => {}) {
   const entries = Object.entries(names);
-  const buffers = await Promise.all(entries.map(([, file]) => loadAudio(ctx, base + file)));
+  const buffers = await Promise.all(entries.map(([, file]) => loadAudio(ctx, base + file).then((buffer) => { onLoad(); return buffer; })));
   const out = {};
   entries.forEach(([key], i) => { out[key] = buffers[i]; });
   return out;
