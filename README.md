@@ -1,6 +1,6 @@
 # Breakout
 
-A modern take on the classic brick-breaker. Clear all destroyable bricks while keeping the blue “hero” ball in play. Power-ups, lasers, inversion, and multi-ball keep things lively. It runs as a desktop game (Python and Pygame) and as a [browser version](#web-version) that plays the same game on a canvas, with touch support.
+A modern take on the classic brick-breaker. Clear all destroyable bricks while keeping the blue “hero” ball in play. Power-ups, lasers, inversion, and multi-ball keep things lively. It runs as a desktop game (Python and Pygame) and as a [browser version](#web-version) (try it [here](https://breakout.7thsoftware.co.uk/)) that plays the same game on a canvas, with touch support.
 
 ![Illustration](./web/sprites/intro.png)
 
@@ -68,11 +68,13 @@ source .venv/bin/activate
 # 2) Start the game
 python breakout.py
 ```
+
 You can also pass the `--ratio` (or `-r`) parameter to scale the graphics down by a specified amount, e.g.
 
 ```bash
 python breakout.py -r 4
 ```
+
 will down-scale all of the graphics by a factor of four (horizontally and vertically). Higher values give more retro vibes! If your machine struggles to play Breakout smoothly at full resolution, increasing the `-r` parameter should reduce CPU load.
 
 ## Mouse sensitivity
@@ -86,6 +88,7 @@ If you have multiple monitors, you can pass the `--monitor` (or `-m`) parameter 
 ```bash
 python breakout.py -m 2
 ```
+
 If this parameter isn't passed and there are multiple monitors detected, you will see a monitor selection icon in the top-left of the intro screen. Clicking this will move the game to each monitor in turn.
 
 ## How to play
@@ -105,24 +108,25 @@ If this parameter isn't passed and there are multiple monitors detected, you wil
 ### Music
 
 The intro and each level have their own chiptune track, played at a volume that leaves room for the sound effects. Levels 4 to 6 bring the first three tunes back faster (and higher), old-school style. Start with it off using `--no-music`, or set the level with `--music-volume 0.25` (0 to 1). The tracks live in `web/music`; see `web/music/CREDITS.txt`.
+
 - **Intro screen**: Move the mouse over the menu to select a difficulty, then click or press any key
 
 ### Brick types
 
-| Brick | Type | Description |
-|-------|-------|-------------|
-| ![Blue](./web/sprites/sm-brick0.png) | **Blue** | Standard; no effect |
-| ![Red](./web/sprites/sm-brick1.png) | **Red** | Spawns a temporary red bonus ball |
-| ![Green](./web/sprites/sm-brick2.png) | **Green** | Adds a temporary extra bat |
-| ![White star](./web/sprites/sm-brick3.png) | **White star** | Grants an extra life |
-| ![Black hole](./web/sprites/sm-brick4.png) | **Black hole** | Temporarily darkens the screen |
-| ![Yellow arrows](./web/sprites/sm-brick5.png) | **Yellow arrows** | Temporarily reverse controls |
-| ![Cracked fire](./web/sprites/sm-brick6.png) | **Cracked fire** | Destroys neighbouring bricks (cascade) |
-| ![Metal](./web/sprites/sm-brick7.png) | **Metal** | Indestructible |
-| ![Warning triangle](./web/sprites/sm-brick8.png) | **Warning triangle** | Enables laser mode for a duration |
-| ![Red lens](./web/sprites/sm-brick9.png) | **Red lens** | Blurs your view and reddens its edges for 15 seconds, fading over the last five, and every one makes it worse while they overlap (web version only; Hard and Insane have one, two and three of them on levels 4 to 6, Medium at most one a level, Easy none) |
-| ![Safety net](./web/sprites/sm-brick10.png) | **Safety net** | A glowing bar floats up from below to just under the bat and stays for a few seconds, then pulses for four more as a warning before it goes; any ball that reaches it bounces back up, a little slower. Another one while it's up keeps it longer (web version only) |
-| ![Regenerator](./web/sprites/sm-brick11.png) | **Regenerator** | Brings back a tenth of the level's bricks, one at a time over a few seconds, each popping into the place of a brick you'd already broken (never one the ball is in). They come back as ordinary bricks. One on levels 2 and 3, two on each level after (web version only) |
+| Brick                                            | Type                 | Description                                                                                                                                                                                                                                                               |
+| ------------------------------------------------ | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ![Blue](./web/sprites/sm-brick0.png)             | **Blue**             | Standard; no effect                                                                                                                                                                                                                                                       |
+| ![Red](./web/sprites/sm-brick1.png)              | **Red**              | Spawns a temporary red bonus ball                                                                                                                                                                                                                                         |
+| ![Green](./web/sprites/sm-brick2.png)            | **Green**            | Adds a temporary extra bat                                                                                                                                                                                                                                                |
+| ![White star](./web/sprites/sm-brick3.png)       | **White star**       | Grants an extra life                                                                                                                                                                                                                                                      |
+| ![Black hole](./web/sprites/sm-brick4.png)       | **Black hole**       | Temporarily darkens the screen                                                                                                                                                                                                                                            |
+| ![Yellow arrows](./web/sprites/sm-brick5.png)    | **Yellow arrows**    | Temporarily reverse controls                                                                                                                                                                                                                                              |
+| ![Cracked fire](./web/sprites/sm-brick6.png)     | **Cracked fire**     | Destroys neighbouring bricks (cascade)                                                                                                                                                                                                                                    |
+| ![Metal](./web/sprites/sm-brick7.png)            | **Metal**            | Indestructible                                                                                                                                                                                                                                                            |
+| ![Warning triangle](./web/sprites/sm-brick8.png) | **Warning triangle** | Enables laser mode for a duration                                                                                                                                                                                                                                         |
+| ![Red lens](./web/sprites/sm-brick9.png)         | **Red lens**         | Blurs your view and reddens its edges for 15 seconds, fading over the last five, and every one makes it worse while they overlap (web version only; Hard and Insane have one, two and three of them on levels 4 to 6, Medium at most one a level, Easy none)              |
+| ![Safety net](./web/sprites/sm-brick10.png)      | **Safety net**       | A glowing bar floats up from below to just under the bat and stays for a few seconds, then pulses for four more as a warning before it goes; any ball that reaches it bounces back up, a little slower. Another one while it's up keeps it longer (web version only)      |
+| ![Regenerator](./web/sprites/sm-brick11.png)     | **Regenerator**      | Brings back a tenth of the level's bricks, one at a time over a few seconds, each popping into the place of a brick you'd already broken (never one the ball is in). They come back as ordinary bricks. One on levels 2 and 3, two on each level after (web version only) |
 
 Different brick types require different numbers of hits to destroy. If no brick is destroyed for a while, an extra bonus ball is introduced.
 
@@ -146,21 +150,21 @@ Copy the `web` folder to a static web server (SFTP, S3, GitHub Pages, whatever y
 
 ### Controls
 
-| Input | Action |
-|-------|--------|
-| **Click, tap or any key** | Dismiss the title card (browsers only allow sound after you've interacted with the page) |
-| **Mouse** | Moves the ball on the intro (it lights up the difficulty it's over) and the bat in play. Swipe the bat under a ball as it bounces and it spins away, its path curving the other way from the swipe until the spin dies down, and its bounces kicked sideways by the spin (web version only) |
-| **Touch** | The ball on the intro, and the bat in play, sit under your finger: put it down anywhere across the screen and the bat goes there. On a phone the intro's ball rolls with the tilt of the phone instead, like a ball on a tray. It's just for fun there: tap Easy, Medium, Hard or Insane to start |
-| **Tilt (Insane)** | On a phone, Insane plays as Hard but the bat is steered by rolling the phone like a steering wheel: about 45° either way (37° in landscape) takes it to the edge. However you're holding the phone when a level starts, or when you resume after a pause, counts as level |
-| **Click / tap** | On the intro, a click or tap on a difficulty starts the game (anywhere else does nothing); launches the ball when it's sitting on the bat; otherwise speeds all the balls up a little |
-| **Up / Down, then Enter or Space** | Choose a difficulty on the intro and start the game |
-| **Two-finger tap** | Pauses and opens the Options page: music, fullscreen, help, and quit to the menu. On the intro it offers music, fullscreen, help and credits (on a phone, that's where Help and Credits live) |
-| **Space** | Pause or resume |
-| **M** | Music on or off (remembered for your next visit) |
-| **F** | Fullscreen on or off |
-| **L** | Capture the mouse so it can't leave the page while you play (a message confirms it; **Esc** or **L** releases it, and Esc also pauses). The level banner reminds you until you do, since on a multi-monitor desk an uncaptured cursor can wander onto another screen mid-game |
-| **Q** | Back to the intro |
-| **H / C** | Help and Credits pages, also reachable from the links on the intro |
+| Input                              | Action                                                                                                                                                                                                                                                                                            |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Click, tap or any key**          | Dismiss the title card (browsers only allow sound after you've interacted with the page)                                                                                                                                                                                                          |
+| **Mouse**                          | Moves the ball on the intro (it lights up the difficulty it's over) and the bat in play. Swipe the bat under a ball as it bounces and it spins away, its path curving the other way from the swipe until the spin dies down, and its bounces kicked sideways by the spin (web version only)       |
+| **Touch**                          | The ball on the intro, and the bat in play, sit under your finger: put it down anywhere across the screen and the bat goes there. On a phone the intro's ball rolls with the tilt of the phone instead, like a ball on a tray. It's just for fun there: tap Easy, Medium, Hard or Insane to start |
+| **Tilt (Insane)**                  | On a phone, Insane plays as Hard but the bat is steered by rolling the phone like a steering wheel: about 45° either way (37° in landscape) takes it to the edge. However you're holding the phone when a level starts, or when you resume after a pause, counts as level                         |
+| **Click / tap**                    | On the intro, a click or tap on a difficulty starts the game (anywhere else does nothing); launches the ball when it's sitting on the bat; otherwise speeds all the balls up a little                                                                                                             |
+| **Up / Down, then Enter or Space** | Choose a difficulty on the intro and start the game                                                                                                                                                                                                                                               |
+| **Two-finger tap**                 | Pauses and opens the Options page: music, fullscreen, help, and quit to the menu. On the intro it offers music, fullscreen, help and credits (on a phone, that's where Help and Credits live)                                                                                                     |
+| **Space**                          | Pause or resume                                                                                                                                                                                                                                                                                   |
+| **M**                              | Music on or off (remembered for your next visit)                                                                                                                                                                                                                                                  |
+| **F**                              | Fullscreen on or off                                                                                                                                                                                                                                                                              |
+| **L**                              | Capture the mouse so it can't leave the page while you play (a message confirms it; **Esc** or **L** releases it, and Esc also pauses). The level banner reminds you until you do, since on a multi-monitor desk an uncaptured cursor can wander onto another screen mid-game                     |
+| **Q**                              | Back to the intro                                                                                                                                                                                                                                                                                 |
+| **H / C**                          | Help and Credits pages, also reachable from the links on the intro                                                                                                                                                                                                                                |
 
 Moving the bat from one side of the playfield to the other takes the same hand movement on any screen, as in the desktop version, except that the mouse is never slowed down: on a screen or window narrower than 1920 pixels the cursor's full width maps to the full playfield, so the bat can always reach the sides. A finger needs no such scaling: the bat is simply wherever the finger is.
 
@@ -176,13 +180,13 @@ The page notices when it's on a device whose main pointer is a finger and adjust
 
 Options go on the URL, for example `http://localhost:8000/?music=0&sensitivity=1.5`:
 
-| Option | Effect |
-|--------|--------|
-| `music=0` | Start with the music off, whatever was remembered from last time |
-| `volume=0.25` | Music volume, 0 to 1 (default 0.4) |
-| `sensitivity=1.5` | Mouse sensitivity multiplier (default 1) |
-| `mobile=1` / `mobile=0` | Force the phone-and-tablet behaviour on or off, instead of detecting it |
-| `debug=1` | Developer cheats: 99 lives (or `lives=6`, say, for a given number), **D** destroys every brick, a click destroys the brick under the pointer, a digit key jumps straight to that level, **P** saves a screenshot of the playfield as a PNG, and **X** on the intro sets up a busy level 5 on Hard (bricks gone and returning, every bat out, lasers, a crowd of balls) to take one of |
+| Option                  | Effect                                                                                                                                                                                                                                                                                                                                                                                |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `music=0`               | Start with the music off, whatever was remembered from last time                                                                                                                                                                                                                                                                                                                      |
+| `volume=0.25`           | Music volume, 0 to 1 (default 0.4)                                                                                                                                                                                                                                                                                                                                                    |
+| `sensitivity=1.5`       | Mouse sensitivity multiplier (default 1)                                                                                                                                                                                                                                                                                                                                              |
+| `mobile=1` / `mobile=0` | Force the phone-and-tablet behaviour on or off, instead of detecting it                                                                                                                                                                                                                                                                                                               |
+| `debug=1`               | Developer cheats: 99 lives (or `lives=6`, say, for a given number), **D** destroys every brick, a click destroys the brick under the pointer, a digit key jumps straight to that level, **P** saves a screenshot of the playfield as a PNG, and **X** on the intro sets up a busy level 5 on Hard (bricks gone and returning, every bat out, lasers, a crowd of balls) to take one of |
 
 ### Things worth knowing
 
