@@ -109,7 +109,8 @@ export const BRICK_LIVES = [1, 3, 2, 2, 4, 3, 2, 99, 3, 3, 2, 3];
 // red lens bricks (9) sit in the top rows, out of the way early on, and these layouts carry Hard's full set:
 // one on level 4, two on 5, three on 6. Medium keeps one per level and Easy none (see Game.createBricks).
 // Safety nets (10) are scattered about as freely as the laser bricks (8), and the two deepest levels have one in
-// their bottom row, where the player starts.
+// their bottom row, where the player starts. Bonus balls come in from the sides just under the bricks on level
+// 6, so its bottom row keeps metal out of the corners, where it would bounce every one straight back down.
 export const LEVEL_DEFS = [
   [
     [7, 0, 0, 0, 4, 0, 0, 0, 0, 7],
@@ -154,7 +155,7 @@ export const LEVEL_DEFS = [
     [5, 10, 0, 7, 0, 0, 0, 8, 0, 0, 6, 0, 0, 0, 8, 0, 0, 7, 0, 0, 10, 5],
     [0, 0, 0, 0, 0, 7, 0, 3, 6, 0, 7, 0, 6, 3, 0, 7, 0, 0, 0, 11, 0, 0],
     [0, 0, 0, 5, 0, 0, 0, 0, 4, 0, 0, 0, 4, 0, 0, 0, 0, 0, 5, 0, 0, 0],
-    [7, 0, 10, 0, 0, 6, 0, 0, 0, 8, 0, 0, 0, 8, 0, 0, 0, 6, 0, 10, 0, 7],
+    [0, 0, 10, 0, 7, 6, 0, 0, 0, 8, 0, 0, 0, 8, 0, 0, 6, 7, 0, 10, 0, 0],
   ],
 ];
 

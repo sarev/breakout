@@ -556,8 +556,8 @@ export class Ball {
             this.x = gfx.W - 1;
             this.vx = -vx;
           }
-          // Just above the bats, so it never re-enters inside one
-          this.y = Math.min(gfx.H * 0.8, this.game.bats[0].y - this.height);
+          // Clear of the bricks and the bats
+          this.y = this.game.bonusEntryY();
           this.vy = vy;
         }
       }

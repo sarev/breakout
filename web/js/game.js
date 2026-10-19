@@ -338,9 +338,21 @@ export class Game {
     const speed = this.targetBallSpeed(this.level) * rand(0.6, 1);
     const vx = Math.sin(angle) * speed;
     const vy = -Math.cos(angle) * speed;
-    this.balls.push(new Ball(this.sprites.bonusBall, this.sprites.redGlow, this.gfx, this, x, this.gfx.H * 0.8,
+    this.balls.push(new Ball(this.sprites.bonusBall, this.sprites.redGlow, this.gfx, this, x, this.bonusEntryY(),
       { vx: x ? -vx : vx, vy, lives }));
     return x;
+  }
+
+  /**
+   * How far down a bonus ball comes in from a side: 0.8 of the way, or lower if that's among the bricks (level 6
+   * on a wide screen reaches past it, and a ball that starts inside a brick is bounced straight down), but always
+   * above the bats, so it never comes in inside one. Both limits are only just clear: with a phone's raised bats
+   * there is little room between them on level 6.
+   */
+  bonusEntryY() {
+    const belowBricks = this.bottomEdge + this.heroBall.h2 + 1;
+    const aboveBats = this.bats[0].y - this.heroBall.h2 - 1;   // A bat's y is its top
+    return Math.min(Math.max(this.gfx.H * 0.8, belowBricks), aboveBats);
   }
 
   brickCascade(ids) {
