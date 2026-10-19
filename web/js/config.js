@@ -56,6 +56,11 @@ export const BALL_CURVE_FLATTEST = 25;
 export const BALL_CURVE_EASE = 15;
 export const BALL_SPIN_GRIP = 0.3;
 export const BALL_SPIN_BOUNCE_KEEP = 0.7;
+// The glows round the balls, and the trails they leave, are tinted these colours: the glow images are nearly white
+// at their centres, so untinted the blue ball's trail and a bonus ball's looked alike out of the corner of the eye
+// (worse still under the red lens's reddened edges)
+export const GLOW_BLUE = [150, 190, 255];   // Soft: the glows multiply by these, so white would leave them as they were
+export const GLOW_RED = [255, 150, 140];
 export const INTRO_HERO_SCALE = 2;      // The intro's hero ball is drawn this many times the size of a ball in play
 export const BAT_HEIGHT_PCT = 6;
 export const LASER_HEIGHT_PCT = 6;

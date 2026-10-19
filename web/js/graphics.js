@@ -5,7 +5,7 @@
 // in the game is a playfield pixel, and `scale` says how big that is relative to the 1080p reference.
 
 import {
-  BALL_HEIGHT_PCT, BAT_HEIGHT_PCT, HAZE_BLUR_MAX, HAZE_BLUR_PER_BRICK, HAZE_VIGNETTE_MAX,
+  BALL_HEIGHT_PCT, BAT_HEIGHT_PCT, GLOW_BLUE, GLOW_RED, HAZE_BLUR_MAX, HAZE_BLUR_PER_BRICK, HAZE_VIGNETTE_MAX,
   HAZE_VIGNETTE_PER_BRICK, INTRO_HERO_SCALE, LASER_HEIGHT_PCT, MAX_PLAYFIELD_ASPECT, MIN_PLAYFIELD_ASPECT,
   MOBILE_BAT_WIDEN, MOBILE_WIDE_ASPECT, NUM_BRICK_TYPES, REFERENCE_HEIGHT, REFERENCE_WIDTH,
 } from './config.js';
@@ -232,11 +232,12 @@ export class Graphics {
     this.sprites = {
       ball: scaleImage(im.ball, h(BALL_HEIGHT_PCT)),
       bonusBall: scaleImage(im.bonusBall, h(BALL_HEIGHT_PCT)),
-      blueGlow: scaleImage(im.blueGlow, h(BALL_HEIGHT_PCT)),
-      redGlow: scaleImage(im.redGlow, h(BALL_HEIGHT_PCT)),
+      // The glows, and so the trails, tinted a clear blue and red (see GLOW_BLUE)
+      blueGlow: tintImage(scaleImage(im.blueGlow, h(BALL_HEIGHT_PCT)), GLOW_BLUE),
+      redGlow: tintImage(scaleImage(im.redGlow, h(BALL_HEIGHT_PCT)), GLOW_RED),
       // The intro's hero ball is bigger than a ball in play, so it's easy to see and to steer onto the menu
       introBall: scaleImage(im.ball, h(BALL_HEIGHT_PCT * INTRO_HERO_SCALE)),
-      introGlow: scaleImage(im.blueGlow, h(BALL_HEIGHT_PCT * INTRO_HERO_SCALE)),
+      introGlow: tintImage(scaleImage(im.blueGlow, h(BALL_HEIGHT_PCT * INTRO_HERO_SCALE)), GLOW_BLUE),
       bat: widenImage(scaleImage(im.bat, h(BAT_HEIGHT_PCT)), this.batWiden()),
       bonusBat: widenImage(scaleImage(im.bonusBat, h(BAT_HEIGHT_PCT)), this.batWiden()),
       blueLaser: scaleImage(im.blueLaser, h(LASER_HEIGHT_PCT)),
