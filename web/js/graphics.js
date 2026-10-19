@@ -179,12 +179,12 @@ export class Graphics {
 
   /**
    * Composite the layer onto the playfield through the haze of the red lens brick: blurred, with a red vignette
-   * creeping in from the edges, both deeper the more lenses have been broken. The blur uses the context's own
+   * creeping in from the edges, both deeper the more lenses are in effect. The blur uses the context's own
    * filter where the browser has one (Chromium, Firefox); otherwise the layer is drawn down to a small canvas and
    * back up, which smears it much the same way.
    *
    * @param {CanvasRenderingContext2D} ctx The playfield context (origin already at the playfield's corner).
-   * @param {number} count How many red lens bricks have been broken this level (at least 1).
+   * @param {number} count The haze's depth (Game.haze): 1 per red lens in effect, less as each fades.
    */
   drawHazed(ctx, count) {
     const layer = this.layer;

@@ -120,7 +120,7 @@ The intro and each level have their own chiptune track, played at a volume that 
 | ![Cracked fire](./web/sprites/sm-brick6.png) | **Cracked fire** | Destroys neighbouring bricks (cascade) |
 | ![Metal](./web/sprites/sm-brick7.png) | **Metal** | Indestructible |
 | ![Warning triangle](./web/sprites/sm-brick8.png) | **Warning triangle** | Enables laser mode for a duration |
-| ![Red lens](./web/sprites/sm-brick9.png) | **Red lens** | Blurs your view and reddens its edges for the rest of the level, and every one makes it worse (web version only; Hard and Insane have one, two and three of them on levels 4 to 6, Medium at most one a level, Easy none) |
+| ![Red lens](./web/sprites/sm-brick9.png) | **Red lens** | Blurs your view and reddens its edges for 15 seconds, fading over the last five, and every one makes it worse while they overlap (web version only; Hard and Insane have one, two and three of them on levels 4 to 6, Medium at most one a level, Easy none) |
 | ![Safety net](./web/sprites/sm-brick10.png) | **Safety net** | A glowing bar floats up from below to just under the bat and stays for a few seconds; any ball that reaches it bounces back up, a little slower. Another one while it's up keeps it longer (web version only) |
 | ![Regenerator](./web/sprites/sm-brick11.png) | **Regenerator** | Brings back a tenth of the level's bricks, one at a time over a few seconds, each popping into the place of a brick you'd already broken (never one the ball is in). They come back as ordinary bricks. One on levels 2 and 3, two on each level after (web version only) |
 

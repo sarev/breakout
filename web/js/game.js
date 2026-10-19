@@ -2,11 +2,12 @@
 
 import {
   BASE_BALL_SPEED, BLACKOUT_HOLD, BLACKOUT_RATE, BORING_TIMEOUT, COLOURS, DEBUG_LIVES, ENDGAME_SPEED_BOOST,
-  FULL_VOLUME_SPEED, INVERSION_SECONDS, KICK_SPEED_GAIN, LASER_DURATION, LASER_PERIOD, LASER_SPEED_FACTOR,
-  LASER_STAGGER, LEVEL_DEFS, LEVEL_SPEED_RAMP, MAX_BALLS, MAX_SPEED_FRACTION, MIN_SPEED_FRACTION,
-  MOBILE_BAT_LIFT, NET_GAP, NET_HOLD, NET_PULSE, NET_THICKNESS, NET_TRAVEL, PHYSICS_HZ,
-  RANDOM_BRICK_TYPES, REGEN_FRACTION, REGEN_INTERVAL, REGEN_PATIENCE, SERVE_FLICK_GAIN, SERVE_JITTER,
-  SERVE_MAX_ANGLE, SERVE_TIMEOUT, STARTING_LIVES, TRAIL_FADE_GAME, WIPE_TIRED_SPEED,
+  FULL_VOLUME_SPEED, HAZE_FADE_SECONDS, HAZE_SECONDS, INVERSION_SECONDS, KICK_SPEED_GAIN, LASER_DURATION,
+  LASER_PERIOD, LASER_SPEED_FACTOR, LASER_STAGGER, LEVEL_DEFS, LEVEL_SPEED_RAMP, MAX_BALLS,
+  MAX_SPEED_FRACTION, MIN_SPEED_FRACTION, MOBILE_BAT_LIFT, NET_GAP, NET_HOLD, NET_PULSE, NET_THICKNESS,
+  NET_TRAVEL, PHYSICS_HZ, RANDOM_BRICK_TYPES, REGEN_FRACTION, REGEN_INTERVAL, REGEN_PATIENCE,
+  SERVE_FLICK_GAIN, SERVE_JITTER, SERVE_MAX_ANGLE, SERVE_TIMEOUT, STARTING_LIVES, TRAIL_FADE_GAME,
+  WIPE_TIRED_SPEED,
 } from './config.js';
 import { Ball, Bat, Brick, Laser } from './entities.js';
 import { tintImage } from './graphics.js';
@@ -63,7 +64,8 @@ export class Game {
     this.darkAlpha = null;      // Blackout state: negative = darkening, positive = clearing, null = off
     this.inversionRemaining = 0;
     this.laserRemaining = 0;
-    this.haze = 0;              // Red lens bricks broken this level: each blurs and reddens the view further
+    this.haze = 0;              // The haze's depth: each red lens adds up to 1, blurring and reddening the view
+    this.lenses = [];           // The game time each red lens was broken, while its haze lasts
     this.regen = null;          // {left, nextAt, waitingSince} while a regenerator is bringing bricks back
     this.net = null;            // The safety net while it's about: {y (its top), holdUntil, leaving}
     this.boringDeadline = 0;
@@ -142,7 +144,8 @@ export class Game {
   initialiseLevel() {
     this.gfx.buildBricks(Game.columns(this.level));
     this.createBricks();
-    this.haze = 0;   // The haze lasts for the rest of a level, and no further
+    this.haze = 0;   // A haze never outlasts its level
+    this.lenses = [];
     this.net = null;
     this.regen = null;
     if (!this.startedAt) this.startedAt = new Date();   // The first level of the game: stamped on the certificate
@@ -406,7 +409,8 @@ export class Game {
         this.laserRemaining += LASER_DURATION;
         break;
       case 9:
-        this.haze += 1;   // Worse with every one, until the level ends
+        this.lenses.push(this.time);   // Worse with every one, while their spells overlap
+        this.updateHaze();
         break;
       case 10:
         this.raiseNet();
@@ -435,6 +439,7 @@ export class Game {
     this.checkLasers(dt);
     this.animateBats(dt);
     this.animateNet(dt);
+    this.updateHaze();
     this.regenerate();
 
     if (this.serving) {
@@ -449,6 +454,17 @@ export class Game {
     }
 
     this.checkBoring();
+  }
+
+  /**
+   * The red lens haze: each lens broken counts 1 for the first `HAZE_SECONDS - HAZE_FADE_SECONDS`, then fades
+   * steadily to nothing over the last `HAZE_FADE_SECONDS`, and `haze` is the sum over the lenses still going.
+   * On the game clock, so it stands still while paused.
+   */
+  updateHaze() {
+    this.lenses = this.lenses.filter((t) => this.time - t < HAZE_SECONDS);
+    this.haze = this.lenses.reduce(
+      (sum, t) => sum + Math.min(1, (HAZE_SECONDS - (this.time - t)) / HAZE_FADE_SECONDS), 0);
   }
 
   checkInversion(dt) {

@@ -180,8 +180,10 @@ export const REGEN_PATIENCE = 2;        // Seconds to wait for a free spot befor
 export const BLACKOUT_RATE = 60;
 export const BLACKOUT_HOLD = 0.75;
 
-// Haze (red lens brick): the view blurs and a red haze creeps in from the edges for the rest of the level, and
-// every further one makes it worse
+// Haze (red lens brick): the view blurs and a red haze creeps in from the edges for HAZE_SECONDS, fading away
+// over the last HAZE_FADE_SECONDS of that. Each lens has its own spell, and while they overlap they add up.
+export const HAZE_SECONDS = 15;
+export const HAZE_FADE_SECONDS = 5;
 export const HAZE_BLUR_PER_BRICK = 2.5;     // Blur radius per brick, px at the reference scale
 export const HAZE_BLUR_MAX = 8;
 export const HAZE_VIGNETTE_PER_BRICK = 0.3; // Opacity of the red at the edges, per brick

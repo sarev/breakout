@@ -19,7 +19,7 @@ const BRICKS = [
   ['sm-brick6.png', 'Cracked fire', 'Destroys neighbouring bricks (cascade)'],
   ['sm-brick7.png', 'Metal', 'Indestructible'],
   ['sm-brick8.png', 'Warning triangle', 'Lasers for a while'],
-  ['sm-brick9.png', 'Red lens', 'Blurs your view and reddens its edges for the rest of the level; each one makes it worse'],
+  ['sm-brick9.png', 'Red lens', 'Blurs your view and reddens its edges for 15 seconds; each one makes it worse'],
   ['sm-brick10.png', 'Safety net', 'A glowing bar floats up under the bat for a few seconds and bounces any ball back, a little slower'],
   ['sm-brick11.png', 'Regenerator', 'Brings back some of the bricks you have already broken, one by one over a few seconds'],
 ];
