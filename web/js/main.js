@@ -521,7 +521,10 @@ async function boot() {
         setPaused(false);
         return;
       }
-      if (game.serving) game.serve(); else game.kickAllBalls();
+      // A click or tap launches any balls stuck to the bats (the sticky bat brick), and the waiting ball; with
+      // neither, it speeds the balls up
+      const released = game.releaseStuck();
+      if (game.serving) game.serve(); else if (!released) game.kickAllBalls();
       if (DEBUG) {
         const p = input.playfield();
         for (const brick of game.bricks) {

@@ -8,7 +8,8 @@ import {
   BALL_CURVE_EASE, BALL_CURVE_FLATTEST, BALL_CURVE_PER_TURN, BALL_SPIN_BOUNCE_KEEP, BALL_SPIN_FADE,
   BALL_SPIN_GRIP, BALL_SPIN_MAX, BALL_SPIN_MAX_TURNS, BALL_SPIN_RATE, BAT_ANGLE_JITTER, BAT_FADE_SECONDS,
   BAT_HIT_COOLDOWN, BAT_HIT_SPEED_GAIN, BAT_LIFETIME, BAT_SPIN_PER_SWIPE, BAT_VELOCITY_SMOOTHING,
-  BRICK_COLOURS, BRICK_LIVES, INTRO_DAMPING, MAX_BAT_ANGLE, METAL_HIT_PITCH, METAL_HIT_VOLUME, NET_SLOW, REGEN_POP,
+  BRICK_COLOURS, BRICK_LIVES, COLOURS, INTRO_DAMPING, MAX_BAT_ANGLE, METAL_HIT_PITCH, METAL_HIT_VOLUME, NET_SLOW,
+  REGEN_POP,
 } from './config.js';
 import { rgba } from './graphics.js';
 
@@ -157,7 +158,18 @@ export class Bat {
     // A tired bat (the anti-cheat, see wipe.js) is drawn faded, so it's obvious why it isn't keeping up
     if (this.game.wipe.tired(this.game.time)) alpha = Math.min(alpha, 0.35);
     if (alpha < 1) ctx.globalAlpha = alpha;
+    // Sticky bats glow, pulsing (Game.stickyGlow()), each in its own colour: blue for the hero bat, green for
+    // the bonus bats
+    const glow = this.game.stickyGlow();
+    if (glow > 0) {
+      ctx.shadowColor = rgba(this.id === 0 ? COLOURS.sticky : COLOURS.green, glow);
+      ctx.shadowBlur = 30 * this.gfx.scale;
+    }
     ctx.drawImage(this.image, this.x - this.w2, this.y);
+    if (glow > 0) {
+      ctx.shadowColor = 'transparent';
+      ctx.shadowBlur = 0;
+    }
     if (alpha < 1) ctx.globalAlpha = 1;
   }
 }
@@ -329,6 +341,7 @@ export class Ball {
     this.angle = 0;             // The sprite's rotation, radians clockwise: it spins as it travels (spin())
     this.spinSense = 1;         // +1 clockwise, -1 anticlockwise: the last clear direction of travel
     this.english = 0;           // Spin from the bat, radians a second clockwise: it bends the path (curve())
+    this.stuck = null;          // {bat, dx, speed} while it's stuck to a bat (the sticky bat brick)
   }
 
   /**
@@ -643,7 +656,46 @@ export class Ball {
       this.kick(gain);
     }
     this.lastBatHit = now;
+
+    // Sticky bats keep it, where it touched
+    if (this.game.stickyRemaining > 0) this.stick(bat);
     return true;
+  }
+
+  /**
+   * Stick to a bat (the sticky bat brick): the ball stops on top of it where it touched, as far along as it can
+   * sit, so several balls don't all clump in the middle, and keeps the speed it had for its launch.
+   *
+   * @param {Bat} bat
+   */
+  stick(bat) {
+    const reach = Math.max(0, bat.w2 - this.w2);
+    this.stuck = { bat, dx: Math.max(-reach, Math.min(reach, this.x - bat.x)), speed: Math.hypot(this.vx, this.vy) };
+    this.vx = 0;
+    this.vy = 0;
+    this.english = 0;
+    this.followBat();
+  }
+
+  /** Ride along on the bat it's stuck to. */
+  followBat() {
+    this.x = this.stuck.bat.x + this.stuck.dx;
+    this.y = this.stuck.bat.y - this.h2 - 1;
+  }
+
+  /**
+   * Leave the bat it's stuck to: aimed by where it sits, as a hit there would aim it (the centre straight up,
+   * the ends out to MAX_BAT_ANGLE), at the speed it arrived with, and spun by the bat's movement.
+   */
+  release() {
+    const { bat, dx, speed } = this.stuck;
+    this.stuck = null;
+    const offset = Math.max(-1, Math.min(1, dx / bat.w2));
+    const angle = (offset * MAX_BAT_ANGLE * Math.PI) / 180;
+    this.vx = speed * Math.sin(angle);
+    this.vy = -speed * Math.cos(angle);
+    this.swipeSpin(bat);
+    this.lastBatHit = this.game.time;
   }
 
   /**

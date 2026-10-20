@@ -24,6 +24,7 @@ const BRICKS = [
   ['sm-brick9.webp', 'Red lens', 'Blurs your view and reddens its edges for 15 seconds; each one makes it worse'],
   ['sm-brick10.webp', 'Safety net', 'A glowing bar floats up under the bat for a few seconds and bounces any ball back, a little slower; it pulses when it is about to go'],
   ['sm-brick11.webp', 'Regenerator', 'Brings back some of the bricks you have already broken, one by one over a few seconds'],
+  ['sm-brick12.webp', 'Sticky bat', 'For ten seconds, a ball that lands on a bat sticks to it, where it landed, until you click or tap to launch it; the bats glow, pulsing faster near the end, when every ball still stuck is launched'],
 ];
 
 // The controls table differs by device: a phone or tablet has no keyboard, so it gets the touch gestures only

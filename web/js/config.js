@@ -81,6 +81,7 @@ export const COLOURS = {
   haze: [255, 48, 48],
   net: [64, 160, 255],
   regen: [224, 64, 208],
+  sticky: [80, 200, 255],
   black: [0, 0, 0],
   lives: [196, 224, 255],
   advance: [128, 255, 192],
@@ -96,14 +97,14 @@ export const COLOURS = {
 };
 export const BRICK_COLOURS = [
   COLOURS.blue, COLOURS.red, COLOURS.green, COLOURS.white, COLOURS.magenta, COLOURS.yellow, COLOURS.fire,
-  COLOURS.metal, COLOURS.laser, COLOURS.haze, COLOURS.net, COLOURS.regen,
+  COLOURS.metal, COLOURS.laser, COLOURS.haze, COLOURS.net, COLOURS.regen, COLOURS.sticky,
 ];
 
 // ---------------------------------------------------------------------------------------------------------------
 // Bricks and levels
 // ---------------------------------------------------------------------------------------------------------------
 
-export const NUM_BRICK_TYPES = 12;
+export const NUM_BRICK_TYPES = 13;
 
 // The "Level N..." banner introduces each kind of brick the first time a game meets it (which level that is
 // depends on the difficulty: Easy has no metal, for one), with its picture, its name and a few words
@@ -120,6 +121,7 @@ export const BRICK_INTROS = [
   ['Red lens', 'Blurs your view'],
   ['Safety net', 'A net under the bat'],
   ['Regenerator', 'Brings bricks back'],
+  ['Sticky bat', 'Catches balls on the bat'],
 ];
 // The banner stays up this long, plus a little for each brick it introduces, up to a limit (a click skips it)
 export const SPLASH_TIME = 3;
@@ -132,16 +134,16 @@ export const SWAY_WALL_GAP = 1;
 
 // Hits to destroy each brick type: blue, red (extra ball), green (extra bat), white (extra life), black (blackout),
 // yellow (inversion), fire (cascade), metal (indestructible), dark blue (lasers), red lens (haze), safety net,
-// regenerator
-export const BRICK_LIVES = [1, 3, 2, 2, 4, 3, 2, 99, 3, 3, 2, 3];
+// regenerator, sticky bat
+export const BRICK_LIVES = [1, 3, 2, 2, 4, 3, 2, 99, 3, 3, 2, 3, 2];
 
 // Brick layouts. 0 is filled randomly with blue / red / green by difficulty; 7 is metal; see breakout.py.
 //
 // The kinds of brick arrive gradually, so the level banner never has more than two to introduce after the
 // first level (see BRICK_INTROS), and the swaying levels bring something of their own: level 1 has only the
-// random fill and an extra life, then 2 brings fire and lasers, 3 (2a) metal, in its swaying row, 4 safety
-// nets and black holes, 5 (3a) the regenerator, 6 inversion and 7 (4a) the red lens. Easy and Medium, which
-// swap some kinds for others, meet the rest in the same order.
+// random fill and an extra life, then 2 brings fire and lasers, 3 (2a) metal, in its swaying row, and the
+// sticky bat (12), 4 safety nets and black holes, 5 (3a) the regenerator, 6 inversion and 7 (4a) the red lens.
+// Easy and Medium, which swap some kinds for others, meet the rest in the same order.
 //
 // The red lens bricks (9) sit in the top rows, out of the way early on, and these layouts carry Hard's full
 // set: one on level 7 (4a), two on stage 5, three on stage 6. Medium keeps one per level and Easy none (see
@@ -169,15 +171,16 @@ export const LEVEL_DEFS = [
     [0, 8, 0, 0, 0, 0, 0, 0, 6, 0, 0, 0],
     [0, 0, 0, 0, 0, 6, 0, 0, 0, 3, 0, 0],
   ] },
-  // 2a: level 2 with a swaying row of metal under its top row, and a second extra life up there behind it
+  // 2a: level 2 with a swaying row of metal under its top row, a second extra life up there behind it, and a
+  // sticky bat brick in the bottom row
   { stage: 2, rows: [
     [0, 0, 3, 0, 0, 0, 3, 0, 0, 0, 0, 0],
     { cells: [_, _, _, 7, 7, _, _, 7, 7, _, _, _], sway: 2, period: 6 },
     [0, 8, 0, 0, 0, 0, 0, 0, 6, 0, 0, 0],
-    [0, 0, 0, 0, 0, 6, 0, 0, 0, 3, 0, 0],
+    [0, 0, 12, 0, 0, 6, 0, 0, 0, 3, 0, 0],
   ] },
   { stage: 3, rows: [
-    [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0, 0, 12, 0, 0, 0, 0, 0, 0, 0],
     [0, 7, 0, 6, 0, 8, 0, 3, 0, 0, 10, 0, 7, 0],
     [0, 0, 7, 6, 0, 0, 4, 0, 0, 0, 6, 7, 0, 0],
     [0, 0, 0, 0, 10, 0, 0, 7, 8, 0, 0, 0, 0, 3],
@@ -185,14 +188,14 @@ export const LEVEL_DEFS = [
   // 3a: level 3 with a row swaying through the middle: two blocks of metal, each with a breakable brick in it,
   // and a regenerator below them
   { stage: 3, rows: [
-    [0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    [0, 0, 0, 3, 0, 0, 12, 0, 0, 0, 0, 0, 0, 0],
     [0, 7, 0, 6, 0, 8, 0, 3, 0, 0, 10, 0, 7, 0],
     { cells: [_, _, _, 7, 0, 7, _, _, 7, 0, 7, _, _, _], sway: 2, period: 5 },
     [0, 0, 7, 6, 0, 0, 4, 0, 11, 0, 6, 7, 0, 0],
     [0, 0, 0, 0, 10, 0, 0, 7, 8, 0, 0, 0, 0, 3],
   ] },
   { stage: 4, rows: [
-    [0, 6, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0],
+    [0, 6, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 12, 0, 0, 0],
     [0, 0, 6, 0, 0, 11, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0],
     [8, 0, 0, 4, 0, 5, 0, 0, 0, 0, 5, 0, 6, 0, 10, 0],
     [0, 0, 0, 0, 0, 7, 0, 3, 6, 0, 7, 0, 0, 0, 0, 0],
@@ -202,7 +205,7 @@ export const LEVEL_DEFS = [
   // 4a: level 4 with two swaying rows going opposite ways, in place of its fourth and sixth rows (the net and
   // the lasers from the bottom row move into the new one, and the lost extra life rides in the lower swaying row)
   { stage: 4, rows: [
-    [0, 6, 0, 3, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0],
+    [0, 6, 0, 3, 0, 0, 0, 0, 3, 0, 0, 0, 12, 0, 0, 0],
     [0, 0, 6, 0, 0, 11, 0, 0, 4, 0, 0, 0, 9, 0, 0, 0],
     { cells: [_, _, _, 7, 0, _, _, _, _, _, _, 0, 7, _, _, _], sway: 2, period: 7 },
     [8, 0, 0, 4, 0, 5, 0, 0, 0, 0, 5, 0, 6, 0, 10, 0],
@@ -210,10 +213,10 @@ export const LEVEL_DEFS = [
     [5, 0, 10, 0, 0, 0, 7, 7, 7, 7, 0, 11, 0, 4, 0, 8],
   ] },
   { stage: 5, rows: [
-    [0, 0, 0, 0, 0, 0, 0, 0, 0, 7, 3, 0, 0, 0, 0, 0, 9, 0, 0, 0],
+    [0, 0, 0, 12, 0, 0, 0, 0, 0, 7, 3, 0, 0, 0, 0, 0, 9, 0, 0, 0],
     [0, 0, 0, 6, 0, 0, 0, 0, 0, 5, 7, 0, 0, 4, 0, 9, 0, 0, 6, 0],
     [0, 11, 0, 0, 6, 0, 0, 8, 0, 0, 4, 0, 0, 0, 10, 0, 0, 0, 0, 0],
-    [0, 0, 4, 0, 0, 6, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 8, 0, 0],
+    [0, 0, 4, 0, 0, 6, 0, 0, 0, 3, 0, 0, 0, 12, 0, 0, 0, 8, 0, 0],
     [0, 0, 0, 0, 7, 0, 0, 0, 0, 4, 7, 0, 6, 0, 0, 7, 0, 0, 0, 0],
     [3, 0, 5, 7, 0, 0, 0, 0, 7, 7, 0, 6, 0, 0, 11, 0, 7, 4, 0, 0],
     [0, 7, 7, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 7, 7, 5],
@@ -222,11 +225,11 @@ export const LEVEL_DEFS = [
   // 5a: level 5 with two swaying rows going opposite ways, in place of its fifth and seventh rows, and two more
   // extra lives in the bottom row
   { stage: 5, rows: [
-    [0, 0, 0, 0, 0, 0, 0, 0, 0, 7, 3, 0, 0, 0, 0, 0, 9, 0, 0, 0],
+    [0, 0, 0, 12, 0, 0, 0, 0, 0, 7, 3, 0, 0, 0, 0, 0, 9, 0, 0, 0],
     [0, 0, 0, 6, 0, 0, 0, 0, 0, 5, 7, 0, 0, 4, 0, 9, 0, 0, 6, 0],
     { cells: [_, _, _, _, 7, 0, _, _, _, 7, 7, _, _, _, 0, 7, _, _, _, _], sway: 3, period: 7 },
     [0, 11, 0, 0, 6, 0, 0, 8, 0, 0, 4, 0, 0, 0, 10, 0, 0, 0, 0, 0],
-    [0, 0, 4, 0, 0, 6, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 8, 0, 0],
+    [0, 0, 4, 0, 0, 6, 0, 0, 0, 3, 0, 0, 0, 12, 0, 0, 0, 8, 0, 0],
     { cells: [_, _, _, 7, 0, 0, 7, _, _, _, _, _, _, 7, 0, 0, 7, _, _, _], sway: -2, period: 5 },
     [3, 0, 5, 7, 0, 0, 0, 0, 7, 7, 0, 6, 0, 0, 11, 0, 7, 4, 0, 0],
     [0, 0, 0, 3, 0, 10, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 3, 0, 0, 0],
@@ -234,7 +237,7 @@ export const LEVEL_DEFS = [
   { stage: 6, rows: [
     [7, 0, 0, 9, 0, 0, 5, 0, 0, 4, 0, 0, 4, 0, 0, 5, 0, 0, 0, 0, 0, 7],
     [0, 10, 7, 0, 6, 0, 0, 0, 0, 0, 8, 3, 0, 0, 9, 0, 0, 6, 0, 7, 10, 0],
-    [0, 4, 0, 0, 0, 6, 0, 0, 5, 0, 9, 0, 5, 0, 0, 6, 0, 0, 0, 4, 0, 0],
+    [0, 4, 12, 0, 0, 6, 0, 0, 5, 0, 9, 0, 5, 0, 0, 6, 0, 12, 0, 4, 0, 0],
     [0, 0, 11, 0, 0, 0, 7, 7, 7, 6, 0, 0, 6, 7, 7, 7, 0, 0, 0, 0, 0, 0],
     [0, 0, 4, 0, 0, 0, 7, 0, 0, 4, 0, 8, 4, 0, 0, 7, 0, 0, 0, 4, 0, 0],
     [0, 6, 0, 0, 7, 0, 0, 0, 6, 0, 7, 0, 0, 6, 0, 0, 7, 0, 0, 0, 6, 0],
@@ -248,7 +251,7 @@ export const LEVEL_DEFS = [
   { stage: 6, rows: [
     [7, 0, 0, 9, 0, 0, 5, 0, 0, 4, 0, 0, 4, 0, 0, 5, 0, 0, 0, 0, 0, 7],
     [0, 10, 7, 0, 6, 0, 0, 0, 0, 0, 8, 3, 0, 0, 9, 0, 0, 6, 0, 7, 10, 0],
-    [0, 4, 0, 0, 0, 6, 0, 0, 5, 0, 9, 0, 5, 0, 0, 6, 0, 0, 0, 4, 0, 0],
+    [0, 4, 12, 0, 0, 6, 0, 0, 5, 0, 9, 0, 5, 0, 0, 6, 0, 12, 0, 4, 0, 0],
     { cells: [_, _, _, _, 7, 0, 7, _, _, _, _, _, _, _, _, 7, 0, 7, _, _, _, _], sway: 3, period: 6 },
     [0, 0, 11, 0, 0, 0, 7, 7, 7, 6, 0, 0, 6, 7, 7, 7, 0, 0, 0, 0, 0, 0],
     [3, 6, 0, 0, 7, 0, 0, 0, 6, 0, 7, 0, 0, 6, 0, 0, 7, 0, 0, 0, 6, 3],
@@ -337,6 +340,14 @@ export const BAT_ANGLE_JITTER = 2;      // Degrees of randomness on each bat hit
 export const BAT_HIT_COOLDOWN = 0.25;   // No further bat hits add speed for this long after one
 
 // Bats
+// Sticky bat (12, web only): for a while a ball that lands on a bat stops there, where it touched, and rides
+// along with the bat until a click or tap launches it (aimed by where it sits, as a hit there would aim it, and
+// spun by the bat's movement), the time runs out, or the bonus bat it's on goes. The bats glow while it lasts,
+// pulsing, and faster over the last few seconds.
+export const STICKY_DURATION = 10;        // Seconds per sticky bat brick (they stack)
+export const STICKY_WARNING = 3;          // Seconds before the end when the glow's pulse quickens
+export const STICKY_PULSE = 1.2;          // Seconds per pulse of the glow...
+export const STICKY_WARNING_PULSE = 0.4;  // ...and in the warning
 export const BAT_LIFETIME = 10;         // Seconds a bonus bat stays in play
 export const BAT_FADE_SECONDS = 2;      // Warning fade before it goes
 export const BAT_VELOCITY_SMOOTHING = 0.06; // Time constant for the smoothed sideways speed
@@ -390,7 +401,7 @@ export const SOUND_NAMES = [
   'ball-hit', 'bat-hit', 'bonus', 'brick-hit', 'click', 'die', 'drop', 'net', 'respawn', 'restore', 'tick',
   'wall-hit', 'win',
   'explode0', 'explode1', 'explode2', 'explode3', 'explode4', 'explode5', 'explode6', 'explode7', 'explode8',
-  'explode9', 'explode11',   // No explode10: the safety net's sound is 'net', as it rises
+  'explode9', 'explode11', 'explode12',   // No explode10: the safety net's sound is 'net', as it rises
   'laser0', 'laser1', 'laser2',
 ];
 export const MUSIC_VOLUME = 0.4;

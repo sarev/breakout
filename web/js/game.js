@@ -3,6 +3,7 @@
 import {
   BASE_BALL_SPEED, BLACKOUT_HOLD, BLACKOUT_RATE, BORING_TIMEOUT, COLOURS, DEBUG_LIVES, ENDGAME_SPEED_BOOST,
   FULL_VOLUME_SPEED, HAZE_FADE_SECONDS, HAZE_SECONDS, INVERSION_SECONDS, KICK_SPEED_GAIN, LASER_DURATION,
+  STICKY_DURATION, STICKY_PULSE, STICKY_WARNING, STICKY_WARNING_PULSE,
   LASER_PERIOD, LASER_SPEED_FACTOR, LASER_STAGGER, LEVEL_DEFS, LEVEL_SPEED_RAMP, MAX_BALLS,
   MAX_SPEED_FRACTION, MIN_SPEED_FRACTION, MOBILE_BAT_LIFT, NET_GAP, NET_HOLD, NET_PULSE, NET_THICKNESS,
   NET_TRAVEL, NET_WARNING, NET_WARNING_FAINTEST, NET_WARNING_PULSE, PHYSICS_HZ, RANDOM_BRICK_TYPES,
@@ -66,6 +67,7 @@ export class Game {
     this.darkAlpha = null;      // Blackout state: negative = darkening, positive = clearing, null = off
     this.inversionRemaining = 0;
     this.laserRemaining = 0;
+    this.stickyRemaining = 0;   // Seconds of sticky bats left (brick 12)
     this.haze = 0;              // The haze's depth: each red lens adds up to 1, blurring and reddening the view
     this.lenses = [];           // The game time each red lens was broken, while its haze lasts
     this.regen = null;          // {left, nextAt, waitingSince} while a regenerator is bringing bricks back
@@ -251,6 +253,7 @@ export class Game {
     this.balls.length = 1;
     this.lasers = [];
     this.laserRemaining = 0;
+    this.stickyRemaining = 0;
     this.gfx.clearTrails();
     this.startServe();
   }
@@ -330,6 +333,10 @@ export class Game {
       ball.setImage(ball === this.heroBall ? this.sprites.ball : this.sprites.bonusBall,
         ball === this.heroBall ? this.sprites.blueGlow : this.sprites.redGlow);
       ball.x *= sx; ball.y *= sy; ball.vx *= sx; ball.vy *= sy;
+      if (ball.stuck) {
+        ball.stuck.dx *= sx;
+        ball.followBat();
+      }
     }
     this.gfx.buildBackground(Game.stage(this.level));
     if (this.bricks.length) {
@@ -378,6 +385,7 @@ export class Game {
     this.heroBall.vx = 0;
     this.heroBall.vy = 0;
     this.heroBall.english = 0;   // Served clean, whatever it was doing at the end of the last level
+    this.heroBall.stuck = null;
     this.holdHeroBall();
   }
 
@@ -523,6 +531,9 @@ export class Game {
       case 11:
         this.startRegeneration();
         break;
+      case 12:
+        this.stickyRemaining += STICKY_DURATION;
+        break;
       default:
         break;
     }
@@ -542,6 +553,7 @@ export class Game {
 
     this.checkInversion(dt);
     this.checkLasers(dt);
+    this.checkSticky(dt);
     this.animateBats(dt);
     this.animateNet(dt);
     this.updateHaze();
@@ -642,6 +654,39 @@ export class Game {
     });
   }
 
+  /** Count down the sticky bats, and let every stuck ball go when they're over. */
+  checkSticky(dt) {
+    if (this.stickyRemaining <= 0) return;
+    this.stickyRemaining = Math.max(0, this.stickyRemaining - dt);
+    if (this.stickyRemaining === 0) this.releaseStuck();
+  }
+
+  /**
+   * Launch the balls stuck to the bats, or to just one bat: on a click or tap, at the end of the sticky bats,
+   * and when a bonus bat goes.
+   *
+   * @param {Bat} [bat] Only the balls on this bat.
+   * @returns {number} How many were launched.
+   */
+  releaseStuck(bat = null) {
+    let n = 0;
+    for (const ball of this.balls) {
+      if (ball.stuck && (bat === null || ball.stuck.bat === bat)) {
+        ball.release();
+        n++;
+      }
+    }
+    if (n) this.sfx.play('bat-hit', (bat || this.bats[0]).x / this.gfx.W, 0.5);
+    return n;
+  }
+
+  /** The sticky bats' glow, 0 (none) to 1: a slow pulse, quickening over the last STICKY_WARNING seconds. */
+  stickyGlow() {
+    if (this.stickyRemaining <= 0) return 0;
+    const period = this.stickyRemaining < STICKY_WARNING ? STICKY_WARNING_PULSE : STICKY_PULSE;
+    return 0.6 + 0.4 * Math.cos((2 * Math.PI * this.time) / period);
+  }
+
   checkBoring() {
     if (this.time > this.boringDeadline) {
       this.boringDeadline = this.time + BORING_TIMEOUT;
@@ -666,6 +711,7 @@ export class Game {
       if (bat.expired()) lost.push(bat);
     }
     for (const bat of lost) {
+      this.releaseStuck(bat);   // Any balls it was holding go as it does
       this.bats.splice(this.bats.indexOf(bat), 1);
       this.extraBats.push(bat);
     }
@@ -675,6 +721,10 @@ export class Game {
     const lost = [];
     for (const ball of this.balls) {
       if (this.serving && ball === this.heroBall) continue;
+      if (ball.stuck) {
+        ball.followBat();
+        continue;
+      }
       ball.move(dt, this.level);
       if (ball.dropped) {
         ball.dropped = false;
@@ -700,6 +750,7 @@ export class Game {
         const a = this.balls[i];
         const b = this.balls[j];
         if (this.serving && (a === this.heroBall || b === this.heroBall)) continue;
+        if (a.stuck || b.stuck) continue;
         a.checkBall(b);
       }
     }
