@@ -408,13 +408,19 @@ export const SOUND_NAMES = [
 ];
 export const MUSIC_VOLUME = 0.4;
 export const MUSIC_FADE_SECONDS = 0.8;
-export const MUSIC_FILES = { intro: 'intro.ogg', stage1: 'stage1.ogg', stage2: 'stage2.ogg', boss: 'boss.ogg' };
+export const MUSIC_FILES = {
+  intro: 'intro.ogg', stage1: 'stage1.ogg', stage2: 'stage2.ogg', boss: 'boss.ogg',
+  action1: 'action1.ogg', action2: 'action2.ogg', action3: 'action3.ogg', ending: 'ending.ogg',
+};
 
-// What each stage plays, as [track, tempo]. Tempo changes pitch too, old-school style.
+// What each stage plays, as [track, tempo] (a tempo other than 1 changes the pitch too, old-school style): the
+// first three stages have "Chiptune Adventures", the last three the "Retro Game Music Pack" (see CREDITS.txt)
 export const MUSIC_LEVEL_PLAN = [
   ['stage1', 1.0], ['stage2', 1.0], ['boss', 1.0],
-  ['stage1', 1.2], ['stage2', 1.1], ['boss', 1.2],
+  ['action1', 1.0], ['action2', 1.0], ['action3', 1.0],
 ];
+// The certificate plays the ending, once the level's tune has faded under the win or game-over sound
+export const MUSIC_ENDING_DELAY = 1.5;   // Seconds
 
 // Full volume for speed-scaled effects is reached at this speed (px/s at the reference resolution)
 export const FULL_VOLUME_SPEED = 3000;

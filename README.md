@@ -107,7 +107,7 @@ If this parameter isn't passed and there are multiple monitors detected, you wil
 
 ### Music
 
-The intro and each level have their own chiptune track, played at a volume that leaves room for the sound effects. Levels 4 to 6 bring the first three tunes back faster (and higher), old-school style. In the browser version a level that goes back over an earlier one carries on with its tune, so levels 6 to 11 have the faster ones. Start with it off using `--no-music`, or set the level with `--music-volume 0.25` (0 to 1). The tracks live in `web/music`; see `web/music/CREDITS.txt`.
+The intro and each level have their own chiptune track, played at a volume that leaves room for the sound effects. Levels 4 to 6 bring the first three tunes back faster (and higher), old-school style. In the browser version a level that goes back over an earlier one carries on with its tune; levels 6 to 11 have three more tunes of their own, by the same composer, and the certificate at the end of a game plays an ending. Start with it off using `--no-music`, or set the level with `--music-volume 0.25` (0 to 1). The tracks live in `web/music`; see `web/music/CREDITS.txt`.
 
 - **Intro screen**: Move the mouse over the menu to select a difficulty, then click or press any key
 
@@ -215,7 +215,7 @@ Run with `--debug` to enable a few developer cheats during play: **D** destroys 
 
 - Pygame community ( https://www.pygame.org/contribute.html ) for an excellent Python module
 - The very useful sfxr ( https://sfxr.me/ ) for sound effect generation
-- Background music: "Chiptune Adventures" by Juhani Junkala ( https://juhanijunkala.com/ ), released under CC0 via OpenGameArt ( https://opengameart.org/content/4-chiptunes-adventure )
+- Background music: "Chiptune Adventures" and the "Retro Game Music Pack" by Juhani Junkala ( https://juhanijunkala.com/ ), released under CC0 via OpenGameArt ( https://opengameart.org/content/4-chiptunes-adventure and https://opengameart.org/content/5-chiptunes-action )
 - A nod to Arkanoid, Fireball 2 (Archimedes), and other classics
 - Final level background: Rosette Nebula ( Dylan O'Donnell, https://deography.com/will-you-accept-this-rose-ngc2237/ )
 - Thanks to ChatGPT for art assistance

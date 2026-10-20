@@ -83,8 +83,9 @@ const CREDITS = `
 Fireball 2 on the Archimedes, and the other classics.</p>
 <ul>
 <li>Sound effects made with <a href="https://sfxr.me/" target="_blank" rel="noopener">sfxr</a></li>
-<li>Music: &ldquo;Chiptune Adventures&rdquo; by <a href="https://juhanijunkala.com/" target="_blank" rel="noopener">Juhani Junkala</a>,
-released under CC0 via <a href="https://opengameart.org/content/4-chiptunes-adventure" target="_blank" rel="noopener">OpenGameArt</a></li>
+<li>Music: &ldquo;Chiptune Adventures&rdquo; and the &ldquo;Retro Game Music Pack&rdquo; by <a href="https://juhanijunkala.com/" target="_blank" rel="noopener">Juhani Junkala</a>,
+released under CC0 via OpenGameArt (<a href="https://opengameart.org/content/4-chiptunes-adventure" target="_blank" rel="noopener">1</a>,
+<a href="https://opengameart.org/content/5-chiptunes-action" target="_blank" rel="noopener">2</a>)</li>
 <li>Final level background: the Rosette Nebula, by <a href="https://deography.com/will-you-accept-this-rose-ngc2237/" target="_blank" rel="noopener">Dylan O'Donnell</a></li>
 <li>Thanks to ChatGPT for art assistance</li>
 <li>Web conversion by <a href="https://www.anthropic.com/claude" target="_blank" rel="noopener">Anthropic's Claude</a></li>

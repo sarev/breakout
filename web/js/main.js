@@ -21,7 +21,7 @@ import { AudioSystem, Music, Sfx } from './audio.js';
 import { loadAudioSet, loadImages } from './assets.js';
 import { Certificate } from './certificate.js';
 import {
-  COLOURS, LEVEL_DEFS, MAX_BALLS, MAX_FRAME_DT, MUSIC_FILES, NUM_BRICK_TYPES, RANDOM_BRICK_TYPES, SOUND_NAMES,
+  COLOURS, LEVEL_DEFS, MAX_BALLS, MAX_FRAME_DT, MUSIC_ENDING_DELAY, MUSIC_FILES, NUM_BRICK_TYPES, RANDOM_BRICK_TYPES, SOUND_NAMES,
   SPLASH_BRICK_TIME, SPLASH_MAX_TIME, SPLASH_TIME,
 } from './config.js';
 import { Game } from './game.js';
@@ -312,8 +312,9 @@ async function boot() {
    * @param {boolean} won True for the last level cleared, false for the last life lost.
    */
   function showCertificate(won) {
-    music.stop();
+    music.stop();   // The level's tune fades under the win or game-over sound, then the ending plays
     audio.sfx.play(won ? 'win' : 'die');
+    setTimeout(() => { if (scene === 'over') music.play('ending'); }, MUSIC_ENDING_DELAY * 1000);
     input.releaseLock();
     game.clearInversion();
     notice = null;   // A notice from the last seconds of play would sit over the certificate's text
