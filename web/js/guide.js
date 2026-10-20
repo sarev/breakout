@@ -74,9 +74,11 @@ export function drawBallGuide(gfx, ctx, images, y, alpha) {
 }
 
 /**
- * The "Level N..." banner's introductions: a heading, then a card for each kind of brick new to this game (its
- * picture, its name and a few words), in centred rows between `top` and `bottom`, the cards shrunk if need be to
- * fit, and faded in one after another.
+ * The "Level N..." banner's introductions: a heading, then an entry for each kind of brick new to this game, its
+ * picture with its name and a few words beside it (as in the gate's ball guide), faded in one after another.
+ * The entries go in columns of a width that suits the longest, fewest rows that fit across, each row centred,
+ * and all of it shrunk if need be until the rows fit between the heading and `bottom`. Side by side rather than
+ * the words under the picture leaves room across the screen for text large enough to read on a phone.
  *
  * @param {object} gfx Graphics.
  * @param {CanvasRenderingContext2D} ctx
@@ -84,7 +86,7 @@ export function drawBallGuide(gfx, ctx, images, y, alpha) {
  * @param {number[]} types The brick types to introduce, in order.
  * @param {number} elapsed Seconds since the banner went up.
  * @param {number} top Playfield y of the heading.
- * @param {number} bottom Playfield y the cards must end above.
+ * @param {number} bottom Playfield y the entries must end above.
  */
 export function drawBrickIntros(gfx, ctx, images, types, elapsed, top, bottom) {
   const n = types.length;
@@ -93,34 +95,44 @@ export function drawBrickIntros(gfx, ctx, images, types, elapsed, top, bottom) {
   const fade = (delay) => Math.max(0, Math.min(0.9, (elapsed - delay) / 0.5));
   gfx.text(ctx, n === 1 ? 'New brick' : 'New bricks', { x: gfx.W / 2, y: top, size: 70, colour: COLOURS.presskey, glow: COLOURS.neonCyan, alpha: fade(0.2) });
 
-  // A card at full size, in playfield pixels. Fewest rows that fit across, the cards spread evenly over them
-  // (eight make two rows of four, not five and three), and all of it shrunk until the rows fit the height.
-  const card = { w: 430 * s, h: 245 * s, icon: 120 * s };
+  const nameLook = { size: 72, bold: true };
+  const wordsLook = { size: 60 };
+  // An entry at full size, in playfield pixels: the picture, the space after it, from one row to the next and
+  // between the columns; its width is the picture and the widest name or words
+  const icon = 130 * s;
+  const gap = 30 * s;
+  const step = 165 * s;
+  const between = 70 * s;
+  const text = Math.max(...types.flatMap((type) => [
+    gfx.textWidth(ctx, BRICK_INTROS[type][0], nameLook), gfx.textWidth(ctx, BRICK_INTROS[type][1], wordsLook)]));
+  const entry = icon + gap + text;
   const area = bottom - (top + 55 * s);
   let k = 1;
   let cols;
   let rows;
   for (;;) {
-    cols = Math.max(1, Math.min(n, Math.floor((gfx.W * 0.96) / (card.w * k))));
+    cols = Math.max(1, Math.min(n, Math.floor((gfx.W * 0.96 + between * k) / ((entry + between) * k))));
     rows = Math.ceil(n / cols);
-    cols = Math.ceil(n / rows);
-    if (rows * card.h * k <= area || k < 0.4) break;
+    cols = Math.ceil(n / rows);   // Spread evenly over the rows: eight make two rows of four, not five and three
+    if (rows * step * k <= area || k < 0.4) break;
     k *= 0.9;
   }
-  const first = top + 55 * s + (area - rows * card.h * k) / 2;   // The rows are centred in the space they have
+  const first = top + 55 * s + (area - rows * step * k) / 2 + (step * k) / 2;   // The rows are centred in the space they have
 
   types.forEach((type, i) => {
     const row = Math.floor(i / cols);
     const inRow = Math.min(cols, n - row * cols);
-    const x = gfx.W / 2 + ((i % cols) - (inRow - 1) / 2) * card.w * k;
-    const y = first + row * card.h * k;
+    const width = inRow * entry * k + (inRow - 1) * between * k;
+    const left = (gfx.W - width) / 2 + (i % cols) * (entry + between) * k;
+    const cy = first + row * step * k;
     const alpha = fade(0.4 + 0.15 * i);
-    const px = card.icon * k;
+    const px = icon * k;
     ctx.globalAlpha = alpha;
-    ctx.drawImage(gfx.icon(images[`brick${type}`], px), x - px / 2, y);
+    ctx.drawImage(gfx.icon(images[`brick${type}`], px), left, cy - px / 2);
     ctx.globalAlpha = 1;
     const [name, words] = BRICK_INTROS[type];
-    gfx.text(ctx, name, { x, y: y + px + 36 * k * s, size: 50 * k, colour: COLOURS.steel, alpha, bold: true });
-    gfx.text(ctx, words, { x, y: y + px + 82 * k * s, size: 40 * k, colour: COLOURS.presskey, alpha });
+    const x = left + px + gap * k;
+    gfx.text(ctx, name, { x, y: cy - 28 * s * k, size: nameLook.size * k, colour: COLOURS.steel, alpha, bold: true, align: 'left' });
+    gfx.text(ctx, words, { x, y: cy + 30 * s * k, size: wordsLook.size * k, colour: COLOURS.presskey, alpha, align: 'left' });
   });
 }
