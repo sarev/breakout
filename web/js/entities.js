@@ -9,7 +9,7 @@ import {
   BALL_SPIN_GRIP, BALL_SPIN_MAX, BALL_SPIN_MAX_TURNS, BALL_SPIN_RATE, BAT_ANGLE_JITTER, BAT_FADE_SECONDS,
   BAT_HIT_COOLDOWN, BAT_HIT_SPEED_GAIN, BAT_LIFETIME, BAT_SPIN_PER_SWIPE, BAT_VELOCITY_SMOOTHING,
   BRICK_COLOURS, BRICK_LIVES, COLOURS, INTRO_DAMPING, MAX_BAT_ANGLE, METAL_HIT_PITCH, METAL_HIT_VOLUME, NET_SLOW,
-  REGEN_POP,
+  REGEN_POP, STICKY_SPEED_KEEP,
 } from './config.js';
 import { rgba } from './graphics.js';
 
@@ -685,10 +685,14 @@ export class Ball {
 
   /**
    * Leave the bat it's stuck to: aimed by where it sits, as a hit there would aim it (the centre straight up,
-   * the ends out to MAX_BAT_ANGLE), at the speed it arrived with, and spun by the bat's movement.
+   * the ends out to MAX_BAT_ANGLE), and spun by the bat's movement. It goes at the speed it arrived with, but
+   * one that arrived faster than the level's pace loses most of the excess (STICKY_SPEED_KEEP): the catch
+   * calms a frantic ball down.
    */
   release() {
-    const { bat, dx, speed } = this.stuck;
+    const { bat, dx } = this.stuck;
+    const pace = this.game.targetBallSpeed(this.game.level);
+    const speed = this.stuck.speed > pace ? pace + (this.stuck.speed - pace) * STICKY_SPEED_KEEP : this.stuck.speed;
     this.stuck = null;
     const offset = Math.max(-1, Math.min(1, dx / bat.w2));
     const angle = (offset * MAX_BAT_ANGLE * Math.PI) / 180;

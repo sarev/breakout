@@ -349,6 +349,7 @@ export const STICKY_DURATION = 10;        // Seconds per sticky bat brick (they 
 export const STICKY_WARNING = 3;          // Seconds before the end when the glow's pulse quickens
 export const STICKY_PULSE = 1.2;          // Seconds per pulse of the glow...
 export const STICKY_WARNING_PULSE = 0.4;  // ...and in the warning
+export const STICKY_SPEED_KEEP = 0.25;    // A ball caught faster than the level's pace keeps this much of the excess
 export const BAT_LIFETIME = 10;         // Seconds a bonus bat stays in play
 export const BAT_FADE_SECONDS = 2;      // Warning fade before it goes
 export const BAT_VELOCITY_SMOOTHING = 0.06; // Time constant for the smoothed sideways speed
