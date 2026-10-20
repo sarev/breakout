@@ -8,7 +8,7 @@ import {
   BALL_CURVE_EASE, BALL_CURVE_FLATTEST, BALL_CURVE_PER_TURN, BALL_SPIN_BOUNCE_KEEP, BALL_SPIN_FADE,
   BALL_SPIN_GRIP, BALL_SPIN_MAX, BALL_SPIN_MAX_TURNS, BALL_SPIN_RATE, BAT_ANGLE_JITTER, BAT_FADE_SECONDS,
   BAT_HIT_COOLDOWN, BAT_HIT_SPEED_GAIN, BAT_LIFETIME, BAT_SPIN_PER_SWIPE, BAT_VELOCITY_SMOOTHING,
-  BRICK_COLOURS, BRICK_LIVES, COLOURS, INTRO_DAMPING, MAX_BAT_ANGLE, METAL_HIT_PITCH, METAL_HIT_VOLUME, NET_SLOW,
+  BRICK_COLOURS, BRICK_LIVES, COLOURS, GLOW_MARK_RATE, INTRO_DAMPING, MAX_BAT_ANGLE, METAL_HIT_PITCH, METAL_HIT_VOLUME, NET_SLOW,
   REGEN_POP, STICKY_SPEED_KEEP,
 } from './config.js';
 import { rgba } from './graphics.js';
@@ -42,14 +42,12 @@ export class Laser {
 
   /** Collision with a brick, using a thin vertical slice around the beam's centre. */
   checkBrick(brick) {
+    if (brick.lives <= 0) return false;
     const thin = Math.max(2, Math.floor(this.w2 / 2));
-    const b = brick.bbox();
-    if (!b) return false;
-    const left = this.x - thin;
-    const right = this.x + thin;
-    const top = this.y - this.h2;
-    const bottom = this.y + this.h2;
-    return left < b.x + b.w && right > b.x && top < b.y + b.h && bottom > b.y;
+    const bx = brick.x - brick.w2;
+    const by = brick.y - brick.h2;
+    return this.x - thin < bx + brick.width && this.x + thin > bx && this.y - this.h2 < by + brick.height &&
+      this.y + this.h2 > by;
   }
 
   draw(ctx) {
@@ -251,7 +249,7 @@ export class Brick {
    */
   draw(ctx) {
     if (this.lives > 0) {
-      const img = this.gfx.brickImages[this.type];
+      const img = this.gfx.brickImage(this.type, (this.flipX ? 1 : 0) + (this.flipY ? 2 : 0));
       // A regenerated brick grows in from its centre, out of a fading flash of its own colour
       const age = this.born === null ? Infinity : this.game.time - this.born;
       const grow = age < REGEN_POP ? Math.max(0.05, age / REGEN_POP) : 1;
@@ -261,10 +259,10 @@ export class Brick {
         ctx.arc(this.x, this.y, this.h2 * (0.5 + grow), 0, Math.PI * 2);
         ctx.fill();
       }
-      if (this.flipX || this.flipY || grow < 1) {
+      if (grow < 1) {
         ctx.save();
         ctx.translate(this.x, this.y);
-        ctx.scale((this.flipX ? -1 : 1) * grow, (this.flipY ? -1 : 1) * grow);
+        ctx.scale(grow, grow);
         ctx.drawImage(img, -this.w2, -this.h2);
         ctx.restore();
       } else {
@@ -342,6 +340,7 @@ export class Ball {
     this.spinSense = 1;         // +1 clockwise, -1 anticlockwise: the last clear direction of travel
     this.english = 0;           // Spin from the bat, radians a second clockwise: it bends the path (curve())
     this.stuck = null;          // {bat, dx, speed} while it's stuck to a bat (the sticky bat brick)
+    this.glowDue = 0;           // Trail clock time its next glow mark is due (draw())
   }
 
   /**
@@ -452,8 +451,15 @@ export class Ball {
       ctx.restore();
     }
     // No new glow while paused: the trails fade away and the frozen picture can be redrawn at the idle rate
-    // (main.js idleRate())
-    if (!this.game.paused) this.gfx.addGlow(this.glow, px, py);
+    // (main.js idleRate()). Otherwise a mark goes down `GLOW_MARK_RATE` times a second, whatever the refresh
+    // rate: a mark every frame at 120 Hz made twice the marks, drawn twice as often, and denser, brighter
+    // trails. A mark due a quarter of an interval from now counts, so a 60 Hz frame a touch early isn't skipped
+    const interval = 1 / GLOW_MARK_RATE;
+    const clock = this.gfx.trailClock;
+    if (!this.game.paused && clock >= this.glowDue - interval / 4) {
+      this.gfx.addGlow(this.glow, px, py);
+      this.glowDue = Math.max(this.glowDue, clock - interval) + interval;
+    }
   }
 
   /**
@@ -716,10 +722,16 @@ export class Ball {
    * @returns {boolean} True if there was a contact (the brick has been hit).
    */
   checkBrick(brick) {
-    const b = brick.bbox();
-    if (!b) return false;
-    const a = this.bbox();
-    if (!(a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y)) return false;
+    // The boxes' overlap, worked out in place rather than through bbox(): this runs for every ball, brick and
+    // physics step, and the box objects kept the garbage collector busy
+    if (brick.lives <= 0) return false;
+    const ax = this.x - this.w2;
+    const ay = this.y - this.h2;
+    const bx = brick.x - brick.w2;
+    const by = brick.y - brick.h2;
+    if (!(ax < bx + brick.width && ax + this.width > bx && ay < by + brick.height && ay + this.height > by)) {
+      return false;
+    }
 
     const left = brick.x - brick.w2;
     const right = brick.x + brick.w2;

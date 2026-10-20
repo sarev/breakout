@@ -5,8 +5,8 @@
 // in the game is a playfield pixel, and `scale` says how big that is relative to the 1080p reference.
 
 import {
-  BALL_HEIGHT_PCT, BAT_HEIGHT_PCT, GLOW_BLUE, GLOW_RED, HAZE_BLUR_MAX, HAZE_BLUR_PER_BRICK, HAZE_VIGNETTE_MAX,
-  HAZE_VIGNETTE_PER_BRICK, INTRO_HERO_SCALE, LASER_HEIGHT_PCT, MAX_PLAYFIELD_ASPECT, MIN_PLAYFIELD_ASPECT,
+  BALL_HEIGHT_PCT, BAT_HEIGHT_PCT, GLOW_BLUE, GLOW_RED, HAZE_BLUR_MAX, HAZE_BLUR_PER_BRICK, HAZE_HALF_SIZE_BLUR,
+  HAZE_VIGNETTE_MAX, HAZE_VIGNETTE_PER_BRICK, INTRO_HERO_SCALE, LASER_HEIGHT_PCT, MAX_PLAYFIELD_ASPECT, MIN_PLAYFIELD_ASPECT,
   MOBILE_BAT_WIDEN, MOBILE_WIDE_ASPECT, NUM_BRICK_TYPES, REFERENCE_HEIGHT, REFERENCE_WIDTH,
 } from './config.js';
 
@@ -120,6 +120,7 @@ export class Graphics {
     this.background = null;
     this.trailMarks = [];       // Glow blobs as {img, x, y, t}: drawn each frame with alpha falling with age
     this.icons = new Map();     // Image -> {px, tint, canvas}: shrunk (and tinted) copies for icon() to reuse
+    this.texts = new Map();     // Text and look -> canvas: rendered text for cachedText() to reuse
     this.trailClock = 0;
     this.trailLifetime = 255 / 600;
     this.W = 0;
@@ -158,24 +159,39 @@ export class Graphics {
     if (changed) {
       this.trailMarks = [];
       this.layer = null;   // Rebuilt at the new size when next wanted
+      this.blurLayer = null;
+      this.texts.clear();
       this.buildSprites();
     }
     return changed;
   }
 
   /**
-   * An offscreen canvas the size of the playfield, for drawing a frame that is then composited with an effect
-   * (see drawHazed). Made on first use and kept until the playfield changes size.
+   * An offscreen canvas for drawing a frame that is then composited through the haze (see drawHazed), in
+   * playfield coordinates. Under a blur of `HAZE_HALF_SIZE_BLUR` px or more it's half the playfield's size (the
+   * context scaled to suit), which is a quarter of the pixels to fill and blur, and the blur hides the
+   * softness; a lighter blur, as a haze fades away, keeps full size, so the picture doesn't go soft just before
+   * it goes sharp. Made on first use and kept until the playfield or that choice changes.
    *
+   * @param {number} count The haze's depth (Game.haze).
    * @returns {CanvasRenderingContext2D}
    */
-  layerContext() {
-    if (!this.layer) {
+  layerContext(count) {
+    const scale = this.hazeBlur(count) >= HAZE_HALF_SIZE_BLUR ? 0.5 : 1;
+    if (!this.layer || this.layerScale !== scale) {
       this.layer = document.createElement('canvas');
-      this.layer.width = this.W;
-      this.layer.height = this.H;
+      this.layer.width = Math.max(1, Math.round(this.W * scale));
+      this.layer.height = Math.max(1, Math.round(this.H * scale));
+      this.layerScale = scale;
     }
-    return this.layer.getContext('2d');
+    const ctx = this.layer.getContext('2d');
+    ctx.setTransform(scale, 0, 0, scale, 0, 0);
+    return ctx;
+  }
+
+  /** The haze's blur radius in canvas pixels, for a depth (Game.haze). */
+  hazeBlur(count) {
+    return Math.min(HAZE_BLUR_MAX, HAZE_BLUR_PER_BRICK * count) * this.scale;
   }
 
   /**
@@ -191,14 +207,26 @@ export class Graphics {
     const layer = this.layer;
     const W = this.W;
     const H = this.H;
-    const px = Math.min(HAZE_BLUR_MAX, HAZE_BLUR_PER_BRICK * count) * this.scale;
+    const px = this.hazeBlur(count);
     if (typeof ctx.filter === 'string') {
-      ctx.save();
-      ctx.filter = `blur(${px.toFixed(1)}px)`;
+      // A half-size layer is blurred at its own size, into a second one, and only then drawn up to the playfield
+      const half = this.layerScale < 1;
+      if (half && (!this.blurLayer || this.blurLayer.width !== layer.width || this.blurLayer.height !== layer.height)) {
+        this.blurLayer = document.createElement('canvas');
+        this.blurLayer.width = layer.width;
+        this.blurLayer.height = layer.height;
+      }
+      const out = half ? this.blurLayer.getContext('2d') : ctx;
+      const w = half ? layer.width : W;
+      const h = half ? layer.height : H;
+      const r = px * this.layerScale;
+      out.save();
+      out.filter = `blur(${r.toFixed(1)}px)`;
       // Drawn a little larger than the playfield so the blur's soft edge falls outside the clip
-      const pad = Math.ceil(px * 2);
-      ctx.drawImage(layer, -pad, -pad, W + 2 * pad, H + 2 * pad);
-      ctx.restore();
+      const pad = Math.ceil(r * 2);
+      out.drawImage(layer, -pad, -pad, w + 2 * pad, h + 2 * pad);
+      out.restore();
+      if (half) ctx.drawImage(this.blurLayer, 0, 0, W, H);
     } else {
       const shrink = Math.max(2, Math.round(px));
       if (!this.blurScratch) this.blurScratch = document.createElement('canvas');
@@ -261,7 +289,7 @@ export class Graphics {
    */
   buildBricks(columns) {
     this.brickSize = Math.floor(this.W / columns);
-    this.brickImages = [];
+    this.brickImages = [];   // Per type, its mirrorings as brickImage() makes them: [as drawn, ...]
     for (let i = 0; i < NUM_BRICK_TYPES; i++) {
       const canvas = document.createElement('canvas');
       canvas.width = this.brickSize;
@@ -269,8 +297,33 @@ export class Graphics {
       const ctx = canvas.getContext('2d');
       ctx.imageSmoothingQuality = 'high';
       ctx.drawImage(this.images[`brick${i}`], 0, 0, this.brickSize, this.brickSize);
-      this.brickImages.push(canvas);
+      this.brickImages.push([canvas]);
     }
+  }
+
+  /**
+   * A brick's sprite at the level's size, mirrored as asked. The mirrored copies are made on first use and kept
+   * for the level: most bricks are mirrored, for variety, and drawing each through a mirroring transform every
+   * frame was a measurable share of the frame.
+   *
+   * @param {number} type
+   * @param {number} flip 0 as drawn, 1 left to right, 2 top to bottom, 3 both.
+   * @returns {HTMLCanvasElement}
+   */
+  brickImage(type, flip = 0) {
+    const set = this.brickImages[type];
+    if (!set[flip]) {
+      const plain = set[0];
+      const canvas = document.createElement('canvas');
+      canvas.width = plain.width;
+      canvas.height = plain.height;
+      const ctx = canvas.getContext('2d');
+      ctx.translate(flip & 1 ? plain.width : 0, flip & 2 ? plain.height : 0);
+      ctx.scale(flip & 1 ? -1 : 1, flip & 2 ? -1 : 1);
+      ctx.drawImage(plain, 0, 0);
+      set[flip] = canvas;
+    }
+    return set[flip];
   }
 
   /**
@@ -377,6 +430,31 @@ export class Graphics {
     const h = (m.actualBoundingBoxAscent || px * 0.7) + (m.actualBoundingBoxDescent || px * 0.2);
     const left = align === 'left' ? x : align === 'right' ? x - m.width : x - m.width / 2;
     return { x: left, y: y - h / 2, w: m.width, h };
+  }
+
+  /**
+   * Draw text as `text()` does, from a copy rendered once and kept: for text drawn every frame that rarely
+   * changes (the HUD's lives and level), since stroking and filling big outlined text is slow next to copying
+   * an image. Centred on the point; the copies are forgotten when the playfield changes size, or if many pile up.
+   *
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {string} text
+   * @param {object} style As for `text()`, without `align`.
+   */
+  cachedText(ctx, text, { x, y, ...look }) {
+    const key = JSON.stringify([text, look]);
+    let canvas = this.texts.get(key);
+    if (!canvas) {
+      if (this.texts.size > 64) this.texts.clear();
+      const px = this.fontPx(look.size);
+      const pad = Math.ceil(px * 0.1) + 2;   // Room for the outline
+      canvas = document.createElement('canvas');
+      canvas.width = Math.ceil(this.textWidth(this.ctx, text, look)) + 2 * pad;
+      canvas.height = Math.ceil(px * 1.3) + 2 * pad;
+      this.text(canvas.getContext('2d'), text, { ...look, x: canvas.width / 2, y: canvas.height / 2 });
+      this.texts.set(key, canvas);
+    }
+    ctx.drawImage(canvas, Math.round(x - canvas.width / 2), Math.round(y - canvas.height / 2));
   }
 
   /** The width `text()` would give a string, in canvas pixels, without drawing it. */

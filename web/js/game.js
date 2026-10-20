@@ -936,12 +936,6 @@ export class Game {
   // --- Drawing ----------------------------------------------------------------------------------------------
 
   /**
-   * Draw the whole playfield.
-   *
-   * @param {CanvasRenderingContext2D} ctx
-   * @returns {boolean} True if every destructible brick is gone (level complete).
-   */
-  /**
    * Draw the frame. Under the haze of a red lens brick the playfield (backdrop, bricks, balls and bats) is drawn
    * to a layer and composited through the blur and vignette, and the HUD goes on top of that, crisp; otherwise
    * everything is drawn straight to the canvas in the same order.
@@ -951,7 +945,7 @@ export class Game {
    */
   draw(ctx) {
     const gfx = this.gfx;
-    const field = this.haze > 0 ? gfx.layerContext() : ctx;
+    const field = this.haze > 0 ? gfx.layerContext(this.haze) : ctx;
     field.drawImage(gfx.background, 0, 0);
     gfx.drawTrails(field);
 
@@ -968,8 +962,8 @@ export class Game {
     const livesText = String(this.lives);
     const livesPx = Math.round(300 * 0.72 * gfx.scale);   // The font size `text()` makes of size 300
     const livesX = Math.max(gfx.W / 16, livesText.length * livesPx * 0.3 + livesPx * 0.1);
-    gfx.text(ctx, livesText, { x: livesX, y: gfx.H * 0.9, size: 300, colour: COLOURS.lives, alpha: 164 / 255 });
-    gfx.text(ctx, String(this.level), { x: gfx.W * 0.95, y: gfx.H * 0.9, size: 300, colour: COLOURS.level, alpha: 164 / 255 });
+    gfx.cachedText(ctx, livesText, { x: livesX, y: gfx.H * 0.9, size: 300, colour: COLOURS.lives, alpha: 164 / 255 });
+    gfx.cachedText(ctx, String(this.level), { x: gfx.W * 0.95, y: gfx.H * 0.9, size: 300, colour: COLOURS.level, alpha: 164 / 255 });
 
     this.drawBlackout(ctx);
     return remaining === 0 && !this.regen;

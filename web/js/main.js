@@ -375,6 +375,7 @@ async function boot() {
     intro.choice = 2;
     game.reset(level);
     startLevel();
+    levelHold = null;   // Straight into play, without waiting for a click
     const rows = Game.rows(level).length;
     const mix = RANDOM_BRICK_TYPES[game.difficulty];
     for (const brick of game.bricks) {

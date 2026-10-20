@@ -315,6 +315,7 @@ export const HAZE_SECONDS = 15;
 export const HAZE_FADE_SECONDS = 5;
 export const HAZE_BLUR_PER_BRICK = 2.5;     // Blur radius per brick, px at the reference scale
 export const HAZE_BLUR_MAX = 8;
+export const HAZE_HALF_SIZE_BLUR = 3;      // Blur radius (canvas px) from which the hazed frame is drawn at half size
 export const HAZE_VIGNETTE_PER_BRICK = 0.3; // Opacity of the red at the edges, per brick
 export const HAZE_VIGNETTE_MAX = 0.85;
 
@@ -395,6 +396,9 @@ export const CARD_ROLL_RATE = 10;
 // Trails: alpha units (0..255) subtracted per second
 export const TRAIL_FADE_GAME = 600;
 export const TRAIL_FADE_INTRO = 1200;
+// Glow marks a ball leaves a second, whatever the display's refresh rate: one a frame at 60 Hz, as the trails
+// were designed
+export const GLOW_MARK_RATE = 60;
 
 // ---------------------------------------------------------------------------------------------------------------
 // Audio
