@@ -9,8 +9,18 @@
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#000000">
   <style>
+    /* Exo 2, served with the game (fonts/, SIL Open Font Licence) rather than from a font service, so the page
+       makes no requests elsewhere. The canvas uses it too: main.js waits for it before the first frame */
+    @font-face { font-family: 'Exo 2'; font-style: normal; font-weight: 400; font-display: swap;
+                 src: url(fonts/exo2-400-normal.woff2) format('woff2'); }
+    @font-face { font-family: 'Exo 2'; font-style: normal; font-weight: 700; font-display: swap;
+                 src: url(fonts/exo2-700-normal.woff2) format('woff2'); }
+    @font-face { font-family: 'Exo 2'; font-style: italic; font-weight: 400; font-display: swap;
+                 src: url(fonts/exo2-400-italic.woff2) format('woff2'); }
+    @font-face { font-family: 'Exo 2'; font-style: italic; font-weight: 700; font-display: swap;
+                 src: url(fonts/exo2-700-italic.woff2) format('woff2'); }
     html, body { margin: 0; padding: 0; background: #000; overflow: hidden; height: 100%;
-                 font-family: Arial, Helvetica, sans-serif; }
+                 font-family: 'Exo 2', Arial, Helvetica, sans-serif; }
     /* The cursor is hidden from script only while a game is actually being played; see main.js updateCursor() */
     canvas { display: block; position: relative; z-index: 1; touch-action: none; -webkit-user-select: none;
              user-select: none; }

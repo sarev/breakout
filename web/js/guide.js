@@ -69,7 +69,7 @@ export function drawBallGuide(gfx, ctx, images, y, alpha) {
     ctx.globalAlpha = alpha;
     ctx.drawImage(gfx.icon(ball, icon * k), left, cy - (icon * k) / 2);
     ctx.globalAlpha = 1;
-    gfx.text(ctx, text, { x: left + (icon + gap) * k, y: cy, size: 60 * k, colour: COLOURS.white, alpha, align: 'left' });
+    gfx.text(ctx, text, { x: left + (icon + gap) * k, y: cy, size: 60 * k, colour: COLOURS.steel, alpha, align: 'left' });
   });
 }
 
@@ -91,7 +91,7 @@ export function drawBrickIntros(gfx, ctx, images, types, elapsed, top, bottom) {
   if (!n) return;
   const s = gfx.scale;
   const fade = (delay) => Math.max(0, Math.min(0.9, (elapsed - delay) / 0.5));
-  gfx.text(ctx, n === 1 ? 'New brick' : 'New bricks', { x: gfx.W / 2, y: top, size: 70, colour: COLOURS.presskey, alpha: fade(0.2) });
+  gfx.text(ctx, n === 1 ? 'New brick' : 'New bricks', { x: gfx.W / 2, y: top, size: 70, colour: COLOURS.presskey, glow: COLOURS.neonCyan, alpha: fade(0.2) });
 
   // A card at full size, in playfield pixels. Fewest rows that fit across, the cards spread evenly over them
   // (eight make two rows of four, not five and three), and all of it shrunk until the rows fit the height.
@@ -120,7 +120,7 @@ export function drawBrickIntros(gfx, ctx, images, types, elapsed, top, bottom) {
     ctx.drawImage(gfx.icon(images[`brick${type}`], px), x - px / 2, y);
     ctx.globalAlpha = 1;
     const [name, words] = BRICK_INTROS[type];
-    gfx.text(ctx, name, { x, y: y + px + 36 * k * s, size: 50 * k, colour: COLOURS.white, alpha, bold: true });
+    gfx.text(ctx, name, { x, y: y + px + 36 * k * s, size: 50 * k, colour: COLOURS.steel, alpha, bold: true });
     gfx.text(ctx, words, { x, y: y + px + 82 * k * s, size: 40 * k, colour: COLOURS.presskey, alpha });
   });
 }

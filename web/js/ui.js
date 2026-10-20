@@ -86,6 +86,7 @@ Fireball 2 on the Archimedes, and the other classics.</p>
 <li>Music: &ldquo;Chiptune Adventures&rdquo; and the &ldquo;Retro Game Music Pack&rdquo; by <a href="https://juhanijunkala.com/" target="_blank" rel="noopener">Juhani Junkala</a>,
 released under CC0 via OpenGameArt (<a href="https://opengameart.org/content/4-chiptunes-adventure" target="_blank" rel="noopener">1</a>,
 <a href="https://opengameart.org/content/5-chiptunes-action" target="_blank" rel="noopener">2</a>)</li>
+<li>Text set in <a href="https://fonts.google.com/specimen/Exo+2" target="_blank" rel="noopener">Exo 2</a>, by Natanael Gama, under the SIL Open Font Licence</li>
 <li>Final level background: the Rosette Nebula, by <a href="https://deography.com/will-you-accept-this-rose-ngc2237/" target="_blank" rel="noopener">Dylan O'Donnell</a></li>
 <li>Thanks to ChatGPT for art assistance</li>
 <li>Web conversion by <a href="https://www.anthropic.com/claude" target="_blank" rel="noopener">Anthropic's Claude</a></li>

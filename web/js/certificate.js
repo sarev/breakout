@@ -1,5 +1,5 @@
 // The end-of-game certificate: what replaces the old three-second banner when the last level is cleared ("YOU
-// WIN!") or the last life is lost ("GAME OVER!").
+// WIN!") or the last life is lost ("GAME OVER!"). The logo heads it.
 //
 // It stays up until dismissed, and records the game: the difficulty, the play mode (Desktop, Mobile (touch), or
 // Mobile (tilt) when the phone's roll steered the bat), the time spent in play (the game clock,
@@ -11,7 +11,7 @@
 // camera prompt, the "continue" hint and the footnote saying the photo stays on the device, which aren't part
 // of the record.
 
-import { COLOURS } from './config.js';
+import { COLOURS, LOGO_HEIGHT_CERTIFICATE } from './config.js';
 
 const DIFFICULTY_NAMES = ['Easy', 'Medium', 'Hard'];
 
@@ -128,11 +128,17 @@ export class Certificate {
     ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
     ctx.fillRect(0, 0, W, H);
 
+    // The logo between the corner boxes, made smaller if it would crowd them (on a squarer screen)
+    const boxes = this.boxes();
+    const room = (boxes.selfie.x - (boxes.save.x + boxes.save.w)) * 0.9;
+    const logo = gfx.images.logo;
+    const logoHeight = Math.min(LOGO_HEIGHT_CERTIFICATE, (room * logo.height) / logo.width / gfx.scale);
+    gfx.logo(ctx, x, boxes.save.y + boxes.save.h / 2, logoHeight);
+
     // The outcome sets the banner and its colour, and how the time is put: a winner's time, a loser's endurance
     const title = this.won ? 'YOU WIN!' : 'GAME OVER!';
-    const titleColour = this.won ? COLOURS.win : COLOURS.die;
-    const lineColour = this.won ? COLOURS.advance : COLOURS.die;
-    gfx.text(ctx, title, { x, y: H * 0.31, size: 200, colour: titleColour, alpha: 0.95, bold: true, italic: true });
+    const lineColour = COLOURS.steel;
+    gfx.text(ctx, title, { x, y: H * 0.31, size: 200, chrome: true, glow: this.won ? null : COLOURS.neonRed, alpha: 0.95, bold: true, italic: true });
     gfx.text(ctx, `Difficulty: ${this.difficulty}`, { x, y: H * 0.43, size: 80, colour: lineColour, alpha: 0.9 });
     gfx.text(ctx, `Play mode: ${this.mode}`, { x, y: H * 0.5, size: 80, colour: lineColour, alpha: 0.9 });
     gfx.text(ctx, `${this.won ? 'Time' : 'You lasted'}: ${this.timeText()}`, { x, y: H * 0.57, size: 80, colour: lineColour, alpha: 0.9 });
@@ -140,18 +146,17 @@ export class Certificate {
     gfx.text(ctx, last, { x, y: H * 0.64, size: 80, colour: lineColour, alpha: 0.9 });
     if (!forExport) {
       const prompt = this.mobile ? 'Tap anywhere else to continue' : 'Click or press any key to continue';
-      gfx.text(ctx, prompt, { x, y: H * 0.735, size: 60, colour: COLOURS.presskey, alpha: 0.8 });
+      gfx.text(ctx, prompt, { x, y: H * 0.735, size: 60, colour: COLOURS.presskey, glow: COLOURS.neonCyan, alpha: 0.85 });
     }
-    gfx.text(ctx, 'Breakout, by 7th software Ltd.', { x, y: H * 0.83, size: 50, colour: COLOURS.copyright, alpha: 0.7 });
-    gfx.text(ctx, `Started ${this.startedText()}`, { x, y: H * 0.93, size: 50, colour: COLOURS.copyright, alpha: 0.8 });
+    gfx.text(ctx, '© 2025-26 7th software Ltd.', { x, y: H * 0.835, size: 34, colour: COLOURS.gunmetal, alpha: 0.8 });
+    gfx.text(ctx, `Started ${this.startedText()}`, { x, y: H * 0.93, size: 50, colour: COLOURS.steel, alpha: 0.8 });
     if (!forExport) {
       // A camera in a web page invites the question, so the answer is on the page that asks for one
       gfx.text(ctx, 'Your photo never leaves this device: it is not uploaded or sent anywhere', {
-        x, y: H * 0.978, size: 30, colour: COLOURS.copyright, alpha: 0.6,
+        x, y: H * 0.978, size: 30, colour: COLOURS.gunmetal, alpha: 0.9,
       });
     }
 
-    const boxes = this.boxes();
     this.drawSelfieBox(ctx, boxes.selfie, forExport);
     if (!forExport) this.drawSaveBox(ctx, boxes.save);
   }

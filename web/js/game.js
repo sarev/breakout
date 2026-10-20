@@ -962,8 +962,8 @@ export class Game {
     const livesText = String(this.lives);
     const livesPx = Math.round(300 * 0.72 * gfx.scale);   // The font size `text()` makes of size 300
     const livesX = Math.max(gfx.W / 16, livesText.length * livesPx * 0.3 + livesPx * 0.1);
-    gfx.cachedText(ctx, livesText, { x: livesX, y: gfx.H * 0.9, size: 300, colour: COLOURS.lives, alpha: 164 / 255 });
-    gfx.cachedText(ctx, String(this.level), { x: gfx.W * 0.95, y: gfx.H * 0.9, size: 300, colour: COLOURS.level, alpha: 164 / 255 });
+    gfx.cachedText(ctx, livesText, { x: livesX, y: gfx.H * 0.9, size: 300, colour: COLOURS.steel, glow: COLOURS.neonCyan, alpha: 164 / 255 });
+    gfx.cachedText(ctx, String(this.level), { x: gfx.W * 0.95, y: gfx.H * 0.9, size: 300, colour: COLOURS.steel, glow: COLOURS.neonGreen, alpha: 164 / 255 });
 
     this.drawBlackout(ctx);
     return remaining === 0 && !this.regen;

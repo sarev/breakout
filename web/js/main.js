@@ -18,10 +18,11 @@
 // mouse movement, ?volume=0.3 sets the music volume.
 
 import { AudioSystem, Music, Sfx } from './audio.js';
-import { loadAudioSet, loadImages } from './assets.js';
+import { loadAudioSet, loadFonts, loadImages } from './assets.js';
 import { Certificate } from './certificate.js';
 import {
-  COLOURS, LEVEL_DEFS, MAX_BALLS, MAX_FRAME_DT, MUSIC_ENDING_DELAY, MUSIC_FILES, MUSIC_INTRO_FADE_IN, NUM_BRICK_TYPES, RANDOM_BRICK_TYPES, SOUND_NAMES,
+  COLOURS, FONT_FAMILY, FONT_STACK, LEVEL_DEFS, LOGO_HEIGHT, LOGO_SHIMMER_PERIOD, MAX_BALLS, MAX_FRAME_DT,
+  MUSIC_ENDING_DELAY, MUSIC_FILES, MUSIC_INTRO_FADE_IN, NUM_BRICK_TYPES, RANDOM_BRICK_TYPES, SOUND_NAMES,
   SPLASH_BRICK_TIME, SPLASH_MAX_TIME, SPLASH_TIME,
 } from './config.js';
 import { Game } from './game.js';
@@ -152,7 +153,7 @@ function message(text) {
   ctx.fillStyle = '#000';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   ctx.fillStyle = '#8aa8ff';
-  ctx.font = `${Math.round(canvas.height / 30)}px Arial, sans-serif`;
+  ctx.font = `${Math.round(canvas.height / 30)}px ${FONT_STACK}`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillText(text, canvas.width / 2, canvas.height / 2);
@@ -162,6 +163,7 @@ async function boot() {
   const imageNames = {
     ball: 'ball.webp', bonusBall: 'extra-ball.webp', blueGlow: 'blue-glow.webp', redGlow: 'red-glow.webp',
     bat: 'bat.webp', bonusBat: 'extra-bat.webp', blueLaser: 'blue.webp', greenLaser: 'green.webp', intro: 'intro.webp',
+    logo: 'logo.webp',
   };
   for (let i = 0; i < NUM_BRICK_TYPES; i++) imageNames[`brick${i}`] = `brick${i}.webp`;
   for (let i = 1; i <= 6; i++) imageNames[`tile${i}`] = `tile${i}.webp`;
@@ -179,6 +181,7 @@ async function boot() {
     loadImages(`${ASSET_BASE}sprites/`, imageNames, progress),
     loadAudioSet(audio.ctx, `${ASSET_BASE}sounds/`, soundNames, progress),
     loadAudioSet(audio.ctx, `${ASSET_BASE}music/`, MUSIC_FILES, progress),
+    loadFonts(FONT_FAMILY, ['normal', 'bold', 'italic', 'bold italic']),
   ]);
   audio.sfx = new Sfx(audio.ctx, sounds);
   audio.music = new Music(audio.ctx, tracks, MUSIC_ON, MUSIC_VOLUME);
@@ -269,10 +272,10 @@ async function boot() {
    * Put up a banner. A level's banner introduces the kinds of brick new to this game (game.newBrickTypes()),
    * and stays up a little longer for each.
    */
-  function showSplash(text, colour, next) {
+  function showSplash(text, next) {
     const bricks = next === 'level' ? game.newBrickTypes() : [];
     const duration = Math.min(SPLASH_MAX_TIME, SPLASH_TIME + SPLASH_BRICK_TIME * bricks.length);
-    splash = { text, colour, next, elapsed: 0, bricks, duration };
+    splash = { text, next, elapsed: 0, bricks, duration };
     game.darkAlpha = 192;
     scene = 'splash';
   }
@@ -284,7 +287,7 @@ async function boot() {
     lockAnnounced = false;
     game.reset();
     music.play('intro');   // keeps playing under the first splash, as in the Python version
-    showSplash('Level 1...', COLOURS.advance, 'level');
+    showSplash('Level 1...', 'level');
   }
 
   function startLevel() {
@@ -340,7 +343,7 @@ async function boot() {
       input.releaseLock(true);   // The banner frees the mouse, and the next level takes it back
       game.lives += 1;
       gfx.buildBackground(Game.stage(game.level));
-      showSplash(`Level ${game.level}...`, COLOURS.advance, 'level');
+      showSplash(`Level ${game.level}...`, 'level');
     } else {
       game.level = Game.maxLevel;   // Not past the last level: a resize on the certificate re-lays its bricks out
       showCertificate(true);
@@ -665,7 +668,7 @@ async function boot() {
         if (level <= Game.maxLevel) {
           game.level = level;
           gfx.buildBackground(Game.stage(level));
-          showSplash(`Level ${level}...`, COLOURS.advance, 'level');
+          showSplash(`Level ${level}...`, 'level');
         }
       }
     }
@@ -726,7 +729,7 @@ async function boot() {
     const ctx = gfx.begin();
     if (scene === 'gate') {
       gateElapsed += dt;
-      // The intro screenshot fills the playfield behind the title, scaled to cover it (cropped to the centre
+      // The intro screenshot fills the playfield behind the logo, scaled to cover it (cropped to the centre
       // where the shapes differ) and darkened so the text stays the point
       const img = images.intro;
       const cover = Math.max(gfx.W / img.width, gfx.H / img.height);
@@ -735,16 +738,14 @@ async function boot() {
       ctx.drawImage(img, (gfx.W - dw) / 2, (gfx.H - dh) / 2, dw, dh);
       ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
       ctx.fillRect(0, 0, gfx.W, gfx.H);
-      const wave = Math.round(64 * Math.sin((2 * Math.PI * gateElapsed) / 3));
-      const title = COLOURS.title.map((c) => Math.max(0, Math.min(255, c + wave)));
-      gfx.text(ctx, 'Breakout', { x: gfx.W / 2, y: gfx.H * 0.4, size: 400, colour: title, alpha: 224 / 255, bold: true, italic: true });
+      gfx.logo(ctx, gfx.W / 2, gfx.H * 0.4, LOGO_HEIGHT, 0.5 + 0.5 * Math.sin((2 * Math.PI * gateElapsed) / LOGO_SHIMMER_PERIOD));
       // Pulse the prompt gently so it reads as waiting rather than stuck
       const pulse = 0.55 + 0.35 * Math.sin((2 * Math.PI * gateElapsed) / 1.5);
       const prompt = MOBILE ? 'Tap to begin' : 'Click, tap or press any key to begin';
-      gfx.text(ctx, prompt, { x: gfx.W / 2, y: gfx.H * 0.62, size: 80, colour: COLOURS.presskey, alpha: pulse });
+      gfx.text(ctx, prompt, { x: gfx.W / 2, y: gfx.H * 0.62, size: 80, colour: COLOURS.presskey, glow: COLOURS.neonCyan, alpha: pulse });
       // The one rule a newcomer can't guess: which ball matters
       drawBallGuide(gfx, ctx, images, gfx.H * 0.73, 0.9);
-      gfx.text(ctx, 'Copyright © 2025-26, 7th software Ltd.', { x: gfx.W / 2, y: gfx.H * 0.92, size: 50, colour: COLOURS.copyright, alpha: 0.7 });
+      gfx.text(ctx, 'Copyright © 2025-26, 7th software Ltd.', { x: gfx.W / 2, y: gfx.H * 0.92, size: 50, colour: COLOURS.gunmetal, alpha: 0.9 });
     } else if (scene === 'intro') {
       intro.update(dt);
       intro.draw(ctx);
@@ -756,7 +757,7 @@ async function boot() {
       // up to make room for them, and the hints below go to the foot of the screen.
       const intros = splash.bricks.length > 0;
       gfx.text(ctx, splash.text, {
-        x: gfx.W / 2, y: gfx.H * (intros ? 0.2 : 0.5), size: 300, colour: splash.colour, bold: true, italic: true,
+        x: gfx.W / 2, y: gfx.H * (intros ? 0.2 : 0.5), size: 300, chrome: true, bold: true, italic: true,
         alpha: Math.min(0.9, splash.elapsed / 1.2),
       });
       drawBrickIntros(gfx, ctx, images, splash.bricks, splash.elapsed, gfx.H * 0.35, gfx.H * (MOBILE ? 0.84 : 0.88));
@@ -764,7 +765,7 @@ async function boot() {
         // Without the capture, the cursor can wander off the page (onto another monitor, say) mid-game, and
         // nothing else on screen says that L prevents it
         gfx.text(ctx, "Press L to capture the mouse, so it can't stray off the page (Esc releases it)", {
-          x: gfx.W / 2, y: gfx.H * (intros ? 0.94 : 0.64), size: 60, colour: COLOURS.presskey, alpha: Math.min(0.8, splash.elapsed / 1.2),
+          x: gfx.W / 2, y: gfx.H * (intros ? 0.94 : 0.64), size: 60, colour: COLOURS.presskey, glow: COLOURS.neonCyan, alpha: Math.min(0.8, splash.elapsed / 1.2),
         });
       }
       if (MOBILE && splash.next === 'level') {
@@ -773,7 +774,7 @@ async function boot() {
         const lines = ['Two-finger tap for pause/options'];
         if (game.tiltBat) lines.push('Tilt device to move bat');
         lines.forEach((line, i) => gfx.text(ctx, line, {
-          x: gfx.W / 2, y: gfx.H * ((intros ? 0.89 : 0.64) + 0.06 * i), size: 60, colour: COLOURS.presskey,
+          x: gfx.W / 2, y: gfx.H * ((intros ? 0.89 : 0.64) + 0.06 * i), size: 60, colour: COLOURS.presskey, glow: COLOURS.neonCyan,
           alpha: Math.min(0.8, splash.elapsed / 1.2),
         }));
       }
@@ -795,20 +796,20 @@ async function boot() {
       if (levelHold !== null && !game.paused) {
         // Bobbing gently, and fading in, so it reads as a prompt rather than part of the level
         gfx.text(ctx, 'Click to start...', {
-          x: gfx.W / 2, y: gfx.H * (0.55 + 0.012 * Math.sin(levelHold * 2.5)), size: 120, colour: COLOURS.white,
-          alpha: Math.min(0.8, levelHold * 2), bold: true, italic: true,
+          x: gfx.W / 2, y: gfx.H * (0.55 + 0.012 * Math.sin(levelHold * 2.5)), size: 120, chrome: true,
+          alpha: Math.min(0.9, levelHold * 2), bold: true, italic: true,
         });
         // How to get the mouse back, until the game has first taken it
         if (!lockAnnounced) {
           gfx.text(ctx, 'The mouse is captured in play: Esc or L releases it', {
-            x: gfx.W / 2, y: gfx.H * 0.64, size: 50, colour: COLOURS.presskey, alpha: Math.min(0.7, levelHold * 2),
+            x: gfx.W / 2, y: gfx.H * 0.64, size: 50, colour: COLOURS.presskey, glow: COLOURS.neonCyan, alpha: Math.min(0.7, levelHold * 2),
           });
         }
       }
       if (game.paused) {
-        gfx.text(ctx, 'Paused', { x: gfx.W / 2, y: gfx.H / 2, size: 200, colour: COLOURS.white, alpha: 0.7, bold: true });
+        gfx.text(ctx, 'Paused', { x: gfx.W / 2, y: gfx.H / 2, size: 200, chrome: true, alpha: 0.9, bold: true, italic: true });
         const prompt = MOBILE ? 'Tap to continue' : 'Space, click or tap to continue';
-        gfx.text(ctx, prompt, { x: gfx.W / 2, y: gfx.H * 0.6, size: 60, colour: COLOURS.presskey, alpha: 0.7 });
+        gfx.text(ctx, prompt, { x: gfx.W / 2, y: gfx.H * 0.6, size: 60, colour: COLOURS.presskey, glow: COLOURS.neonCyan, alpha: 0.8 });
       } else if (game.lives <= 0 || complete) {
         endOfLevel();
       }
@@ -818,7 +819,7 @@ async function boot() {
       if (remaining <= 0) {
         notice = null;
       } else {
-        gfx.text(ctx, notice.text, { x: gfx.W / 2, y: gfx.H * 0.78, size: 60, colour: COLOURS.presskey, alpha: Math.min(0.85, remaining) });
+        gfx.text(ctx, notice.text, { x: gfx.W / 2, y: gfx.H * 0.78, size: 60, colour: COLOURS.presskey, glow: COLOURS.neonCyan, alpha: Math.min(0.85, remaining) });
       }
     }
     updateCursor();

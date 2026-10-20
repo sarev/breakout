@@ -62,6 +62,17 @@ export const BALL_SPIN_BOUNCE_KEEP = 0.7;
 export const GLOW_BLUE = [150, 190, 255];   // Soft: the glows multiply by these, so white would leave them as they were
 export const GLOW_RED = [255, 150, 140];
 export const INTRO_HERO_SCALE = 2;      // The intro's hero ball is drawn this many times the size of a ball in play
+// The logo (sprites/logo.webp) heads the opening screen, the intro (a little smaller on a phone's) and the
+// certificate (smaller again, between its corner boxes). On the first two it shimmers, brightening by up to
+// LOGO_SHIMMER and back every LOGO_SHIMMER_PERIOD seconds.
+export const LOGO_HEIGHT = 220;          // Px at the reference resolution
+export const LOGO_HEIGHT_MOBILE = 160;
+export const LOGO_HEIGHT_CERTIFICATE = 170;
+export const LOGO_SHIMMER = 0.35;
+export const LOGO_SHIMMER_PERIOD = 3;
+// The typeface for all the text: Exo 2, served from web/fonts (declared in index.html), with Arial in reserve
+export const FONT_FAMILY = '"Exo 2"';
+export const FONT_STACK = `${FONT_FAMILY}, Arial, Helvetica, sans-serif`;
 export const BAT_HEIGHT_PCT = 6;
 export const LASER_HEIGHT_PCT = 6;
 
@@ -83,18 +94,23 @@ export const COLOURS = {
   regen: [224, 64, 208],
   sticky: [80, 200, 255],
   black: [0, 0, 0],
-  lives: [196, 224, 255],
-  advance: [128, 255, 192],
-  level: [164, 240, 164],
-  die: [255, 164, 164],
-  win: [224, 224, 255],
-  title: [64, 104, 191],
-  copyright: [128, 168, 255],
-  rights: [128, 168, 255],
-  presskey: [64, 224, 224],
-  item: [32, 164, 32],
-  selitem: [96, 224, 96],
+  // Text, in a palette taken from the logo: gunmetal and dirty chrome, lit by neon (cyan from above, red from
+  // below, green from the sides). Headlines are drawn as chrome itself (Graphics.text()'s `chrome`).
+  steel: [196, 205, 216],      // Body text
+  gunmetal: [120, 131, 144],   // Small print
+  presskey: [60, 225, 255],    // Prompts, what to do next: neon cyan, and given a cyan glow
+  neonCyan: [0, 200, 255],
+  neonRed: [255, 50, 40],
+  neonGreen: [60, 255, 90],
+  textEdge: [12, 15, 20],      // The dark outline round all text
 };
+// Chrome text: the fill, top to bottom (a bright sky, a dark horizon a little above the middle, a lighter
+// ground), and the neon lights round its edges as [colour, dx, dy, strength], reaching out this share of the font size
+export const CHROME_STOPS = [[0, '#f6f9fc'], [0.42, '#b9c3cd'], [0.5, '#56606b'], [0.58, '#8a95a1'], [1, '#e2e8ee']];
+export const CHROME_RIM_REACH = 0.07;
+export const CHROME_RIMS = [
+  [COLOURS.neonCyan, 0, -1, 1], [COLOURS.neonRed, 0, 1, 1], [COLOURS.neonGreen, -1, 0, 0.3], [COLOURS.neonGreen, 1, 0, 0.3],
+];
 export const BRICK_COLOURS = [
   COLOURS.blue, COLOURS.red, COLOURS.green, COLOURS.white, COLOURS.magenta, COLOURS.yellow, COLOURS.fire,
   COLOURS.metal, COLOURS.laser, COLOURS.haze, COLOURS.net, COLOURS.regen, COLOURS.sticky,

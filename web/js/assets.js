@@ -1,4 +1,5 @@
-// Asset loading: images and decoded audio, fetched from the repository's existing sprites / sounds / music folders.
+// Asset loading: images and decoded audio, fetched from the repository's existing sprites / sounds / music folders,
+// and the typeface's faces.
 
 /**
  * Load an image.
@@ -29,6 +30,20 @@ export async function loadImages(base, names, onLoad = () => {}) {
   const out = {};
   entries.forEach(([key], i) => { out[key] = images[i]; });
   return out;
+}
+
+/**
+ * Load a typeface's faces before anything is drawn in it. The page's CSS declares them, but a browser fetches a
+ * face only when something first uses it, and until then the canvas draws in the fallback (which the cached
+ * text, Graphics.cachedText(), would then keep). A face that doesn't load is left to the fallback.
+ *
+ * @param {string} family
+ * @param {string[]} styles The CSS font styles wanted, e.g. 'bold italic'.
+ * @returns {Promise<void>}
+ */
+export async function loadFonts(family, styles) {
+  if (!document.fonts) return;
+  await Promise.all(styles.map((style) => document.fonts.load(`${style} 16px ${family}`).catch(() => {})));
 }
 
 /**

@@ -5,10 +5,12 @@
 // setting on the Options page, and while it's on the intro says so above the two-finger hint.
 
 import {
-  CARD_PITCH_RATE, CARD_ROLL_RATE, CARD_YAW_RATE, COLOURS, INTRO_BALLS, TRAIL_FADE_INTRO, TILT_ACCEL, TILT_DAMPING,
+  CARD_PITCH_RATE, CARD_ROLL_RATE, CARD_YAW_RATE, COLOURS, INTRO_BALLS, LOGO_HEIGHT, LOGO_HEIGHT_MOBILE, LOGO_SHIMMER_PERIOD,
+  TRAIL_FADE_INTRO, TILT_ACCEL, TILT_DAMPING,
 } from './config.js';
 import { Ball } from './entities.js';
 import { substeps } from './game.js';
+import { rgba } from './graphics.js';
 
 const randInt = (lo, hi) => lo + Math.floor(Math.random() * (hi - lo + 1));
 
@@ -311,37 +313,36 @@ export class Intro {
     const x = gfx.W / 2;
     this.drawCard(ctx);
 
-    // On a phone the title is toned down and the menu made bigger: the labels are tap targets there, and the
+    // On a phone the logo is toned down and the menu made bigger: the labels are tap targets there, and the
     // whole screen is only a few inches across. It's packed a little tighter, to leave room below it for the
     // two-finger hint and, with tilt steering on, a reminder of that.
     const layout = this.input.mobile
-      ? { title: 280, menuSize: 130, menuTop: 0.54, menuStep: 0.1, tilt: 0.88, hint: 0.94 }
-      : { title: 400, menuSize: 100, menuTop: 0.6, menuStep: 0.08 };
+      ? { logo: LOGO_HEIGHT_MOBILE, menuSize: 130, menuTop: 0.54, menuStep: 0.1, tilt: 0.88, hint: 0.94 }
+      : { logo: LOGO_HEIGHT, menuSize: 100, menuTop: 0.6, menuStep: 0.08 };
 
-    const wave = Math.round(64 * Math.sin((2 * Math.PI * this.elapsed) / 3));
-    const title = COLOURS.title.map((c) => Math.max(0, Math.min(255, c + wave)));
-    gfx.text(ctx, 'Breakout', { x, y: gfx.H * 0.2, size: layout.title, colour: title, alpha: 224 / 255, bold: true, italic: true });
-    gfx.text(ctx, 'Copyright © 2025-26, 7th software Ltd.', { x, y: gfx.H * 0.35, size: 80, colour: COLOURS.copyright, alpha: 200 / 255 });
-    gfx.text(ctx, 'All rights reserved.', { x, y: gfx.H * 0.41, size: 80, colour: COLOURS.rights, alpha: 200 / 255 });
+    gfx.logo(ctx, x, gfx.H * 0.17, layout.logo, 0.5 + 0.5 * Math.sin((2 * Math.PI * this.elapsed) / LOGO_SHIMMER_PERIOD));
+    // The small print stays small, under the logo; the prompt, what to do next, stands out more
+    gfx.text(ctx, 'Copyright © 2025-26, 7th software Ltd.', { x, y: gfx.H * 0.325, size: 60, colour: COLOURS.steel, alpha: 200 / 255 });
+    gfx.text(ctx, 'All rights reserved.', { x, y: gfx.H * 0.37, size: 42, colour: COLOURS.gunmetal, alpha: 220 / 255 });
     const prompt = this.input.mobile
       ? 'Tap a difficulty to play'
       : 'Click a difficulty to play, or use the arrow keys and Enter';
-    gfx.text(ctx, prompt, { x, y: gfx.H * 0.46, size: 60, colour: COLOURS.presskey, alpha: 200 / 255 });
+    gfx.text(ctx, prompt, { x, y: gfx.H * 0.45, size: 72, colour: COLOURS.presskey, glow: COLOURS.neonCyan, alpha: 240 / 255, bold: true });
 
     this.labels.forEach((label, i) => {
       const selected = i === this.choice;
       this.menuBoxes[i] = gfx.text(ctx, label, {
         x, y: gfx.H * (layout.menuTop + layout.menuStep * i), size: layout.menuSize, alpha: 224 / 255,
-        colour: selected ? COLOURS.selitem : COLOURS.item, bold: selected,
+        colour: COLOURS.steel, chrome: selected, bold: selected,
       });
     });
 
     // On a phone the Options page is a two-finger tap away, so the link gives way to a hint
     if (this.input.mobile) {
       this.linkBoxes = {};
-      gfx.text(ctx, 'Two-finger tap for the menu', { x, y: gfx.H * layout.hint, size: 60, alpha: 0.8, colour: COLOURS.presskey });
+      gfx.text(ctx, 'Two-finger tap for the menu', { x, y: gfx.H * layout.hint, size: 60, alpha: 0.8, colour: COLOURS.presskey, glow: COLOURS.neonCyan });
       if (this.game.tiltBat) {
-        gfx.text(ctx, 'Steering the bat by tilting', { x, y: gfx.H * layout.tilt, size: 60, alpha: 0.8, colour: COLOURS.copyright });
+        gfx.text(ctx, 'Steering the bat by tilting', { x, y: gfx.H * layout.tilt, size: 60, alpha: 0.8, colour: COLOURS.steel });
       }
     }
 
@@ -353,9 +354,9 @@ export class Intro {
     links.forEach(([name, label, lx]) => {
       const lit = hover === name;
       const box = gfx.text(ctx, label, {
-        x: lx, y: gfx.H * 0.88, size: 60, alpha: lit ? 1 : 0.8, colour: lit ? COLOURS.white : COLOURS.presskey,
+        x: lx, y: gfx.H * 0.88, size: 60, alpha: lit ? 1 : 0.8, colour: lit ? COLOURS.steel : COLOURS.presskey, glow: COLOURS.neonCyan,
       });
-      ctx.strokeStyle = lit ? 'rgba(255,255,255,0.9)' : 'rgba(64,224,224,0.6)';
+      ctx.strokeStyle = lit ? rgba(COLOURS.steel, 0.9) : rgba(COLOURS.presskey, 0.6);
       ctx.lineWidth = Math.max(1, 2 * gfx.scale);
       ctx.beginPath();
       ctx.moveTo(box.x, box.y + box.h + 4 * gfx.scale);

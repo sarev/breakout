@@ -5,8 +5,9 @@
 // in the game is a playfield pixel, and `scale` says how big that is relative to the 1080p reference.
 
 import {
-  BALL_HEIGHT_PCT, BAT_HEIGHT_PCT, GLOW_BLUE, GLOW_RED, HAZE_BLUR_MAX, HAZE_BLUR_PER_BRICK, HAZE_HALF_SIZE_BLUR,
-  HAZE_VIGNETTE_MAX, HAZE_VIGNETTE_PER_BRICK, INTRO_HERO_SCALE, LASER_HEIGHT_PCT, MAX_PLAYFIELD_ASPECT, MIN_PLAYFIELD_ASPECT,
+  BALL_HEIGHT_PCT, BAT_HEIGHT_PCT, CHROME_RIM_REACH, CHROME_RIMS, CHROME_STOPS, COLOURS, FONT_STACK, GLOW_BLUE, GLOW_RED, HAZE_BLUR_MAX,
+  HAZE_BLUR_PER_BRICK, HAZE_HALF_SIZE_BLUR, HAZE_VIGNETTE_MAX, HAZE_VIGNETTE_PER_BRICK, INTRO_HERO_SCALE, LASER_HEIGHT_PCT,
+  LOGO_SHIMMER, MAX_PLAYFIELD_ASPECT, MIN_PLAYFIELD_ASPECT,
   MOBILE_BAT_WIDEN, MOBILE_WIDE_ASPECT, NUM_BRICK_TYPES, REFERENCE_HEIGHT, REFERENCE_WIDTH,
 } from './config.js';
 
@@ -405,28 +406,73 @@ export class Graphics {
    *
    * @param {CanvasRenderingContext2D} ctx
    * @param {string} text
-   * @param {{x: number, y: number, size: number, colour: number[], alpha?: number, bold?: boolean, italic?: boolean,
-   *          align?: string}} style
+   * @param {{x: number, y: number, size: number, colour?: number[], alpha?: number, bold?: boolean, italic?: boolean,
+   *          outline?: number[]|null, align?: string, chrome?: boolean, glow?: number[]}} style
    *        `size` is in the Python game's font units at the reference resolution (scaled here). `x` is the
-   *        centre of the text, or its left or right end with `align` 'left' or 'right'.
+   *        centre of the text, or its left or right end with `align` 'left' or 'right'. `chrome` draws it as the
+   *        logo's lettering is, polished metal lit by neon at the edges (`colour` is then unused); `glow` gives it a
+   *        soft neon halo of that colour. Either is drawn once and kept (cachedText()), since shadows are slow.
    * @returns {{x: number, y: number, w: number, h: number}} Bounding box, for hit tests.
    */
-  text(ctx, text, { x, y, size, colour, alpha = 0.8, bold = false, italic = false, outline = [0, 0, 0], align = 'center' }) {
+  text(ctx, text, style) {
+    if (style.chrome || style.glow) return this.cachedText(ctx, text, style);
+    return this.drawText(ctx, text, style);
+  }
+
+  /** Draw text as `text()` describes, every time (no keeping). */
+  drawText(ctx, text, {
+    x, y, size, colour = COLOURS.steel, alpha = 0.8, bold = false, italic = false, outline = COLOURS.textEdge,
+    align = 'center', chrome = false, glow = null,
+  }) {
     const px = this.fontPx(size);
+    ctx.save();
     ctx.font = this.font(size, bold, italic);
     ctx.textAlign = align;
     ctx.textBaseline = 'middle';
+    ctx.globalAlpha = alpha;
+    if (glow) {
+      // The halo: the text drawn with a blurred shadow of the glow colour, which the fill below then covers
+      ctx.shadowColor = rgba(glow, 0.9);
+      ctx.shadowBlur = px * 0.3;
+      ctx.fillStyle = rgba(glow);
+      ctx.fillText(text, x, y);
+      ctx.shadowColor = 'transparent';
+    }
+    if (chrome) {
+      // The neon lights round the edges: each a shadow cast a little way off in its direction, from a dark copy
+      // of the text that the chrome then covers, so only the coloured fringe on that side shows
+      ctx.fillStyle = rgba(COLOURS.textEdge);
+      for (const [rim, dx, dy, strength] of CHROME_RIMS) {
+        ctx.shadowColor = rgba(rim, strength);
+        ctx.shadowOffsetX = dx * px * CHROME_RIM_REACH;
+        ctx.shadowOffsetY = dy * px * CHROME_RIM_REACH;
+        // Twice: a tight bright edge, then a wider soft spill
+        ctx.shadowBlur = px * 0.04;
+        ctx.fillText(text, x, y);
+        ctx.shadowBlur = px * 0.16;
+        ctx.fillText(text, x, y);
+      }
+      ctx.shadowColor = 'transparent';
+    }
     if (outline) {
-      // An outline (an [r, g, b] colour, black unless a caller passes its own or null) drawn under the fill, so
-      // text stays legible over a busy background: the spinning card, the brick field, the level backdrops
-      ctx.strokeStyle = rgba(outline, alpha);
-      ctx.lineWidth = Math.max(1, px * 0.1);
+      // An outline (an [r, g, b] colour, near-black unless a caller passes its own or null) drawn under the fill,
+      // so text stays legible over a busy background: the spinning card, the brick field, the level backdrops
+      ctx.strokeStyle = rgba(outline);
+      ctx.lineWidth = Math.max(1, px * (chrome ? 0.04 : 0.1));
       ctx.lineJoin = 'round';
       ctx.strokeText(text, x, y);
     }
-    ctx.fillStyle = rgba(colour, alpha);
+    if (chrome) {
+      // Polished metal: a bright sky above a dark horizon, over the height of a capital
+      const fill = ctx.createLinearGradient(0, y - px * 0.38, 0, y + px * 0.38);
+      for (const [at, stop] of CHROME_STOPS) fill.addColorStop(at, stop);
+      ctx.fillStyle = fill;
+    } else {
+      ctx.fillStyle = rgba(colour);
+    }
     ctx.fillText(text, x, y);
     const m = ctx.measureText(text);
+    ctx.restore();
     const h = (m.actualBoundingBoxAscent || px * 0.7) + (m.actualBoundingBoxDescent || px * 0.2);
     const left = align === 'left' ? x : align === 'right' ? x - m.width : x - m.width / 2;
     return { x: left, y: y - h / 2, w: m.width, h };
@@ -434,27 +480,37 @@ export class Graphics {
 
   /**
    * Draw text as `text()` does, from a copy rendered once and kept: for text drawn every frame that rarely
-   * changes (the HUD's lives and level), since stroking and filling big outlined text is slow next to copying
-   * an image. Centred on the point; the copies are forgotten when the playfield changes size, or if many pile up.
+   * changes (the HUD's lives and level, and the chrome and glowing text), since stroking, filling and shadowing
+   * big text is slow next to copying an image. The copy is made at full opacity and drawn at the alpha asked
+   * for, so text fading in or out doesn't make a new one every frame. The copies are forgotten when the
+   * playfield changes size, or if many pile up.
    *
    * @param {CanvasRenderingContext2D} ctx
    * @param {string} text
-   * @param {object} style As for `text()`, without `align`.
+   * @param {object} style As for `text()`.
+   * @returns {{x: number, y: number, w: number, h: number}} Bounding box of the text, for hit tests.
    */
-  cachedText(ctx, text, { x, y, ...look }) {
+  cachedText(ctx, text, { x, y, alpha = 0.8, align = 'center', ...look }) {
     const key = JSON.stringify([text, look]);
-    let canvas = this.texts.get(key);
-    if (!canvas) {
-      if (this.texts.size > 64) this.texts.clear();
+    let kept = this.texts.get(key);
+    if (!kept) {
+      if (this.texts.size > 128) this.texts.clear();
       const px = this.fontPx(look.size);
-      const pad = Math.ceil(px * 0.1) + 2;   // Room for the outline
-      canvas = document.createElement('canvas');
-      canvas.width = Math.ceil(this.textWidth(this.ctx, text, look)) + 2 * pad;
+      const pad = Math.ceil(px * (look.glow ? 0.45 : look.chrome ? 0.2 : 0.1)) + 2;   // Room for the outline and glow
+      const width = this.textWidth(this.ctx, text, look);
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.ceil(width) + 2 * pad;
       canvas.height = Math.ceil(px * 1.3) + 2 * pad;
-      this.text(canvas.getContext('2d'), text, { ...look, x: canvas.width / 2, y: canvas.height / 2 });
-      this.texts.set(key, canvas);
+      const box = this.drawText(canvas.getContext('2d'), text, { ...look, alpha: 1, x: canvas.width / 2, y: canvas.height / 2 });
+      kept = { canvas, width, top: box.y - canvas.height / 2, h: box.h };
+      this.texts.set(key, kept);
     }
-    ctx.drawImage(canvas, Math.round(x - canvas.width / 2), Math.round(y - canvas.height / 2));
+    const left = align === 'left' ? x : align === 'right' ? x - kept.width : x - kept.width / 2;
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.drawImage(kept.canvas, Math.round(left + kept.width / 2 - kept.canvas.width / 2), Math.round(y - kept.canvas.height / 2));
+    ctx.restore();
+    return { x: left, y: y + kept.top, w: kept.width, h: kept.h };
   }
 
   /** The width `text()` would give a string, in canvas pixels, without drawing it. */
@@ -469,7 +525,7 @@ export class Graphics {
   }
 
   font(size, bold = false, italic = false) {
-    return `${italic ? 'italic ' : ''}${bold ? 'bold ' : ''}${this.fontPx(size)}px Arial, Helvetica, sans-serif`;
+    return `${italic ? 'italic ' : ''}${bold ? 'bold ' : ''}${this.fontPx(size)}px ${FONT_STACK}`;
   }
 
   /**
@@ -490,6 +546,30 @@ export class Graphics {
     const canvas = tint ? tintImage(scaled, tint) : scaled;
     this.icons.set(img, { px: height, tint, canvas });
     return canvas;
+  }
+
+  /**
+   * Draw the Breakout logo centred on a point. A second copy is added on top (lighter) to make it shimmer, as the
+   * old text title's colour wave did.
+   *
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {number} x Centre.
+   * @param {number} y
+   * @param {number} height In pixels at the reference resolution (scaled here).
+   * @param {number} [shimmer] How brightly lit it is just now, from 0 to 1.
+   */
+  logo(ctx, x, y, height, shimmer = 0) {
+    const img = this.icon(this.images.logo, height * this.scale);
+    const left = Math.round(x - img.width / 2);
+    const top = Math.round(y - img.height / 2);
+    ctx.drawImage(img, left, top);
+    if (shimmer > 0) {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = shimmer * LOGO_SHIMMER;
+      ctx.drawImage(img, left, top);
+      ctx.restore();
+    }
   }
 
   // --- Glow trails ------------------------------------------------------------------------------------------
