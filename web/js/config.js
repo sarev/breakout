@@ -143,6 +143,9 @@ export const BRICK_INTROS = [
 export const SPLASH_TIME = 3;
 export const SPLASH_BRICK_TIME = 1.5;
 export const SPLASH_MAX_TIME = 10;   // Only a debug jump to a late level meets more than four at once
+// A pause lasts at least this long (seconds) before it can be resumed, so pausing over and over, however fast a
+// key is hammered, can't play the game in slow motion
+export const PAUSE_MIN_TIME = 0.5;
 
 // A swaying row of bricks never comes closer to a side wall than this many cells, so a ball caught between them
 // always has room

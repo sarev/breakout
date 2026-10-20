@@ -22,7 +22,7 @@ import { loadAudioSet, loadFonts, loadImages } from './assets.js';
 import { Certificate } from './certificate.js';
 import {
   COLOURS, FONT_FAMILY, FONT_STACK, LEVEL_DEFS, LOGO_HEIGHT, LOGO_SHIMMER_PERIOD, MAX_BALLS, MAX_FRAME_DT,
-  MUSIC_ENDING_DELAY, MUSIC_FILES, MUSIC_INTRO_FADE_IN, NUM_BRICK_TYPES, RANDOM_BRICK_TYPES, SOUND_NAMES,
+  MUSIC_ENDING_DELAY, MUSIC_FILES, MUSIC_INTRO_FADE_IN, NUM_BRICK_TYPES, PAUSE_MIN_TIME, RANDOM_BRICK_TYPES, SOUND_NAMES,
   SPLASH_BRICK_TIME, SPLASH_MAX_TIME, SPLASH_TIME,
 } from './config.js';
 import { Game } from './game.js';
@@ -207,6 +207,7 @@ async function boot() {
   let splash = null;   // {text, colour, next, elapsed}
   let gateElapsed = 0;
   let notice = null;   // {text, until}: a short on-screen message (mouse captured / released)
+  let pausedAt = 0;    // performance.now() when the game was last paused
 
   function showNotice(text, seconds = 4) {
     notice = { text, until: performance.now() / 1000 + seconds };
@@ -350,10 +351,19 @@ async function boot() {
     }
   }
 
+  /** True once a pause has lasted PAUSE_MIN_TIME, and can be resumed. */
+  function resumable() {
+    return performance.now() - pausedAt >= PAUSE_MIN_TIME * 1000;
+  }
+
   function setPaused(flag) {
     if (scene !== 'game' || game.paused === flag) return;
+    // Too soon to resume: the press is ignored rather than kept for later, since resuming captures the mouse
+    // again, which a browser allows only in answer to a click or key press (the prompt waits until it's time)
+    if (!flag && !resumable()) return;
     game.paused = flag;
     if (flag) {
+      pausedAt = performance.now();
       audio.pause();
       input.releaseLock(true);   // Free the mouse while paused; remember if the player had captured it
     } else {
@@ -654,7 +664,9 @@ async function boot() {
     } else if (scene === 'game') {
       if (key === ' ') {
         e.preventDefault();
-        setPaused(!game.paused);
+        // Not on the key's auto-repeat: holding Space down would otherwise flick in and out of the pause
+        // many times a second, and play the game in slow motion. It must be let go before it can resume.
+        if (!e.repeat) setPaused(!game.paused);
       } else if (key === 'q') {
         quitToIntro();
       } else if (key === 'd' && DEBUG) {
@@ -690,7 +702,7 @@ async function boot() {
 
   /** The frame rate to throttle to right now, or 0 for the display's full rate. */
   function idleRate(now) {
-    const paused = scene === 'game' && game.paused && gfx.trailMarks.length === 0;
+    const paused = scene === 'game' && game.paused && gfx.trailMarks.length === 0 && resumable();   // Not before the prompt is up
     if (!notice && (scene === 'over' || paused)) return STILL_FPS;   // Nothing moving: only input changes them
     if (scene === 'gate') return IDLE_FPS;
     if (scene === 'intro') {
@@ -809,7 +821,7 @@ async function boot() {
       if (game.paused) {
         gfx.text(ctx, 'Paused', { x: gfx.W / 2, y: gfx.H / 2, size: 200, chrome: true, alpha: 0.9, bold: true, italic: true });
         const prompt = MOBILE ? 'Tap to continue' : 'Space, click or tap to continue';
-        gfx.text(ctx, prompt, { x: gfx.W / 2, y: gfx.H * 0.6, size: 60, colour: COLOURS.presskey, glow: COLOURS.neonCyan, alpha: 0.8 });
+        if (resumable()) gfx.text(ctx, prompt, { x: gfx.W / 2, y: gfx.H * 0.6, size: 60, colour: COLOURS.presskey, glow: COLOURS.neonCyan, alpha: 0.8 });
       } else if (game.lives <= 0 || complete) {
         endOfLevel();
       }
