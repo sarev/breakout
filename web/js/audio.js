@@ -24,8 +24,9 @@ export class Sfx {
    * @param {number} pan 0 (left) .. 1 (right); 0.5 is centred.
    * @param {number} volume 0 .. 1.
    * @param {number} rate Playback rate, which shifts the pitch too: 1 as recorded.
+   * @param {number} delay Seconds from now to start it, so one effect can follow another exactly.
    */
-  play(name, pan = 0.5, volume = 1, rate = 1) {
+  play(name, pan = 0.5, volume = 1, rate = 1, delay = 0) {
     const buffer = this.buffers[name];
     if (!buffer || this.ctx.state !== 'running') return;
     const source = this.ctx.createBufferSource();
@@ -36,7 +37,13 @@ export class Sfx {
     const gain = this.ctx.createGain();
     gain.gain.value = Math.max(0, Math.min(1, volume));
     source.connect(panner).connect(gain).connect(this.ctx.destination);
-    source.start();
+    source.start(this.ctx.currentTime + delay);
+  }
+
+  /** How long an effect lasts at its recorded rate, in seconds (0 if it didn't load). */
+  duration(name) {
+    const buffer = this.buffers[name];
+    return buffer ? buffer.duration : 0;
   }
 }
 

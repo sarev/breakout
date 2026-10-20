@@ -570,7 +570,13 @@ export class Ball {
       } else {
         // Fell off the bottom
         if (this.lives !== null && this.lives > 0) this.lives -= 1;
-        this.game.sfx.play('drop', this.x / gfx.W);
+        if (this.serveOnDrop) {
+          // The hero ball costs a life, which gets its own sound first, with the usual drop straight after it
+          this.game.sfx.play('hero-drop', this.x / gfx.W);
+          this.game.sfx.play('drop', this.x / gfx.W, 1, 1, this.game.sfx.duration('hero-drop'));
+        } else {
+          this.game.sfx.play('drop', this.x / gfx.W);
+        }
         this.dropped = true;
         this.english = 0;
         if (this.serveOnDrop) {
