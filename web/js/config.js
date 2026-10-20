@@ -408,6 +408,7 @@ export const SOUND_NAMES = [
 ];
 export const MUSIC_VOLUME = 0.4;
 export const MUSIC_FADE_SECONDS = 0.8;
+export const MUSIC_INTRO_FADE_IN = 2.5;   // Seconds: the intro tune eases in, on loading and coming back to it
 export const MUSIC_FILES = {
   intro: 'intro.ogg', stage1: 'stage1.ogg', stage2: 'stage2.ogg', boss: 'boss.ogg',
   action1: 'action1.ogg', action2: 'action2.ogg', action3: 'action3.ogg', ending: 'ending.ogg',

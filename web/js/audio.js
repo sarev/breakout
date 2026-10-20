@@ -63,6 +63,7 @@ export class Music {
     this.gain.gain.value = this.volume;
     this.gain.connect(ctx.destination);
     this.source = null;             // The looping source, while something is playing
+    this.fader = null;              // Its own gain, between it and the volume, for fading it in or out
     this.current = null;            // [name, tempo] of the track the scene wants, playing or (music off) not
   }
 
@@ -86,27 +87,37 @@ export class Music {
    * just remembers the track, so switching the music on plays it straight away rather than waiting for the next
    * scene to ask for one (which, with the music off from the start, meant the intro stayed silent).
    *
+   * Each track has its own fader, so with a fade-in the track it replaces fades out underneath rather than
+   * being cut off. Scheduled on the audio clock, so a fade asked for before the context is unlocked (the intro,
+   * from the gate) or while it's suspended (paused) waits and plays out in full once it runs.
+   *
    * @param {string} name
    * @param {number} tempo Speed (and pitch) multiplier.
+   * @param {number} fadeIn Seconds to fade in over: 0 starts at full volume, cutting off whatever was playing.
    */
-  play(name, tempo = 1) {
+  play(name, tempo = 1, fadeIn = 0) {
     if (!this.enabled) {
       this.current = [name, tempo];
       return;
     }
     if (!this.buffers[name]) return;
     if (this.current && this.current[0] === name && this.current[1] === tempo && this.playing()) return;
-    this.stop(false);
+    this.stop(fadeIn > 0);
+    const now = this.ctx.currentTime;
     const source = this.ctx.createBufferSource();
     source.buffer = this.buffers[name];
     source.loop = true;
     source.playbackRate.value = tempo;
-    source.connect(this.gain);
-    source.start();
+    const fader = this.ctx.createGain();
+    if (fadeIn > 0) {
+      fader.gain.setValueAtTime(0, now);
+      fader.gain.linearRampToValueAtTime(1, now + fadeIn);
+    }
+    source.connect(fader).connect(this.gain);
+    source.start(now);
     this.source = source;
+    this.fader = fader;
     this.current = [name, tempo];
-    this.gain.gain.cancelScheduledValues(this.ctx.currentTime);
-    this.gain.gain.setValueAtTime(this.volume, this.ctx.currentTime);
   }
 
   /**
@@ -118,13 +129,22 @@ export class Music {
   stop(fade = true) {
     this.current = null;
     const source = this.source;
+    const fader = this.fader;
     if (!source) return;
     this.source = null;
+    this.fader = null;
     if (fade) {
+      // From wherever it is now, which may be part way through its own fade-in. `value` only catches up with a
+      // ramp once the audio thread has rendered it, so where the browser can hold the ramp's true level (not
+      // Firefox) that's used instead
       const now = this.ctx.currentTime;
-      this.gain.gain.cancelScheduledValues(now);
-      this.gain.gain.setValueAtTime(this.gain.gain.value, now);
-      this.gain.gain.linearRampToValueAtTime(0, now + MUSIC_FADE_SECONDS);
+      if (fader.gain.cancelAndHoldAtTime) {
+        fader.gain.cancelAndHoldAtTime(now);
+      } else {
+        fader.gain.cancelScheduledValues(now);
+        fader.gain.setValueAtTime(fader.gain.value, now);
+      }
+      fader.gain.linearRampToValueAtTime(0, now + MUSIC_FADE_SECONDS);
       source.stop(now + MUSIC_FADE_SECONDS);
     } else {
       source.stop();

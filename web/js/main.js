@@ -21,7 +21,7 @@ import { AudioSystem, Music, Sfx } from './audio.js';
 import { loadAudioSet, loadImages } from './assets.js';
 import { Certificate } from './certificate.js';
 import {
-  COLOURS, LEVEL_DEFS, MAX_BALLS, MAX_FRAME_DT, MUSIC_ENDING_DELAY, MUSIC_FILES, NUM_BRICK_TYPES, RANDOM_BRICK_TYPES, SOUND_NAMES,
+  COLOURS, LEVEL_DEFS, MAX_BALLS, MAX_FRAME_DT, MUSIC_ENDING_DELAY, MUSIC_FILES, MUSIC_INTRO_FADE_IN, NUM_BRICK_TYPES, RANDOM_BRICK_TYPES, SOUND_NAMES,
   SPLASH_BRICK_TIME, SPLASH_MAX_TIME, SPLASH_TIME,
 } from './config.js';
 import { Game } from './game.js';
@@ -247,7 +247,7 @@ async function boot() {
   function leaveGate() {
     audio.unlock();
     startTilt();
-    music.play('intro');
+    music.play('intro', 1, MUSIC_INTRO_FADE_IN);
     scene = 'intro';
   }
 
@@ -301,7 +301,7 @@ async function boot() {
   function backToIntro() {
     input.releaseLock();
     intro.relayout();
-    music.play('intro');
+    music.play('intro', 1, MUSIC_INTRO_FADE_IN);   // The ending fades out as it comes in
     scene = 'intro';
   }
 
@@ -439,7 +439,7 @@ async function boot() {
     game.paused = false;
     game.clearInversion();
     intro.relayout();
-    music.play('intro');
+    music.play('intro', 1, MUSIC_INTRO_FADE_IN);
     scene = 'intro';
   }
 
