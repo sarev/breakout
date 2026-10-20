@@ -1,13 +1,13 @@
 Background music by Juhani Junkala (SubspaceAudio), from two packs, both
 Licence: CC0 1.0 (public domain dedication) - https://creativecommons.org/publicdomain/zero/1.0/
 
-"Chiptune Adventures" (4 Chiptunes (Adventure)): https://opengameart.org/content/4-chiptunes-adventure
+"4 Chiptunes (Adventure)" (downloaded as "Chiptune Adventures"): https://opengameart.org/content/4-chiptunes-adventure
   intro.ogg   = "4. Stage Select"
   stage1.ogg  = "1. Stage 1"
   stage2.ogg  = "2. Stage 2"
   boss.ogg    = "3. Boss Fight"
 
-"Retro Game Music Pack" (5 Chiptunes (Action)): https://opengameart.org/content/5-chiptunes-action
+"5 Chiptunes (Action)": https://opengameart.org/content/5-chiptunes-action
 Encoded from the pack's WAVs to OGG Vorbis, quality 0.9. Used by the browser version only.
   action1.ogg = "Level 1"
   action2.ogg = "Level 2"

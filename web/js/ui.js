@@ -81,14 +81,20 @@ const CREDITS = `
 <h2>Credits</h2>
 <p>Breakout is &copy; 2025-26 7th software Ltd. A modern take on the classic brick-breaker, with a nod to Arkanoid,
 Fireball 2 on the Archimedes, and the other classics.</p>
+<p>It's free software: 7th software's code, graphics and sound effects are under the Apache License 2.0, and the
+source is on <a href="https://github.com/sarev/breakout" target="_blank" rel="noopener">GitHub</a>, where
+<a href="https://github.com/sarev/breakout/blob/main/LICENSES.md" target="_blank" rel="noopener">LICENSES.md</a>
+says what's under which licence.</p>
 <ul>
-<li>Sound effects made with <a href="https://sfxr.me/" target="_blank" rel="noopener">sfxr</a></li>
-<li>Music: &ldquo;Chiptune Adventures&rdquo; and the &ldquo;Retro Game Music Pack&rdquo; by <a href="https://juhanijunkala.com/" target="_blank" rel="noopener">Juhani Junkala</a>,
-released under CC0 via OpenGameArt (<a href="https://opengameart.org/content/4-chiptunes-adventure" target="_blank" rel="noopener">1</a>,
-<a href="https://opengameart.org/content/5-chiptunes-action" target="_blank" rel="noopener">2</a>)</li>
+<li>Graphics by 7th software, made with the help of ChatGPT and Gemini</li>
+<li>Sound effects by 7th software, made with <a href="https://sfxr.me/" target="_blank" rel="noopener">sfxr</a></li>
+<li>Music by <a href="https://juhanijunkala.com/" target="_blank" rel="noopener">Juhani Junkala</a>, from
+&ldquo;<a href="https://opengameart.org/content/4-chiptunes-adventure" target="_blank" rel="noopener">4 Chiptunes (Adventure)</a>&rdquo;
+and &ldquo;<a href="https://opengameart.org/content/5-chiptunes-action" target="_blank" rel="noopener">5 Chiptunes (Action)</a>&rdquo;
+on OpenGameArt, released under CC0</li>
 <li>Text set in <a href="https://fonts.google.com/specimen/Exo+2" target="_blank" rel="noopener">Exo 2</a>, by Natanael Gama, under the SIL Open Font Licence</li>
-<li>Final level background: the Rosette Nebula, by <a href="https://deography.com/will-you-accept-this-rose-ngc2237/" target="_blank" rel="noopener">Dylan O'Donnell</a></li>
-<li>Thanks to ChatGPT and Gemini for art assistance</li>
+<li>The backdrop of levels 10 and 11: the Rosette Nebula, photographed by
+<a href="https://deography.com/will-you-accept-this-rose-ngc2237/" target="_blank" rel="noopener">Dylan O'Donnell</a>, who has put it in the public domain</li>
 <li>Web conversion by <a href="https://www.anthropic.com/claude" target="_blank" rel="noopener">Anthropic's Claude</a></li>
 <li>The desktop version is built on the <a href="https://www.pygame.org/" target="_blank" rel="noopener">Pygame</a> community's excellent work</li>
 </ul>

@@ -151,7 +151,7 @@ Background music is streamed from OGG files in `web/music/` through `pygame.mixe
 - `play()` is a no-op if the requested track is already playing, which is what lets the music run on uninterrupted across the monitor-switch re-initialisation.
 - Pausing the game pauses the music; game over and the win fade it out under the splash; **M** toggles it in the intro and during play; `--no-music` starts with it off.
 - In the browser version the intro tune fades in over `MUSIC_INTRO_FADE_IN` seconds, leaving the gate and on coming back to the intro, rather than starting at full volume. Each track plays through its own fader gain under the volume gain, so `Music.play(name, tempo, fadeIn)` fades the track it replaces out underneath (the certificate's ending, say) rather than cutting it off.
-- The tracks are CC0 (Juhani Junkala's "Chiptune Adventures", via OpenGameArt); `web/music/CREDITS.txt` carries the attribution. The browser version also has three tracks from his "Retro Game Music Pack" for stages 4 to 6 (`MUSIC_LEVEL_PLAN`, in place of the faster repeats this version plays), and its "Ending" for the certificate, started `MUSIC_ENDING_DELAY` seconds after the win or game-over sound, once the level's tune has faded.
+- The tracks are CC0 (Juhani Junkala's "4 Chiptunes (Adventure)", via OpenGameArt); `web/music/CREDITS.txt` carries the attribution. The browser version also has three tracks from his "5 Chiptunes (Action)" for stages 4 to 6 (`MUSIC_LEVEL_PLAN`, in place of the faster repeats this version plays), and its "Ending" for the certificate, started `MUSIC_ENDING_DELAY` seconds after the win or game-over sound, once the level's tune has faded.
 
 # Web version
 
