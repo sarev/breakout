@@ -40,11 +40,14 @@ const SENSITIVITY = parseFloat(params.get('sensitivity') || '1') || 1;
 const MUSIC_KEY = 'breakout-music';
 const MUSIC_ON = params.has('music') ? params.get('music') !== '0' : readSetting(MUSIC_KEY) !== 'off';
 const MUSIC_VOLUME = params.has('volume') ? parseFloat(params.get('volume')) : null;
-// Whether each game starts with the mouse captured (the Options page, desktop only), remembered between visits
+// Whether the mouse is captured in play (the Options page, desktop only): on unless turned off, remembered
+// between visits
 const CAPTURE_KEY = 'breakout-capture';
 // Whether the bat is steered by rolling the phone (the Options page, phones only), remembered likewise
 const TILT_KEY = 'breakout-tilt';
-let captureMouse = readSetting(CAPTURE_KEY) === 'on';
+let captureMouse = readSetting(CAPTURE_KEY) !== 'off';
+let lockAnnounced = false;   // Whether this game has captured the mouse yet (the prompt says how to get it back until then)
+let levelHold = null;        // Seconds a level has been waiting for the click that starts it, or null once going
 
 /**
  * Is this a mobile device: a phone or tablet whose only pointer is a finger?
@@ -275,9 +278,10 @@ async function boot() {
   }
 
   function startGame() {
-    // The click or key that starts the game is the user gesture a pointer lock request needs, so a player who
-    // asked for it on the Options page has the mouse captured from the first banner on (never on a phone)
-    if (captureMouse) input.requestLock();
+    // The mouse is captured only while a level is being played: each level start takes it, and the banners,
+    // a pause, the certificate and the intro all give it back (never on a phone)
+    input.wantLock = captureMouse && !MOBILE;
+    lockAnnounced = false;
     game.reset();
     music.play('intro');   // keeps playing under the first splash, as in the Python version
     showSplash('Level 1...', COLOURS.advance, 'level');
@@ -288,7 +292,10 @@ async function boot() {
     music.play(...Music.levelTrack(Game.stage(game.level)));
     game.running = true;
     scene = 'game';
-    if (input.wantLock) input.requestLock();   // Only if the player opted in with L earlier
+    // A lock request needs a user gesture, and a banner can outlast the one that started the game or skipped
+    // it, so a level that's to capture the mouse waits for a click (a player who leaves the ball to serve itself
+    // would otherwise never give one). The bat moves meanwhile, but the clock, and with it the serve, waits
+    levelHold = input.wantLock ? 0 : null;
   }
 
   function leaveSplash() {
@@ -330,6 +337,7 @@ async function boot() {
     }
     game.level += 1;
     if (game.level <= Game.maxLevel) {
+      input.releaseLock(true);   // The banner frees the mouse, and the next level takes it back
       game.lives += 1;
       gfx.buildBackground(Game.stage(game.level));
       showSplash(`Level ${game.level}...`, COLOURS.advance, 'level');
@@ -348,6 +356,7 @@ async function boot() {
     } else {
       audio.resume();
       if (input.wantLock) input.requestLock();
+      levelHold = null;   // The click or key that resumes is the gesture a level waiting to start wanted
       // With tilt steering, however the phone is held on resuming is level again (a pause is the way to re-level)
       if (game.tiltBat && game.steer) game.steer.level();
     }
@@ -419,14 +428,18 @@ async function boot() {
   }
 
   /**
-   * L: capture or release the mouse (pointer lock). Opt-in, and announced on screen either way. Works on the
-   * level banner too, where the hint suggests it, as well as in play.
+   * L: capture or release the mouse (pointer lock) for the rest of this game. Works on the level banner too,
+   * where the hint suggests it with capture off, though the banner itself leaves the mouse free: there it
+   * just decides whether the level takes it.
    */
   function toggleLock() {
     if (MOBILE || (scene !== 'game' && scene !== 'splash') || game.paused) return;
     if (input.locked || input.wantLock) {
       input.releaseLock();
-      showNotice('Mouse released');
+      showNotice(scene === 'splash' ? 'The mouse stays free this game' : 'Mouse released');
+    } else if (scene === 'splash') {
+      input.wantLock = true;
+      showNotice('The mouse will be captured in play');
     } else {
       input.requestLock();
     }
@@ -449,14 +462,14 @@ async function boot() {
   }
 
   /**
-   * The Options page's mouse capture button (not offered on a phone): whether each game starts with the mouse
-   * captured, remembered for next time. L still captures or releases it for the game in hand. Switched in play
-   * (a two-finger tap on a touch laptop), it applies when the game resumes, as the pause has let the mouse go.
+   * The Options page's mouse capture button (not offered on a phone): whether the mouse is captured in play,
+   * remembered for next time. L still captures or releases it for the game in hand. Switched in play, it
+   * applies when the game resumes, as the pause has let the mouse go.
    */
   function toggleCapture() {
     captureMouse = !captureMouse;
     writeSetting(CAPTURE_KEY, captureMouse ? 'on' : 'off');
-    if (scene === 'game') input.wantLock = captureMouse;
+    if (scene === 'game' || scene === 'splash') input.wantLock = captureMouse && !MOBILE;
   }
 
   /**
@@ -522,6 +535,11 @@ async function boot() {
         setPaused(false);
         return;
       }
+      if (levelHold !== null) {
+        // The click a level waits for: it captures the mouse and sets the level going, and serves as any click does
+        levelHold = null;
+        if (input.wantLock) input.requestLock();
+      }
       // A click or tap launches any balls stuck to the bats (the sticky bat brick), and the waiting ball; with
       // neither, it speeds the balls up
       const released = game.releaseStuck();
@@ -552,7 +570,8 @@ async function boot() {
     if (scene === 'game' && !game.paused) setPaused(true);
   };
   input.onLockChange = (locked) => {
-    if (locked) showNotice('Mouse captured. Esc or L releases it.', 5);
+    // No notice: Click to start... has said how to get the mouse back, before it was taken
+    if (locked) lockAnnounced = true;
   };
   input.onTap = () => { fullscreenOnTap(); primaryAction(); };
   game.wipe.onTired = () => showNotice('Too frantic! The bat is worn out for a moment', 2.5);
@@ -762,9 +781,29 @@ async function boot() {
     } else if (scene === 'over') {
       certificate.draw(ctx);
     } else if (scene === 'game') {
-      game.update(dt);
+      if (levelHold !== null && !game.paused) {
+        // Waiting for the click that starts the level: only the bat, and the ball on it, move
+        levelHold += dt;
+        game.animateBats(dt);
+        if (game.serving) game.holdHeroBall();
+      } else {
+        game.update(dt);
+      }
       const complete = game.draw(ctx);
       game.advanceEffects(dt);
+      if (levelHold !== null && !game.paused) {
+        // Bobbing gently, and fading in, so it reads as a prompt rather than part of the level
+        gfx.text(ctx, 'Click to start...', {
+          x: gfx.W / 2, y: gfx.H * (0.55 + 0.012 * Math.sin(levelHold * 2.5)), size: 120, colour: COLOURS.white,
+          alpha: Math.min(0.8, levelHold * 2), bold: true, italic: true,
+        });
+        // How to get the mouse back, until the game has first taken it
+        if (!lockAnnounced) {
+          gfx.text(ctx, 'The mouse is captured in play: Esc or L releases it', {
+            x: gfx.W / 2, y: gfx.H * 0.64, size: 50, colour: COLOURS.presskey, alpha: Math.min(0.7, levelHold * 2),
+          });
+        }
+      }
       if (game.paused) {
         gfx.text(ctx, 'Paused', { x: gfx.W / 2, y: gfx.H / 2, size: 200, colour: COLOURS.white, alpha: 0.7, bold: true });
         const prompt = MOBILE ? 'Tap to continue' : 'Space, click or tap to continue';

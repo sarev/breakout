@@ -8,7 +8,7 @@
 // The Options page began for touch screens, where there are no keys to toggle the music or go fullscreen and no
 // Q to quit: a two-finger tap opens it (pausing the game first). It works just as well with a mouse on a touch
 // laptop. On a desktop the intro's Options link (or O) opens it too, which keeps the intro down to one link, and
-// there it has a setting of its own: whether games start with the mouse captured (never offered on a phone).
+// there it has a setting of its own: whether the mouse is captured in play (never offered on a phone).
 // Its buttons call back into main.js, which owns the music, fullscreen, mouse and scene state.
 
 const BRICKS = [
@@ -35,7 +35,7 @@ const KEYBOARD_CONTROLS = `
 <tr><td>Space</td><td>Pause and resume</td></tr>
 <tr><td>M</td><td>Music on or off</td></tr>
 <tr><td>F</td><td>Fullscreen</td></tr>
-<tr><td>L</td><td>Capture the mouse so it can't leave the page (Esc or L releases it). To have every game start that way, turn it on in the options.</td></tr>
+<tr><td>L</td><td>Capture or release the mouse for this game. It's captured in play, so it can't leave the page, and free everywhere else (Esc releases it too, and pauses). To leave it free in every game, turn it off in the options.</td></tr>
 <tr><td>Q</td><td>Back to this screen</td></tr>
 <tr><td>O</td><td>On this screen, the options: music, fullscreen, capturing the mouse, help and credits</td></tr>
 `;

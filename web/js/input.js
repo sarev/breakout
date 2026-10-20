@@ -1,12 +1,13 @@
 // Pointer handling.
 //
-// Two mouse modes. By default we use the absolute cursor position, like any other canvas game: the cursor stays
-// visible outside the playfield and nothing surprising happens to it. Optionally (the L key) the player can
-// capture the mouse with the browser's Pointer Lock API; then we get raw movement deltas and accumulate our own
-// pointer position, so the bat can be driven without the real cursor ever reaching the edge of the screen. A
-// locked mouse is alarming if you weren't expecting it, which is why it's opt-in and announced on screen, and
-// why losing the lock (Esc) pauses the game. On a mobile device there is only the one screen and no keyboard,
-// so the lock is never offered there.
+// Two mouse modes. Outside play, and wherever the lock is refused or turned off, we use the absolute cursor
+// position, like any other canvas game: the cursor stays visible outside the playfield and nothing surprising
+// happens to it. While a level is being played the mouse is captured with the browser's Pointer Lock API (on
+// by default, and the L key or the Options page turns it off); then we get raw movement deltas and accumulate
+// our own pointer position, so the bat can be driven without the real cursor ever reaching the edge of the
+// screen. A locked mouse is alarming if you weren't expecting it, which is why it's announced on screen, given
+// back on every banner, pause and menu, and why losing the lock (Esc) pauses the game. On a mobile device there
+// is only the one screen and no keyboard, so the lock is never offered there.
 //
 // Touch is always absolute: the pointer is wherever the finger is, on the intro (the hero ball sits under it)
 // and in play (the bat sits under it). Lifting the finger and putting it down somewhere else moves the bat
