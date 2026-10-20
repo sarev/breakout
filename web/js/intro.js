@@ -322,8 +322,7 @@ export class Intro {
 
     gfx.logo(ctx, x, gfx.H * 0.17, layout.logo, 0.5 + 0.5 * Math.sin((2 * Math.PI * this.elapsed) / LOGO_SHIMMER_PERIOD));
     // The small print stays small, under the logo; the prompt, what to do next, stands out more
-    gfx.text(ctx, 'Copyright © 2025-26, 7th software Ltd.', { x, y: gfx.H * 0.325, size: 60, colour: COLOURS.steel, alpha: 200 / 255 });
-    gfx.text(ctx, 'All rights reserved.', { x, y: gfx.H * 0.37, size: 42, colour: COLOURS.gunmetal, alpha: 220 / 255 });
+    gfx.text(ctx, 'Copyright © 2025-26, 7th software Ltd.', { x, y: gfx.H * 0.35, size: 60, colour: COLOURS.steel, alpha: 200 / 255 });
     const prompt = this.input.mobile
       ? 'Tap a difficulty to play'
       : 'Click a difficulty to play, or use the arrow keys and Enter';

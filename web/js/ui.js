@@ -88,7 +88,7 @@ released under CC0 via OpenGameArt (<a href="https://opengameart.org/content/4-c
 <a href="https://opengameart.org/content/5-chiptunes-action" target="_blank" rel="noopener">2</a>)</li>
 <li>Text set in <a href="https://fonts.google.com/specimen/Exo+2" target="_blank" rel="noopener">Exo 2</a>, by Natanael Gama, under the SIL Open Font Licence</li>
 <li>Final level background: the Rosette Nebula, by <a href="https://deography.com/will-you-accept-this-rose-ngc2237/" target="_blank" rel="noopener">Dylan O'Donnell</a></li>
-<li>Thanks to ChatGPT for art assistance</li>
+<li>Thanks to ChatGPT and Gemini for art assistance</li>
 <li>Web conversion by <a href="https://www.anthropic.com/claude" target="_blank" rel="noopener">Anthropic's Claude</a></li>
 <li>The desktop version is built on the <a href="https://www.pygame.org/" target="_blank" rel="noopener">Pygame</a> community's excellent work</li>
 </ul>

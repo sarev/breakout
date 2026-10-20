@@ -1500,7 +1500,6 @@ class Graphics():
         'win': (224, 224, 255),
         'title': (64, 104, 191),
         'copyright': (128, 168, 255),
-        'rights': (128, 168, 255),
         'presskey': (64, 224, 224),
         'item': (32, 164, 32),
         'selitem': (96, 224, 96)
@@ -3874,7 +3873,6 @@ def intro(gfx: Graphics, game: Game, widget: MonitorSelector, image_path: str) -
     messages = []
     messages.append(Text(gfx, game, "Breakout", Graphics.colours['title'], x, gfx.window_height * 0.2, size=400, alpha=224, italic=True, bold=True))
     messages.append(Text(gfx, game, "Copyright © 2025-26, 7th software Ltd.", Graphics.colours['copyright'], x, gfx.window_height * 0.35, size=80, alpha=200))
-    messages.append(Text(gfx, game, "All rights reserved.", Graphics.colours['rights'], x, gfx.window_height * 0.41, size=80, alpha=200))
     messages.append(Text(gfx, game, "Click or press any key to continue", Graphics.colours['presskey'], x, gfx.window_height * 0.46, size=60, alpha=200))
     title = messages[0]
 
