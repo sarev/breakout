@@ -1,6 +1,6 @@
 # Licences
 
-Breakout is made of 7th software Ltd.'s own work, which is free software under the Apache License 2.0, and a few things by other people, which are theirs and come under their own terms. This page says which is which. The Apache License 2.0 in [LICENSE](LICENSE) applies only to the first group.
+Break2Zero is made of 7th software Ltd.'s own work, which is free software under the Apache License 2.0, and a few things by other people, which are theirs and come under their own terms. This page says which is which. The Apache License 2.0 in [LICENSE](LICENSE) applies only to the first group.
 
 ## 7th software Ltd.'s work: Apache License 2.0
 
@@ -8,7 +8,7 @@ Breakout is made of 7th software Ltd.'s own work, which is free software under t
 
 | What | Where |
 | ---- | ----- |
-| The code: the browser game, the Python game and the tools | `web/index.html`, `web/tilt.html`, `web/sw.js`, `web/manifest.json`, `web/js/`, `breakout.py`, `tools/` |
+| The code: the browser game, the Python game and the tools | `web/index.html`, `web/tilt.html`, `web/sw.js`, `web/manifest.json`, `web/js/`, `break2zero.py`, `tools/` |
 | The sprites: balls, bats, bricks, glows, lasers, the logo and the stage backdrops 1 to 5, made with the help of ChatGPT and Gemini | `images/` and `web/sprites/`, except `tile6` (below) |
 | The icons | `icon.ico`, `web/favicon.ico`, `web/apple-touch-icon.png`, `web/icon-192.png`, `web/icon-512.png` |
 | The sound effects, made with sfxr | `web/sounds/` |

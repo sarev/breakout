@@ -1,6 +1,6 @@
-// Breakout (web version): all the tuning numbers in one place.
+// Break2Zero (web version): all the tuning numbers in one place.
 //
-// These mirror the constants at the top of the classes in breakout.py, which is the reference implementation.
+// These mirror the constants at the top of the classes in break2zero.py, which is the reference implementation.
 // Distances are logical playfield pixels at the 1080p reference (scaled to the viewport at run time, see
 // graphics.js) and speeds are pixels per second.
 
@@ -156,7 +156,7 @@ export const SWAY_WALL_GAP = 1;
 // regenerator, sticky bat
 export const BRICK_LIVES = [1, 3, 2, 2, 4, 3, 2, 99, 3, 3, 2, 3, 2];
 
-// Brick layouts. 0 is filled randomly with blue / red / green by difficulty; 7 is metal; see breakout.py.
+// Brick layouts. 0 is filled randomly with blue / red / green by difficulty; 7 is metal; see break2zero.py.
 //
 // The kinds of brick arrive gradually, so the level banner never has more than two to introduce after the
 // first level (see BRICK_INTROS), and the swaying levels bring something of their own: level 1 has only the

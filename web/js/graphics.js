@@ -549,7 +549,7 @@ export class Graphics {
   }
 
   /**
-   * Draw the Breakout logo centred on a point. A second copy is added on top (lighter) to make it shimmer, as the
+   * Draw the Break2Zero logo centred on a point. A second copy is added on top (lighter) to make it shimmer, as the
    * old text title's colour wave did.
    *
    * @param {CanvasRenderingContext2D} ctx

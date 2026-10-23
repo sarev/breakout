@@ -266,7 +266,7 @@ export class Certificate {
     const d = this.startedAt;
     const two = (n) => String(n).padStart(2, '0');
     const stamp = `${d.getFullYear()}-${two(d.getMonth() + 1)}-${two(d.getDate())}-${two(d.getHours())}${two(d.getMinutes())}`;
-    const name = `breakout-${this.won ? 'win' : 'game-over'}-${this.difficulty.toLowerCase()}-${stamp}.png`;
+    const name = `break2zero-${this.won ? 'win' : 'game-over'}-${this.difficulty.toLowerCase()}-${stamp}.png`;
     return new Promise((resolve) => {
       canvas.toBlob((blob) => {
         if (!blob) { resolve(null); return; }

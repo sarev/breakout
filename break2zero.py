@@ -116,7 +116,7 @@ class MonitorSelector():
         self.monitors = pygame.display.get_num_displays()
         if self.monitors == 0:
             # No monitors found!
-            raise RuntimeError("Breakout cannot run on a headless system")
+            raise RuntimeError("Break2Zero cannot run on a headless system")
         elif self.monitors == 1:
             # Disable this widget if there's only one monitor
             self.enabled = False
@@ -1658,7 +1658,7 @@ class Graphics():
         self._text_cache_limit = 32
 
         # Set the name of the window
-        pygame.display.set_caption("Breakout")
+        pygame.display.set_caption("Break2Zero")
 
         # Hide the mouse pointer
         pygame.mouse.set_visible(False)
@@ -3871,7 +3871,7 @@ def intro(gfx: Graphics, game: Game, widget: MonitorSelector, image_path: str) -
 
     # Create some other text objects
     messages = []
-    messages.append(Text(gfx, game, "Breakout", Graphics.colours['title'], x, gfx.window_height * 0.2, size=400, alpha=224, italic=True, bold=True))
+    messages.append(Text(gfx, game, "Break2Zero", Graphics.colours['title'], x, gfx.window_height * 0.2, size=260, alpha=224, italic=True, bold=True))
     messages.append(Text(gfx, game, "Copyright © 2025-26, 7th software Ltd.", Graphics.colours['copyright'], x, gfx.window_height * 0.35, size=80, alpha=200))
     messages.append(Text(gfx, game, "Click or press any key to continue", Graphics.colours['presskey'], x, gfx.window_height * 0.46, size=60, alpha=200))
     title = messages[0]
@@ -4290,7 +4290,7 @@ def menu_loop(args: argparse.Namespace) -> int:
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
     parser = argparse.ArgumentParser(
-        description="Breakout. A different spin on the classic retro brick-breaker game."
+        description="Break2Zero. A different spin on the classic retro brick-breaker game."
     )
     parser.add_argument("--resize", "-r", type=float, default=1.0,
                         help="Ratio for down-sizing the graphics for a more retro feel. Default: 1.0")

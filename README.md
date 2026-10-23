@@ -1,12 +1,12 @@
-# Breakout
+# Break2Zero
 
 A modern take on the classic brick-breaker, played in the browser on a desktop or a phone. Clear every breakable brick while keeping the blue “hero” ball in play, across eleven levels and three difficulties, with bonus balls, extra bats, lasers, inversion, safety nets and more to keep things lively.
 
-**[Play it at breakout.7thsoftware.co.uk](https://breakout.7thsoftware.co.uk/)**: nothing to install, and no adverts, cookies or trackers.
+**[Play it at break2zero.7thsoftware.co.uk](https://break2zero.7thsoftware.co.uk/)**: nothing to install, and no adverts, cookies or trackers.
 
 ![Illustration](./images/intro.png)
 
-Breakout is free software, under the [Apache License 2.0](LICENSE) (apart from the music, the typeface and one photograph, which are other people's: see [Licence](#licence)). It began as a desktop game in Python and Pygame, which is still here (see [The Python original](#the-python-original)); the browser version in the `web` folder grew out of it and is now the main game.
+Break2Zero is free software, under the [Apache License 2.0](LICENSE) (apart from the music, the typeface and one photograph, which are other people's: see [Licence](#licence)). It began as a desktop game in Python and Pygame, which is still here (see [The Python original](#the-python-original)); the browser version in the `web` folder grew out of it and is now the main game.
 
 ## Features
 
@@ -81,7 +81,7 @@ The intro and each stage have their own chiptune track, played at a volume that 
 
 ### Winning, and losing
 
-Clear the last level and the win screen is a certificate, headed by the Breakout logo: the difficulty, the play mode (Desktop, Mobile (touch), or Mobile (tilt) when the phone's roll steered the bat), the lives you had left, the time spent in play (the game clock, which stands still during the level banners and pauses) in minutes and seconds to the hundredth of a second, and the date and time the first level began. Lose your last life and you get the same certificate headed Game Over!, with how long you lasted and the level you reached in place of the lives line. The box in the top-right corner takes a selfie with the front camera (the browser asks permission first; the preview is mirrored, and so is the photo, so you get what you saw) and puts it on the certificate. The photo never leaves the device: nothing is uploaded, as a footnote on the certificate says, and the Help page has a short privacy note (no cookies or trackers, nothing collected; only the settings are kept, in the browser). The box in the top-left saves the certificate as a PNG, named for the difficulty and the start time, which on a phone lands in the gallery's Downloads album; **S** does the same on a keyboard. Tap or click anywhere else, or press any other key, to go back to the intro.
+Clear the last level and the win screen is a certificate, headed by the Break2Zero logo: the difficulty, the play mode (Desktop, Mobile (touch), or Mobile (tilt) when the phone's roll steered the bat), the lives you had left, the time spent in play (the game clock, which stands still during the level banners and pauses) in minutes and seconds to the hundredth of a second, and the date and time the first level began. Lose your last life and you get the same certificate headed Game Over!, with how long you lasted and the level you reached in place of the lives line. The box in the top-right corner takes a selfie with the front camera (the browser asks permission first; the preview is mirrored, and so is the photo, so you get what you saw) and puts it on the certificate. The photo never leaves the device: nothing is uploaded, as a footnote on the certificate says, and the Help page has a short privacy note (no cookies or trackers, nothing collected; only the settings are kept, in the browser). The box in the top-left saves the certificate as a PNG, named for the difficulty and the start time, which on a phone lands in the gallery's Downloads album; **S** does the same on a keyboard. Tap or click anywhere else, or press any other key, to go back to the intro.
 
 ### Things worth knowing
 
@@ -125,7 +125,7 @@ Options go on the URL, for example `http://localhost:8000/?music=0&sensitivity=1
 
 ## The Python original
 
-`breakout.py` is the desktop game the browser version was ported from, in Python and Pygame. It has the first six levels and the first nine kinds of brick, the same physics, speed model and power-ups, and its own intro with a perspective-warped card. The browser version is where the game is developed now; the Python one is kept as its ancestor. It loads its sprites from `images`, and its sounds and music from `web`.
+`break2zero.py` is the desktop game the browser version was ported from, in Python and Pygame. It has the first six levels and the first nine kinds of brick, the same physics, speed model and power-ups, and its own intro with a perspective-warped card. The browser version is where the game is developed now; the Python one is kept as its ancestor. It loads its sprites from `images`, and its sounds and music from `web`.
 
 ### Requirements
 
@@ -164,7 +164,7 @@ pip install pygame opencv-python numpy
 
 ```bash
 # With the virtual environment active
-python breakout.py
+python break2zero.py
 ```
 
 - `--ratio` (or `-r`) scales the graphics down by a factor, e.g. `-r 4` down-scales everything by four horizontally and vertically. Higher values give more retro vibes, and if your machine struggles to play it smoothly at full resolution, a higher ratio reduces the CPU load.
@@ -192,7 +192,7 @@ python breakout.py
 
 ## Licence
 
-7th software Ltd.'s own work in Breakout is © 2025-26 7th software Ltd., and free software under the [Apache License 2.0](LICENSE): the code, the sprites (made with the help of ChatGPT and Gemini), the sound effects (made with sfxr) and the screenshots. The rest is other people's, under their own terms, and not covered by the Apache licence:
+7th software Ltd.'s own work in Break2Zero is © 2025-26 7th software Ltd., and free software under the [Apache License 2.0](LICENSE): the code, the sprites (made with the help of ChatGPT and Gemini), the sound effects (made with sfxr) and the screenshots. The rest is other people's, under their own terms, and not covered by the Apache licence:
 
 - The music is Juhani Junkala's, released under CC0
 - The Exo 2 typeface is Natanael Gama's, under the SIL Open Font Licence

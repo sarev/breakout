@@ -38,14 +38,14 @@ const DEBUG = params.get('debug') === '1';
 const DEBUG_LIVES = DEBUG && /^[1-9]\d*$/.test(params.get('lives') || '') ? parseInt(params.get('lives'), 10) : null;
 const SENSITIVITY = parseFloat(params.get('sensitivity') || '1') || 1;
 // Music on or off is remembered between visits; ?music=0 still starts a visit with it off
-const MUSIC_KEY = 'breakout-music';
+const MUSIC_KEY = 'break2zero-music';
 const MUSIC_ON = params.has('music') ? params.get('music') !== '0' : readSetting(MUSIC_KEY) !== 'off';
 const MUSIC_VOLUME = params.has('volume') ? parseFloat(params.get('volume')) : null;
 // Whether the mouse is captured in play (the Options page, desktop only): on unless turned off, remembered
 // between visits
-const CAPTURE_KEY = 'breakout-capture';
+const CAPTURE_KEY = 'break2zero-capture';
 // Whether the bat is steered by rolling the phone (the Options page, phones only), remembered likewise
-const TILT_KEY = 'breakout-tilt';
+const TILT_KEY = 'break2zero-tilt';
 let captureMouse = readSetting(CAPTURE_KEY) !== 'off';
 let lockAnnounced = false;   // Whether this game has captured the mouse yet (the prompt says how to get it back until then)
 let levelHold = null;        // Seconds a level has been waiting for the click that starts it, or null once going
@@ -443,7 +443,7 @@ async function boot() {
     const d = new Date();
     const two = (n) => String(n).padStart(2, '0');
     const stamp = `${d.getFullYear()}-${two(d.getMonth() + 1)}-${two(d.getDate())}-${two(d.getHours())}${two(d.getMinutes())}${two(d.getSeconds())}`;
-    const name = `breakout-level${game.level}-${stamp}.png`;
+    const name = `break2zero-level${game.level}-${stamp}.png`;
     shot.toBlob((blob) => {
       if (!blob) { showNotice('Screenshot failed'); return; }
       const url = URL.createObjectURL(blob);
@@ -875,7 +875,7 @@ async function boot() {
   }
 
   // Expose the live objects for poking at from the console (and for the automated smoke test)
-  window.breakout = {
+  window.break2zero = {
     screenshot: saveScreenshot, showcase, game, gfx, input, intro, certificate, audio, mobile: MOBILE, get scene() { return scene; }, get frames() { return frames; } };
 
   // Away with the loading screen: the first frame (the gate) is drawn before the page is next shown

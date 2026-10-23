@@ -1,4 +1,4 @@
-// The things in the game: balls, bats, bricks and laser bolts. A direct port of the classes in breakout.py.
+// The things in the game: balls, bats, bricks and laser bolts. A direct port of the classes in break2zero.py.
 //
 // Positions are playfield pixels, velocities are playfield pixels per second, and every `move()` takes the
 // length of one physics sub-step. Each entity holds references to the graphics (for sizes and sprites) and the

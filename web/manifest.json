@@ -1,6 +1,6 @@
 {
-  "name": "Breakout",
-  "short_name": "Breakout",
+  "name": "Break2Zero",
+  "short_name": "Break2Zero",
   "description": "A free, open-source brick-breaker for your browser, on a desktop or a phone.",
   "start_url": "./",
   "scope": "./",

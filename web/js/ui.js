@@ -69,7 +69,7 @@ bonus ball is thrown in.</p>
 often gets worn out, and for a few seconds it can't keep up.</p>
 
 <h3>Privacy</h3>
-<p>Breakout uses no cookies, adverts or trackers, and it doesn't collect anything about you or how you play,
+<p>Break2Zero uses no cookies, adverts or trackers, and it doesn't collect anything about you or how you play,
 or send it anywhere. All it keeps is your settings (such as whether the music is on), which your browser
 stores on this device so they're remembered next time.</p>
 <p>The selfie on the end-of-game certificate is taken and shown entirely on your device. It is never uploaded
@@ -79,11 +79,11 @@ or sent anywhere, and it's only kept if you save the certificate as a picture yo
 
 const CREDITS = `
 <h2>Credits</h2>
-<p>Breakout is &copy; 2025-26 7th software Ltd. A modern take on the classic brick-breaker, with a nod to Arkanoid,
+<p>Break2Zero is &copy; 2025-26 7th software Ltd. A modern take on the classic brick-breaker, with a nod to Arkanoid,
 Fireball 2 on the Archimedes, and the other classics.</p>
 <p>It's free software: 7th software's code, graphics and sound effects are under the Apache License 2.0, and the
-source is on <a href="https://github.com/sarev/breakout" target="_blank" rel="noopener">GitHub</a>, where
-<a href="https://github.com/sarev/breakout/blob/main/LICENSES.md" target="_blank" rel="noopener">LICENSES.md</a>
+source is on <a href="https://github.com/sarev/break2zero" target="_blank" rel="noopener">GitHub</a>, where
+<a href="https://github.com/sarev/break2zero/blob/main/LICENSES.md" target="_blank" rel="noopener">LICENSES.md</a>
 says what's under which licence.</p>
 <ul>
 <li>Graphics by 7th software, made with the help of ChatGPT and Gemini</li>

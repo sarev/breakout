@@ -1,4 +1,4 @@
-// The Game: owns the playfield state and advances it. A port of the Game class in breakout.py.
+// The Game: owns the playfield state and advances it. A port of the Game class in break2zero.py.
 
 import {
   BASE_BALL_SPEED, BLACKOUT_HOLD, BLACKOUT_RATE, BORING_TIMEOUT, COLOURS, DEBUG_LIVES, ENDGAME_SPEED_BOOST,
