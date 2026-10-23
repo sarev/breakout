@@ -213,21 +213,31 @@ async function boot() {
     notice = { text, until: performance.now() / 1000 + seconds };
   }
 
+  let tiltListening = false;   // The sensor listeners are added once, the first time the readings are allowed
+
+  /** True where reading the motion sensors needs the player's permission, asked for by a prompt (iOS). */
+  const tiltNeedsPermission = () => [window.DeviceOrientationEvent, window.DeviceMotionEvent]
+    .some((cls) => cls && typeof cls.requestPermission === 'function');
+
   /**
    * On a phone the intro's hero ball rolls with the device's tilt rather than following a finger, and with tilt
    * steering on the bat is steered by rolling the phone (see tilt.js). iOS wants permission for motion and orientation
-   * readings, asked for from a user gesture (the gate's tap); Android just sends them (on a secure page). The
-   * ball stays finger-driven until the first reading arrives, and so does the bat, so a device with no sensors
-   * or a refused permission loses nothing.
+   * readings, asked for from a user gesture (the gate's tap, or the tap that turns tilt steering on); Android just
+   * sends them (on a secure page). The ball stays finger-driven until the first reading arrives, and so does the
+   * bat, so a device with no sensors or a refused permission loses nothing.
+   *
+   * @param {Function} [refused] Called if the player refuses the permission.
    */
-  function startTilt() {
-    if (!MOBILE || !window.DeviceOrientationEvent) return;
+  function startTilt(refused = null) {
+    if (!MOBILE || !window.DeviceOrientationEvent || tiltListening) return;
     const screenAngle = () => {
       const a = (screen.orientation && typeof screen.orientation.angle === 'number') ? screen.orientation.angle
         : (typeof window.orientation === 'number' ? window.orientation : 0);
       return ((a % 360) + 360) % 360;
     };
     const listen = () => {
+      if (tiltListening) return;   // Two requests can be granted in the same session (the gate's, then the option's)
+      tiltListening = true;
       window.addEventListener('deviceorientation', (e) => {
         if (e.beta === null || e.gamma === null) return;
         intro.onOrientation(e.beta, e.gamma, screenAngle());
@@ -245,7 +255,10 @@ async function boot() {
       .filter((cls) => cls && typeof cls.requestPermission === 'function')
       .map((cls) => cls.requestPermission());
     if (asks.length) {
-      Promise.all(asks).then((results) => { if (results.every((r) => r === 'granted')) listen(); }).catch(() => {});
+      // A rejection (no user gesture, or the request was blocked) counts as a refusal
+      const denied = () => { if (refused) refused(); };
+      Promise.all(asks).then((results) => { if (results.every((r) => r === 'granted')) listen(); else denied(); })
+        .catch(denied);
     } else {
       listen();
     }
@@ -253,7 +266,10 @@ async function boot() {
 
   function leaveGate() {
     audio.unlock();
-    startTilt();
+    // Where the sensors need permission, it's only asked for once tilt steering is on. A prompt on the first tap
+    // reads as a promise that tilting steers the bat, and with the option off it doesn't (on iOS the intro's ball
+    // is then rolled by the finger alone)
+    if (game.tiltBat || !tiltNeedsPermission()) startTilt();
     music.play('intro', 1, MUSIC_INTRO_FADE_IN);
     scene = 'intro';
   }
@@ -494,6 +510,15 @@ async function boot() {
   function toggleTilt() {
     game.tiltBat = !game.tiltBat;
     writeSetting(TILT_KEY, game.tiltBat ? 'on' : 'off');
+    // Turning it on is a tap, so iOS can ask for the sensors here. If the player refuses, the option goes back off
+    // rather than showing "on" for a bat that can't be steered
+    if (game.tiltBat) {
+      startTilt(() => {
+        game.tiltBat = false;
+        writeSetting(TILT_KEY, 'off');
+        renderOptions();
+      });
+    }
   }
 
   /**
